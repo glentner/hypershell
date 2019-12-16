@@ -20,7 +20,7 @@ from typing import Tuple
 # default connection details
 ADDRESS  = 'localhost', 50001
 AUTHKEY  = b'--BADKEY--'
-MAXSIZE  = 10000  # arbitrary for now
+MAXSIZE  = 10_000  # arbitrary for now
 SENTINEL = None
 
 
@@ -28,21 +28,19 @@ class QueueServer(BaseManager):
     """Server for managing queue."""
 
     tasks: JoinableQueue
-    failed: JoinableQueue
+    finished: JoinableQueue
     connected: JoinableQueue
-    disconnected: JoinableQueue
 
-    def __init__(self, address: Tuple[str, int] = ADDRESS, authkey: bytes = AUTHKEY) -> None:
+    def __init__(self, address: Tuple[str, int] = ADDRESS, authkey: bytes = AUTHKEY,
+                 max_tasks: int = MAXSIZE, max_connections: int = MAXSIZE) -> None:
         """Initialize manager."""
         super().__init__(address=address, authkey=authkey)
-        self.tasks = JoinableQueue(maxsize=MAXSIZE)
-        self.failed = JoinableQueue(maxsize=MAXSIZE)
-        self.connected = JoinableQueue(maxsize=MAXSIZE)
-        self.disconnected = JoinableQueue(maxsize=MAXSIZE)
+        self.tasks = JoinableQueue(maxsize=max_tasks)
+        self.finished = JoinableQueue(maxsize=max_tasks)
+        self.connected = JoinableQueue(maxsize=max_connections)  # FIXME: can this be unbounded?
         self.register('_get_tasks', callable=lambda:self.tasks)
-        self.register('_get_failed', callable=lambda:self.failed)
+        self.register('_get_finished', callable=lambda:self.finished)
         self.register('_get_connected', callable=lambda:self.connected)
-        self.register('_get_disconnected', callable=lambda:self.disconnected)
 
     def __enter__(self) -> 'QueueServer':
         """Start the server."""
@@ -58,25 +56,22 @@ class QueueClient(BaseManager):
     """Client connection to queue manager."""
 
     tasks: JoinableQueue = None
-    failed: JoinableQueue = None
+    finished: JoinableQueue = None
     connected: JoinableQueue = None
-    disconnected: JoinableQueue = None
 
     def __init__(self, address: Tuple[str, int] = ADDRESS, authkey: bytes = AUTHKEY) -> None:
         """Initialize manager."""
         super().__init__(address=address, authkey=authkey)
         self.register('_get_tasks')
-        self.register('_get_failed')
+        self.register('_get_finished')
         self.register('_get_connected')
-        self.register('_get_disconnected')
 
     def __enter__(self) -> 'QueueClient':
         """Connect to the server."""
         self.connect()
         self.tasks = self._get_tasks()  # pylint: disable=no-member
-        self.failed = self._get_failed()  # pylint: disable=no-member
+        self.finished = self._get_finished()  # pylint: disable=no-member
         self.connected = self._get_connected()  # pylint: disable=no-member
-        self.disconnected = self._get_disconnected()  # pylint: disable=no-member
         return self
 
     def __exit__(self, *exc) -> None:
