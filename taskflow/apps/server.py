@@ -107,7 +107,7 @@ def record_results(filepath: str, finished: JoinableQueue, tasks_finished: Value
             if task_exit == 0:
                 log.info(f'finished task_id={task_id}')
             else:
-                log.warning(f'task_id={task_id} exitted status={task_exit}')
+                log.warning(f'task_id={task_id} exited status={task_exit}')
                 output.write(f'{task_line}\n')
             finished.task_done()
             with tasks_finished.get_lock():
