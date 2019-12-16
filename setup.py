@@ -50,5 +50,6 @@ setup(
                         'Operating System :: MacOS',
                         'Operating System :: Microsoft :: Windows',
                         'License :: OSI Approved :: Apache Software License', ],
+    install_requires = ['cmdkit>=1.0.0', 'logalpha>=2.0.0'],
     entry_points     = {'console_scripts': ['taskflow=taskflow:main', ]},
 )
