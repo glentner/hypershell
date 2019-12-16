@@ -151,6 +151,8 @@ class Server(Application):
                                         status=exit_status.runtime_error)
     }
 
+    server: QueueServer = None
+
     def run(self) -> None:
         """Run the taskflow server."""
         
@@ -195,7 +197,7 @@ class Server(Application):
         results_process.join()
 
     def __enter__(self) -> Server:
-        """Initialize resource."""
+        """Initialize resources."""
 
         if self.debug:
             for handler in log.handlers:
@@ -207,7 +209,8 @@ class Server(Application):
         return self
     
     def __exit__(self, *exc) -> None:
-        """Release resource."""
+        """Release resources."""
+
         if self.server is not None:
             self.server.__exit__()
             log.debug(f'server stopped')
