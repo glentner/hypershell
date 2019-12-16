@@ -10,8 +10,9 @@
 
 """Run the taskflow client."""
 
-# allow for return annotations
+# annotations
 from __future__ import annotations
+from typing import IO
 
 # standard libs
 import os
@@ -23,11 +24,11 @@ from multiprocessing import JoinableQueue
 
 # internal libs
 from ..core.logging import logger, HOST
-from ..core.queue import QueueClient, ADDRESS, AUTHKEY, MAXSIZE
+from ..core.queue import QueueClient, ADDRESS, AUTHKEY, SENTINEL
 from ..__meta__ import __appname__, __copyright__, __contact__, __website__
 
 # external libs
-from cmdkit.app import Application
+from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
 
 
@@ -55,7 +56,7 @@ options:
 -H, --host     ADDR  Hostname of server (default: {ADDRESS[0]}).
 -p, --port     SIZE  Port number for clients (default: {ADDRESS[1]}).
 -k, --authkey  KEY   Cryptographic authkey for connection (default: {AUTHKEY}).
--x, --timeout  SEC   Length of time in seconds before disconnecting (default: 60).
+-x, --timeout  SEC   Length of time in seconds before disconnecting (default: 600).
 -d, --debug          Show debugging messages.
 -h, --help           Show this message and exit.
 """
@@ -65,9 +66,18 @@ options:
 log = logger.with_name(NAME)
 
 
+def received_eof(exc) -> int:
+    """The server shutdown and caused an EOFError."""
+    log.critical(f'server disconnected')
+    return exit_status.runtime_error
+
+
 class Client(Application):
 
     interface = Interface(PROGRAM, USAGE, HELP)
+
+    outfile: str = '-'
+    interface.add_argument('-o', '--output', default=outfile, dest='outfile')
 
     host: str = ADDRESS[0]
     interface.add_argument('-H', '--host', default=host)
@@ -81,78 +91,67 @@ class Client(Application):
     template: str = TEMPLATE
     interface.add_argument('-t', '--template', default=template)
 
-    timeout: float = 60
-    interface.add_argument('-x', '--timeout', default=timeout, type=float)
+    timeout: int = 600
+    interface.add_argument('-w', '--timeout', default=timeout, type=int)
 
     debug: bool = False
     interface.add_argument('-d', '--debug', action='store_true')
 
-    _server: QueueClient = None
+    exceptions = {
+        EOFError: received_eof
+    }
+
+    server: QueueClient = None
+    output: IO = None
 
     def run(self) -> None:
         """Run the taskflow client."""
         
-        if self.debug:
-            for handler in log.handlers:
-                handler.level = log.levels[0]
-        
-        get_task = partial(self.tasks.get, timeout=self.timeout)
-        run_task = partial(Popen, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+        get_task = partial(self.server.tasks.get, timeout=self.timeout)
+        run_task = partial(Popen, shell=True, stdout=self.output, stderr=sys.stderr)
+
         try:
-            for task_id, task_line in iter(get_task, None):
+            for task_id, task_line in iter(get_task, SENTINEL):
+                # NOTE: signalling task_done immediately allows other clients to get a task
+                #       without having to wait for this one to finish
+                self.server.tasks.task_done()
                 log.info(f'running task_id={task_id}')
                 log.debug(f'running task_id={task_id}: {task_line}')
                 process = run_task(self.template.format(task_line))
                 process.wait()
-                log.debug(f'finished task_id={task_id}, status={process.returncode}')
-                if process.returncode != 0:
-                    self.failed.put(task_line)
-                self.tasks.task_done()
+                log.info(f'finished task_id={task_id}, status={process.returncode}')
+                self.server.finished.put((task_id, task_line, process.returncode))
 
             log.debug('received sentinel, shutting down')
+
         except Empty:
             log.debug(f'timeout reached, shutting down')
-        finally:
-            self.disconnected.put(HOST)
-
-    @property
-    def server(self) -> QueueClient:
-        """Lazy-initialize the QueueClient."""
-        if self._server is None:
-            self._server = QueueClient((self.host, self.port), authkey=self.authkey).__enter__()
-            log.info(f'connected to {self.host}:{self.port}')
-            self._server.connected.put(HOST)
-        return self._server
-
-    @property
-    def tasks(self) -> JoinableQueue:
-        """Access to QueueServer's `tasks` queue."""
-        return self.server.tasks
-
-    @property
-    def failed(self) -> JoinableQueue:
-        """Access to QueueServer's `failed` queue."""
-        return self.server.failed
-
-    @property
-    def connected(self) -> JoinableQueue:
-        """Access to QueueServer's `connected` queue."""
-        return self.server.connected
-
-    @property
-    def disconnected(self) -> JoinableQueue:
-        """Access to QueueServer's `disconnected` queue."""
-        return self.server.disconnected
 
     def __enter__(self) -> Client:
-        """Initialize resource."""
+        """Initialize resources."""
+
+        if self.debug:
+            for handler in log.handlers:
+                handler.level = log.levels[0]
+                
+        self.server = QueueClient((self.host, self.port), authkey=self.authkey).__enter__()
+        self.server.connected.put(HOST)
+        log.debug(f'connected to {self.host}:{self.port}')
+
+        self.output = sys.stdout if self.outfile == '-' else open(self.outfile, 'w')
+        log.debug(f'writing failures to {"<stdout>" if self.outfile == "-" else self.outfile}')
+
         return self
     
     def __exit__(self, *exc) -> None:
-        """Release resource."""
-        if self._server is not None:
-            self._server.__exit__()
-            log.info(f'disconnected')
+        """Release resources."""
+
+        if self.server is not None:
+            self.server.__exit__()
+            log.debug(f'disconnected from server')
+
+        if self.output is not sys.stdout:
+            self.output.close()
 
 
 # inherit docstring from module
