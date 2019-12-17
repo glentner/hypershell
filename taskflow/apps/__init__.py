@@ -25,11 +25,13 @@ from cmdkit.cli import Interface, ArgumentError
 # commands
 from .server import Server
 from .client import Client
+from .cluster import Cluster
 
 
 COMMANDS = {
     'server': Server,
     'client': Client,
+    'cluster': Cluster
 }
 
 PROGRAM = __appname__
@@ -55,6 +57,7 @@ HELP = f"""\
 commands:
 server                 {Server.__doc__}
 client                 {Client.__doc__}
+cluster                {Cluster.__doc__}
 
 options:
 -h, --help             Show this message and exit.
@@ -75,8 +78,8 @@ class CompletedCommand(Exception):
     """Lift exit_status of sub-commands `main` method."""
 
 
-class taskflow(Application):
-    """Application class for primary taskflow console-app."""
+class Taskflow(Application):
+    """Entry-point for taskflow console-app."""
 
     interface = Interface(PROGRAM, USAGE, HELP)
     interface.add_argument('-v', '--version', version=__version__, action='version')
