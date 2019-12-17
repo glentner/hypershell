@@ -85,7 +85,7 @@ def queue_tasks(filepath: str, tasks: JoinableQueue, tasks_queued: Value) -> Non
             log.debug(f'queued task_id={task_id}: {task_line}')
             with tasks_queued.get_lock():
                 tasks_queued.value += 1
-    
+
     except KeyboardInterrupt:
         pass
 
@@ -99,9 +99,9 @@ def record_results(filepath: str, finished: JoinableQueue, tasks_finished: Value
 
     from ..core.logging import logger
     log = logger.with_name(NAME)
-    
+
     output = sys.stdout if filepath == '-' else open(filepath, 'w')
-    
+
     try:
         for task_id, task_line, task_exit in iter(finished.get, SENTINEL):
             if task_exit == 0:
@@ -125,8 +125,8 @@ class Server(Application):
 
     interface = Interface(PROGRAM, USAGE, HELP)
 
-    infile: str = '-'
-    interface.add_argument('infile')
+    taskfile: str = '-'
+    interface.add_argument('taskfile')
 
     outfile: str = '-'
     interface.add_argument('-o', '--output', default=outfile, dest='outfile')
@@ -147,7 +147,7 @@ class Server(Application):
     interface.add_argument('-s', '--maxsize', default=maxsize, type=int)
 
     exceptions = {
-        RuntimeError: functools.partial(print_and_exit, logger=log.critical, 
+        RuntimeError: functools.partial(print_and_exit, logger=log.critical,
                                         status=exit_status.runtime_error)
     }
 
@@ -155,15 +155,15 @@ class Server(Application):
 
     def run(self) -> None:
         """Run the taskflow server."""
-        
+
          # count of all tasks published
         tasks_queued = Value('i', 0)
         tasks_finished = Value('i', 0)
 
         # publish all commands to the task queue
-        log.debug(f'reading from {"<stdin>" if self.infile == "-" else self.infile}')
+        log.debug(f'reading from {"<stdin>" if self.taskfile == "-" else self.taskfile}')
         queueing_process = Process(name='taskflowd', target=queue_tasks,
-                                   args=(self.infile, self.server.tasks, tasks_queued))
+                                   args=(self.taskfile, self.server.tasks, tasks_queued))
         queueing_process.start()
 
         # wait for finished tasks and log failures
@@ -207,7 +207,7 @@ class Server(Application):
                                   max_tasks=self.maxsize).__enter__()
         log.debug(f'server started')
         return self
-    
+
     def __exit__(self, *exc) -> None:
         """Release resources."""
 
