@@ -11,9 +11,9 @@
 """Package initialization for taskflow."""
 
 import sys
-from .apps import taskflow
+from .apps import Taskflow
 
 
 def main() -> int:
     """Entry-point for `taskflow` console application."""
-    return taskflow.main(sys.argv[1:2])  # only first argument if present
+    return Taskflow.main(sys.argv[1:2])  # only first argument if present
