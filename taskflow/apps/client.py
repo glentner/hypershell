@@ -106,7 +106,7 @@ class Client(Application):
 
     def run(self) -> None:
         """Run the taskflow client."""
-        
+
         get_task = partial(self.server.tasks.get, timeout=self.timeout)
         run_task = partial(Popen, shell=True, stdout=self.output, stderr=sys.stderr)
 
@@ -133,7 +133,7 @@ class Client(Application):
         if self.debug:
             for handler in log.handlers:
                 handler.level = log.levels[0]
-                
+
         self.server = QueueClient((self.host, self.port), authkey=self.authkey).__enter__()
         self.server.connected.put(HOST)
         log.debug(f'connected to {self.host}:{self.port}')
@@ -142,7 +142,7 @@ class Client(Application):
         log.debug(f'writing failures to {"<stdout>" if self.outfile == "-" else self.outfile}')
 
         return self
-    
+
     def __exit__(self, *exc) -> None:
         """Release resources."""
 
