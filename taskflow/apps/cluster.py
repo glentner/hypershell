@@ -41,8 +41,9 @@ PADDING = ' ' * len(PROGRAM)
 
 USAGE = f"""\
 usage: {PROGRAM} FILE [--failures PATH] [--port NUM] [--maxsize SIZE] [--template CMD]
-       {PADDING} [--local [--num-cores NUM] | --mpi [--nodefile PATH] | --parsl [--profile NAME]]
-       {PADDING} [--debug] [--help]
+       {PADDING} [--local [--num-cores NUM] | --mpi --nodefile PATH | --parsl [--profile NAME]]
+       {PADDING} [--verbose | --debug] [--logging]
+       {PADDING} [--help]
 
 {__doc__}\
 """
