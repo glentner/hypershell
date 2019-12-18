@@ -33,7 +33,6 @@ from ..__meta__ import __appname__
 from typing import Callable
 
 
-# NOTICE messages won't actually be formatted with color.
 LEVELS = levels.Level.from_names(['DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL'])
 COLORS = colors.Color.from_names(['blue', 'green', 'white', 'yellow', 'red', 'magenta'])
 RESET = colors.Color.reset
@@ -81,10 +80,24 @@ class ConsoleHandler(handlers.Handler):
         return f'{timestamp} {HOST} {msg.level.name} [{__appname__}] {msg.source}: {msg.content}'
 
 
-HANDLER = ConsoleHandler(LEVELS[1])
+@dataclass
+class SimpleConsoleHandler(handlers.Handler):
+    """Write shorter messages to <stderr> with color."""
+
+    level: levels.Level
+    resource: io.TextIOWrapper = sys.stderr
+
+    def format(self, msg: Message) -> str:
+        """Colorize the log level and with only the message."""
+        COLOR = Logger.colors[msg.level.value].foreground
+        return f'{COLOR}{msg.level.name.lower()}{RESET} {msg.source}: {msg.content}'
+
+
+DETAILED_HANDLER = ConsoleHandler(LEVELS[2])
+SIMPLE_HANDLER = SimpleConsoleHandler(LEVELS[2])
 
 logger = Logger()
-logger.handlers.append(HANDLER)
+logger.handlers.append(SIMPLE_HANDLER)
 
 # inject logger back into cmdkit library
 _cmdkit_logging.log = logger

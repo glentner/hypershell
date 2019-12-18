@@ -23,7 +23,7 @@ from subprocess import Popen, PIPE
 from multiprocessing import JoinableQueue
 
 # internal libs
-from ..core.logging import logger, HOST
+from ..core.logging import logger, HOST, DETAILED_HANDLER
 from ..core.queue import QueueClient, ADDRESS, AUTHKEY, SENTINEL
 from ..__meta__ import __appname__, __copyright__, __contact__, __website__
 
@@ -41,8 +41,8 @@ PROGRAM = f'{__appname__} {NAME}'
 PADDING = ' ' * len(PROGRAM)
 
 USAGE = f"""\
-usage: {PROGRAM} [--template CMD] [--debug] [--host ADDR] [--port PORT] [--authkey KEY]
-       {PADDING} [--timeout SEC]
+usage: {PROGRAM} [--template CMD] [--host ADDR] [--port PORT] [--authkey KEY] [--timeout SEC]
+       {PADDING} [--verbose | --debug] [--logging]
        {PADDING} [--help]
 
 {__doc__}\
@@ -57,7 +57,9 @@ options:
 -p, --port     SIZE  Port number for clients (default: {ADDRESS[1]}).
 -k, --authkey  KEY   Cryptographic authkey for connection (default: {AUTHKEY}).
 -x, --timeout  SEC   Length of time in seconds before disconnecting (default: 600).
+-v, --verbose        Show info messages.
 -d, --debug          Show debugging messages.
+-l, --logging        Show detailed syslog style messages.
 -h, --help           Show this message and exit.
 """
 
@@ -69,6 +71,12 @@ log = logger.with_name(NAME)
 def received_eof(exc) -> int:
     """The server shutdown and caused an EOFError."""
     log.critical(f'server disconnected')
+    return exit_status.runtime_error
+
+
+def connection_refused(exc) -> int:
+    """The client raised a ConnectionRefusedError."""
+    log.critical(f'connection refused')
     return exit_status.runtime_error
 
 
@@ -95,10 +103,17 @@ class Client(Application):
     interface.add_argument('-w', '--timeout', default=timeout, type=int)
 
     debug: bool = False
-    interface.add_argument('-d', '--debug', action='store_true')
+    verbose: bool = False
+    logging_interface = interface.add_mutually_exclusive_group()
+    logging_interface.add_argument('-d', '--debug', action='store_true')
+    logging_interface.add_argument('-v', '--verbose', action='store_true')
+
+    logging: bool = False
+    interface.add_argument('-l', '--logging', action='store_true')
 
     exceptions = {
-        EOFError: received_eof
+        EOFError: received_eof,
+        ConnectionRefusedError: connection_refused
     }
 
     server: QueueClient = None
@@ -130,16 +145,21 @@ class Client(Application):
     def __enter__(self) -> Client:
         """Initialize resources."""
 
+        if self.logging:
+            log.handlers[0] = DETAILED_HANDLER
         if self.debug:
-            for handler in log.handlers:
-                handler.level = log.levels[0]
+            log.handlers[0].level = logger.levels[0]
+        elif self.verbose:
+            log.handlers[0].level = logger.levels[1]
+        else:
+            log.handlers[0].level = logger.levels[2]
 
         self.server = QueueClient((self.host, self.port), authkey=self.authkey).__enter__()
         self.server.connected.put(HOST)
         log.debug(f'connected to {self.host}:{self.port}')
 
         self.output = sys.stdout if self.outfile == '-' else open(self.outfile, 'w')
-        log.debug(f'writing failures to {"<stdout>" if self.outfile == "-" else self.outfile}')
+        log.debug(f'writing outputs to {"<stdout>" if self.outfile == "-" else self.outfile}')
 
         return self
 
@@ -148,7 +168,7 @@ class Client(Application):
 
         if self.server is not None:
             self.server.__exit__()
-            log.debug(f'disconnected from server')
+            log.debug(f'disconnected')
 
         if self.output is not sys.stdout:
             self.output.close()
