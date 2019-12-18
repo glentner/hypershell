@@ -41,7 +41,7 @@ PADDING = ' ' * len(PROGRAM)
 
 USAGE = f"""\
 usage: {PROGRAM} FILE [--failures PATH] [--port NUM] [--maxsize SIZE] [--template CMD]
-       {PADDING} [--local [--num-cores NUM] | --mpi --nodefile PATH | --parsl [--profile NAME]]
+       {PADDING} [--local [--num-cores NUM] | [--ssh | --mpi] --nodefile PATH | --parsl [--profile NAME]]
        {PADDING} [--verbose | --debug] [--logging]
        {PADDING} [--help]
 
@@ -97,9 +97,10 @@ class Cluster(Application):
 
     # clustering method
     cluster_mode: str = 'local'
-    cluster_modes: Tuple[str] = ('local', 'mpi', 'parsl')
+    cluster_modes: Tuple[str] = ('local', 'ssh', 'mpi', 'parsl')
     cluster_mode_interface = interface.add_mutually_exclusive_group()
     cluster_mode_interface.add_argument('--local', action='store_true', dest='use_local')
+    cluster_mode_interface.add_argument('--ssh', action='store_true', dest='use_ssh')
     cluster_mode_interface.add_argument('--mpi', action='store_true', dest='use_mpi')
     cluster_mode_interface.add_argument('--parsl', action='store_true', dest='use_parsl')
 
@@ -122,7 +123,9 @@ class Cluster(Application):
 
     exceptions = {
         RuntimeError: functools.partial(print_and_exit, logger=log.critical,
-                                        status=exit_status.runtime_error)
+                                        status=exit_status.runtime_error),
+        FileNotFoundError: functools.partial(print_and_exit, logger=log.critical,
+                                            status=exit_status.runtime_error)
     }
 
     def run(self) -> None:
@@ -149,14 +152,14 @@ class Cluster(Application):
         authkey = secrets.token_hex(nbytes=16)
         failures = '' if self.failures is None else f'--output {self.failures}'
 
-        server_invocation = (f'taskflow server {self.taskfile} {failures} --port {self.port} '
+        server_invocation = (f'{sys.argv[0]} server {self.taskfile} {failures} --port {self.port} '
                              f'--authkey {authkey} --maxsize {self.maxsize} {logging}')
 
         log.debug(f'starting server: "{server_invocation}"')
         server_process = Popen(server_invocation, shell=True, stdin=sys.stdin, stdout=PIPE, stderr=sys.stderr)
 
-        client_invocation = (f'taskflow client -p {self.port} -k {authkey} {logging} '
-                             f'-t "{self.template}"')
+        client_invocation = (f'{sys.argv[0]} client --port {self.port} --authkey {authkey} {logging} '
+                             f'--template "{self.template}"')
 
         num_cores = self.num_cores if self.num_cores is not None else psutil.cpu_count()
         log.debug(f'starting {num_cores} clients: "{client_invocation}"')
@@ -172,11 +175,8 @@ class Cluster(Application):
 
         server_process.wait()
 
-    def run_mpi(self) -> None:
-        """Run the cluster in 'mpi' mode."""
-
-        if self.nodefile is None:
-            raise ArgumentError(f'No nodefile given')
+    def run_ssh(self) -> None:
+        """Run the cluster in 'ssh' mode."""
 
         logging = ''
         if self.debug:
@@ -186,15 +186,63 @@ class Cluster(Application):
         if self.logging:
             logging += ' --logging'
 
+        if self.nodefile is None:
+            raise ArgumentError(f'no nodefile given')
+
+        with open(self.nodefile, 'r') as nodefile:
+            log.debug(f'reading hostnames from {self.nodefile}')
+            hostnames = [hostname.strip() for hostname in nodefile.readlines()]
+
         authkey = secrets.token_hex(nbytes=16)
         failures = '' if self.failures is None else f'--output {self.failures}'
-        server_invocation = (f'taskflow server {self.taskfile} {failures} --host 0.0.0.0 '
+
+        server_invocation = (f'{sys.argv[0]} server {self.taskfile} {failures} --host 0.0.0.0 --port {self.port} '
+                             f'--authkey {authkey} --maxsize {self.maxsize} {logging}')
+
+        log.debug(f'starting server: "{server_invocation}"')
+        server_process = Popen(server_invocation, shell=True, stdin=sys.stdin, stdout=PIPE, stderr=sys.stderr)
+
+        client_invocation = (f'{sys.argv[0]} client --host {HOST} --port {self.port} --authkey {authkey} '
+                             f' {logging} --template "{self.template}"')
+
+        num_hosts = len(set(hostnames))
+        num_clients = len(hostnames)
+        log.debug(f'starting {num_clients} clients across {num_hosts} hosts: "{client_invocation}"')
+        time.sleep(2)
+
+        client_processes = []
+        for hostname in hostnames:
+            client = Popen(f'ssh {hostname} {client_invocation}', shell=True, stdout=sys.stdout, stderr=sys.stderr)
+            client_processes.append(client)
+
+        for client in client_processes:
+            client.wait()
+
+        server_process.wait()
+
+    def run_mpi(self) -> None:
+        """Run the cluster in 'mpi' mode."""
+
+        logging = ''
+        if self.debug:
+            logging += '--debug'
+        if self.verbose:
+            logging += '--verbose'
+        if self.logging:
+            logging += ' --logging'
+
+        if self.nodefile is None:
+            raise ArgumentError(f'no nodefile given')
+
+        authkey = secrets.token_hex(nbytes=16)
+        failures = '' if self.failures is None else f'--output {self.failures}'
+        server_invocation = (f'{sys.argv[0]} server {self.taskfile} {failures} --host 0.0.0.0 '
                              f'--port {self.port} --authkey {authkey} --maxsize {self.maxsize} {logging}')
 
         log.debug(f'starting server: "{server_invocation}"')
         server_process = Popen(server_invocation, shell=True, stdin=sys.stdin, stderr=sys.stderr)
 
-        client_invocation = (f'taskflow client --host {HOST} --port {self.port} --authkey {authkey} {logging} '
+        client_invocation = (f'{sys.argv[0]} client --host {HOST} --port {self.port} --authkey {authkey} {logging} '
                              f'--template "{self.template}"')
 
         log.debug(f'starting clients: "{client_invocation}"')
