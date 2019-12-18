@@ -22,7 +22,7 @@ from queue import Empty
 from multiprocessing import Process, JoinableQueue, Value
 
 # internal libs
-from ..core.logging import logger, Logger
+from ..core.logging import logger, Logger, DETAILED_HANDLER
 from ..core.queue import QueueServer, ADDRESS, AUTHKEY, MAXSIZE, SENTINEL
 from ..core.exceptions import print_and_exit
 from ..__meta__ import __appname__, __copyright__, __contact__, __website__
@@ -43,7 +43,8 @@ PADDING = ' ' * len(PROGRAM)
 USAGE = f"""\
 usage: {PROGRAM} FILE [--output FILE] [--maxsize SIZE]
        {PADDING} [--host ADDR] [--port PORT] [--authkey KEY]
-       {PADDING} [--debug] [--help]
+       {PADDING} [--verbose | --debug] [--logging]
+       {PADDING} [--help]
 
 {__doc__}\
 """
@@ -60,7 +61,9 @@ options:
 -H, --host     ADDR  Bind address for server (default: {ADDRESS[0]}).
 -p, --port     PORT  Port number for server (default: {ADDRESS[1]}).
 -k, --authkey  KEY   Cryptographic key for connection (default: {AUTHKEY}).
+-v, --verbose        Show info messages.
 -d, --debug          Show debugging messages.
+-l, --logging        Show detailed syslog style messages.
 -h, --help           Show this message and exit.
 """
 
@@ -69,12 +72,22 @@ options:
 log = logger.with_name(NAME)
 
 
-def queue_tasks(filepath: str, tasks: JoinableQueue, tasks_queued: Value) -> None:
+def queue_tasks(filepath: str, tasks: JoinableQueue, tasks_queued: Value,
+                debug: bool = False, verbose: bool = False, logging: bool = False) -> None:
     """Read lines from `filepath` and publish to `tasks` queue."""
 
-    from ..core.logging import logger
+    from ..core.logging import logger, DETAILED_HANDLER
     log = logger.with_name(NAME)
+    if logging:
+        log.handlers[0] = DETAILED_HANDLER
+    if debug:
+        log.handlers[0].level = logger.levels[0]
+    elif verbose:
+        log.handlers[0].level = logger.levels[1]
 
+    # NOTE: Python has unfortunate behavior of setting stdin=/dev/null with
+    #       Process creation. Work around: stackoverflow.com #30134297
+    sys.stdin = open(0)
     source = sys.stdin if filepath == '-' else open(filepath, 'r')
 
     try:
@@ -94,11 +107,18 @@ def queue_tasks(filepath: str, tasks: JoinableQueue, tasks_queued: Value) -> Non
             source.close()
 
 
-def record_results(filepath: str, finished: JoinableQueue, tasks_finished: Value) -> None:
+def record_results(filepath: str, finished: JoinableQueue, tasks_finished: Value,
+                   debug: bool = False, verbose: bool = False, logging: bool = False) -> None:
     """Get lines from `finished` queue and write failures back to `filepath`."""
 
-    from ..core.logging import logger
+    from ..core.logging import logger, DETAILED_HANDLER
     log = logger.with_name(NAME)
+    if logging:
+        log.handlers[0] = DETAILED_HANDLER
+    if debug:
+        log.handlers[0].level = logger.levels[0]
+    elif verbose:
+        log.handlers[0].level = logger.levels[1]
 
     output = sys.stdout if filepath == '-' else open(filepath, 'w')
 
@@ -107,7 +127,7 @@ def record_results(filepath: str, finished: JoinableQueue, tasks_finished: Value
             if task_exit == 0:
                 log.info(f'finished task_id={task_id}')
             else:
-                log.warning(f'task_id={task_id} exited status={task_exit}')
+                log.warning(f'task_id={task_id} returned status={task_exit}')
                 output.write(f'{task_line}\n')
             finished.task_done()
             with tasks_finished.get_lock():
@@ -140,11 +160,17 @@ class Server(Application):
     authkey: bytes = AUTHKEY
     interface.add_argument('-k', '--authkey', default=authkey, type=str.encode)
 
-    debug: bool = False
-    interface.add_argument('-d', '--debug', action='store_true')
-
     maxsize: int = MAXSIZE
     interface.add_argument('-s', '--maxsize', default=maxsize, type=int)
+
+    debug: bool = False
+    verbose: bool = False
+    logging_interface = interface.add_mutually_exclusive_group()
+    logging_interface.add_argument('-d', '--debug', action='store_true')
+    logging_interface.add_argument('-v', '--verbose', action='store_true')
+
+    logging: bool = False
+    interface.add_argument('-l', '--logging', action='store_true')
 
     exceptions = {
         RuntimeError: functools.partial(print_and_exit, logger=log.critical,
@@ -163,13 +189,15 @@ class Server(Application):
         # publish all commands to the task queue
         log.debug(f'reading from {"<stdin>" if self.taskfile == "-" else self.taskfile}')
         queueing_process = Process(name='taskflowd', target=queue_tasks,
-                                   args=(self.taskfile, self.server.tasks, tasks_queued))
+                                   args=(self.taskfile, self.server.tasks, tasks_queued,
+                                         self.debug, self.verbose, self.logging))
         queueing_process.start()
 
         # wait for finished tasks and log failures
         log.debug(f'writing failures to {"<stdout>" if self.outfile == "-" else self.outfile}')
         results_process = Process(name='taskflowd', target=record_results,
-                                  args=(self.outfile, self.server.finished, tasks_finished))
+                                  args=(self.outfile, self.server.finished, tasks_finished,
+                                        self.debug, self.verbose, self.logging))
         results_process.start()
 
         # wait for all tasks to be published
@@ -199,13 +227,19 @@ class Server(Application):
     def __enter__(self) -> Server:
         """Initialize resources."""
 
+        if self.logging:
+            log.handlers[0] = DETAILED_HANDLER
         if self.debug:
-            for handler in log.handlers:
-                handler.level = log.levels[0]
+            log.handlers[0].level = logger.levels[0]
+        elif self.verbose:
+            log.handlers[0].level = logger.levels[1]
+        else:
+            log.handlers[0].level = logger.levels[2]
 
         self.server = QueueServer((self.host, self.port), authkey=self.authkey,
                                   max_tasks=self.maxsize).__enter__()
-        log.debug(f'server started')
+
+        log.debug(f'started')
         return self
 
     def __exit__(self, *exc) -> None:
@@ -213,7 +247,7 @@ class Server(Application):
 
         if self.server is not None:
             self.server.__exit__()
-            log.debug(f'server stopped')
+            log.debug(f'stopped')
 
 
 # inherit docstring from module
