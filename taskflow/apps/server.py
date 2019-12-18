@@ -85,6 +85,9 @@ def queue_tasks(filepath: str, tasks: JoinableQueue, tasks_queued: Value,
     elif verbose:
         log.handlers[0].level = logger.levels[1]
 
+    # NOTE: Python has unfortunate behavior of setting stdin=/dev/null with
+    #       Process creation. Work around: stackoverflow.com #30134297
+    sys.stdin = open(0)
     source = sys.stdin if filepath == '-' else open(filepath, 'r')
 
     try:
