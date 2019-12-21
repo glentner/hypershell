@@ -37,7 +37,7 @@ setup(
     packages         = find_packages(),
     long_description = readme_file(),
     long_description_content_type='text/markdown',
-    classifiers      = ['Development Status :: 3 - Beta',
+    classifiers      = ['Development Status :: 4 - Beta',
                         'Topic :: Utilities',
                         'Programming Language :: Python :: 3.6',
                         'Programming Language :: Python :: 3.7',
