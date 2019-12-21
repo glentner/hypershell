@@ -11,11 +11,14 @@
 """Metadata for the hyper-shell package."""
 
 __appname__     = 'hyper-shell'
-__version__     = '1.5.3'
+__version__     = '1.5.4'
 __authors__     = 'Geoffrey Lentner'
 __contact__     = 'glentner@purdue.edu'
 __license__     = 'Apache Software License'
-__copyright__   = 'Copyright (c) Geoffrey Lentner 2019. All Rights Reserved.'
+__copyright__   = 'Copyright Geoffrey Lentner 2019. All Rights Reserved.'
 __website__     = 'https://github.com/glentner/hyper-shell'
 __keywords__    = 'distributed-computing command-line-tool shell-scripting high-performance-computing'
-__description__ = 'Distributed, asynchronous shell execution across a cluster of nodes.'
+__description__ = """\
+A cross-platform, high performance computing utility for processing
+shell commands over a distributed, asynchronous queue.
+"""
