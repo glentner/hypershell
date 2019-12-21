@@ -1,29 +1,38 @@
 hyper-shell
 ===========
 
-Distributed, asynchronous shell execution across a cluster of nodes.
-
 [![PyPI Version](https://img.shields.io/pypi/pyversions/hyper-shell.svg?logo=python&logoColor=white&style=flat)](https://pypi.org/project/hyper-shell/)
 [![PyPI Version](https://img.shields.io/pypi/v/hyper-shell.svg?style=flat&color=blue)](https://pypi.org/project/hyper-shell/)
 [![Docs Latest](https://readthedocs.org/projects/hyper-shell/badge/?version=latest&style=flat)](https://hyper-shell.readthedocs.io)
 [![GitHub License](http://img.shields.io/badge/license-Apache-blue.svg?style=flat)](https://www.apache.org/licenses/LICENSE-2.0)
 
----
+A cross-platform, high performance computing utility for processing shell commands
+over a distributed, asynchronous queue. _hyper-shell_ is a single producer
+(server) many consumer (client) system.
+
+_hyper-shell_ is pure Python and has been tested on Linux, macOS, and Windows 10 in
+Python 3.7 environments. The server and clients don't even need to be using the same
+platform.
+
 
 Installation
 ------------
 
-To install _hyper-shell_ for general purposes use Pip:
+To install _hyper-shell_:
 
 ```
-pip install git+https://github.com/glentner/hyper-shell.git
+pip install hyper-shell
 ```
+
+For general use on a production system such as a shared computing cluster it is more robust
+to encapsulate _hyper-shell_ within its own environment or container.
 
 
 Documentation
 -------------
 
-Documentation will be available here via the hyper-shell Wiki.
+Documentation is available at
+[hyper-shell.readthedocs.io](https://hyper-shell.readthedocs.io).
 
 
 Contributions
