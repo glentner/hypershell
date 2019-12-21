@@ -11,7 +11,7 @@
 """
 Logging configuration.
 
-taskflow uses the `logalpha` package for logging functionality. All messages
+hyper-shell uses the `logalpha` package for logging functionality. All messages
 are written to <stderr> and should be redirected by their parent processes.
 """
 
@@ -47,7 +47,7 @@ class Message(messages.Message):
 
 
 class Logger(loggers.Logger):
-    """Logger for taskflow."""
+    """Logger for hyper-shell."""
 
     Message: type = Message
     callbacks: dict = {'timestamp': datetime.now,

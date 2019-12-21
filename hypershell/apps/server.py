@@ -8,7 +8,7 @@
 # You should have received a copy of the Apache License along with this program.
 # If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
 
-"""Run the taskflow server."""
+"""Run the hyper-shell server."""
 
 # allow for return annotations
 from __future__ import annotations
@@ -180,7 +180,7 @@ class Server(Application):
     server: QueueServer = None
 
     def run(self) -> None:
-        """Run the taskflow server."""
+        """Run the hyper-shell server."""
 
          # count of all tasks published
         tasks_queued = Value('i', 0)
@@ -188,14 +188,14 @@ class Server(Application):
 
         # publish all commands to the task queue
         log.debug(f'reading from {"<stdin>" if self.taskfile == "-" else self.taskfile}')
-        queueing_process = Process(name='taskflowd', target=queue_tasks,
+        queueing_process = Process(name='hypershelld', target=queue_tasks,
                                    args=(self.taskfile, self.server.tasks, tasks_queued,
                                          self.debug, self.verbose, self.logging))
         queueing_process.start()
 
         # wait for finished tasks and log failures
         log.debug(f'writing failures to {"<stdout>" if self.outfile == "-" else self.outfile}')
-        results_process = Process(name='taskflowd', target=record_results,
+        results_process = Process(name='hypershelld', target=record_results,
                                   args=(self.outfile, self.server.finished, tasks_finished,
                                         self.debug, self.verbose, self.logging))
         results_process.start()

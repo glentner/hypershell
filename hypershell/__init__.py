@@ -8,14 +8,12 @@
 # You should have received a copy of the Apache License along with this program.
 # If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
 
-"""Metadata for the taskflow package."""
+"""Package initialization for hyper-shell."""
 
-__appname__     = 'taskflow'
-__version__     = '1.4.0'
-__authors__     = 'Geoffrey Lentner'
-__contact__     = 'glentner@purdue.edu'
-__license__     = 'Apache Software License'
-__copyright__   = 'Copyright (c) Geoffrey Lentner 2019. All Rights Reserved.'
-__website__     = 'https://github.com/glentner/taskflow'
-__keywords__    = 'distributed-computing command-line-tool shell-scripting high-performance-computing'
-__description__ = 'Distributed, asynchronous shell execution across a cluster of nodes.'
+import sys
+from .apps import HyperShell
+
+
+def main() -> int:
+    """Entry-point for `hyper-shell` console application."""
+    return HyperShell.main(sys.argv[1:2])  # only first argument if present

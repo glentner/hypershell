@@ -8,21 +8,15 @@
 # You should have received a copy of the Apache License along with this program.
 # If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
 
-"""Build and installation script for taskflow."""
+"""Build and installation script for hyper-shell."""
 
 # standard libs
 import os
 from setuptools import setup, find_packages
 
 # internal libs
-from taskflow.__meta__ import (__appname__,
-                               __version__,
-                               __authors__,
-                               __contact__,
-                               __license__,
-                               __website__,
-                               __keywords__,
-                               __description__)
+from hypershell.__meta__ import (__appname__, __version__, __authors__, __contact__,
+                                 __license__, __website__, __keywords__, __description__)
 
 
 def readme_file():
@@ -51,5 +45,5 @@ setup(
                         'Operating System :: Microsoft :: Windows',
                         'License :: OSI Approved :: Apache Software License', ],
     install_requires = ['cmdkit>=1.0.0', 'logalpha>=2.0.0'],
-    entry_points     = {'console_scripts': ['taskflow=taskflow:main', ]},
+    entry_points     = {'console_scripts': ['hyper-shell=hypershell:main', ]},
 )
