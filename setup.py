@@ -36,6 +36,7 @@ setup(
     url              = __website__,
     packages         = find_packages(),
     long_description = readme_file(),
+    long_description_content_type='text/markdown',
     classifiers      = ['Development Status :: 3 - Beta',
                         'Topic :: Utilities',
                         'Programming Language :: Python :: 3.6',
