@@ -22,7 +22,7 @@ copyright = '2019, Geoffrey Lentner'
 author = 'Geoffrey Lentner'
 
 # The full version, including alpha/beta/rc tags
-release = '1.5.1'
+release = '1.5.3'
 
 
 # -- General configuration ---------------------------------------------------
@@ -36,6 +36,12 @@ extensions = [
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
+
+# source_suffix = ['.rst', '.md']
+source_suffix = '.rst'
+
+# The master toctree document.
+master_doc = 'index'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
