@@ -8,12 +8,17 @@
 # You should have received a copy of the Apache License along with this program.
 # If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
 
-"""Package initialization for taskflow."""
+"""Exception handling."""
 
-import sys
-from .apps import Taskflow
+# standard libs
+from typing import Callable
 
 
-def main() -> int:
-    """Entry-point for `taskflow` console application."""
-    return Taskflow.main(sys.argv[1:2])  # only first argument if present
+# class RuntimeError(Exception):
+#     """A runtime error within hyper-shell."""
+
+
+def print_and_exit(exc: Exception, logger: Callable[[str], None], status: int) -> int:
+    """Log the exception argument and exit with `status`."""
+    logger(*exc.args)
+    return status

@@ -8,7 +8,7 @@
 # You should have received a copy of the Apache License along with this program.
 # If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
 
-"""Run the taskflow client."""
+"""Run the hyper-shell client."""
 
 # annotations
 from __future__ import annotations
@@ -120,7 +120,7 @@ class Client(Application):
     output: IO = None
 
     def run(self) -> None:
-        """Run the taskflow client."""
+        """Run the hyper-shell client."""
 
         get_task = partial(self.server.tasks.get, timeout=self.timeout)
         run_task = partial(Popen, shell=True, stdout=self.output, stderr=sys.stderr)

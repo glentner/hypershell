@@ -8,7 +8,7 @@
 # You should have received a copy of the Apache License along with this program.
 # If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
 
-"""The main entry-point, `taskflow`."""
+"""The main entry-point for hyper-shell."""
 
 # standard libs
 import sys
@@ -78,8 +78,8 @@ class CompletedCommand(Exception):
     """Lift exit_status of sub-commands `main` method."""
 
 
-class Taskflow(Application):
-    """Entry-point for taskflow console-app."""
+class HyperShell(Application):
+    """Entry-point for hyper-shell console-app."""
 
     interface = Interface(PROGRAM, USAGE, HELP)
     interface.add_argument('-v', '--version', version=__version__, action='version')

@@ -1,4 +1,4 @@
-taskflow
+hyper-shell
 ========
 
 Distributed, asynchronous shell execution across a cluster of nodes.
@@ -10,17 +10,17 @@ Distributed, asynchronous shell execution across a cluster of nodes.
 Installation
 ------------
 
-To install _taskflow_ for general purposes use Pip:
+To install _hyper-shell_ for general purposes use Pip:
 
 ```
-pip install git+https://github.com/glentner/taskflow.git
+pip install git+https://github.com/glentner/hyper-shell.git
 ```
 
 
 Documentation
 -------------
 
-Documentation will be available here via the taskflow Wiki.
+Documentation will be available here via the hyper-shell Wiki.
 
 
 Contributions

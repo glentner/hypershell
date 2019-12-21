@@ -8,7 +8,7 @@
 # You should have received a copy of the Apache License along with this program.
 # If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
 
-"""Run taskflow cluster, server and clients."""
+"""Run hyper-shell cluster, server and clients."""
 
 # type annotations
 from __future__ import annotations
@@ -129,7 +129,7 @@ class Cluster(Application):
     }
 
     def run(self) -> None:
-        """Run the taskflow cluster."""
+        """Run the hyper-shell cluster."""
 
         for mode in self.cluster_modes:
             if hasattr(self, f'use_{mode}') and getattr(self, f'use_{mode}') is True:
