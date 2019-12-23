@@ -30,7 +30,7 @@ setup(
     version          = __version__,
     author           = __authors__,
     author_email     = __contact__,
-    description      = __description__,
+    description      = ' '.join(__description__.split('\n')),
     license          = __license__,
     keywords         = __keywords__,
     url              = __website__,
