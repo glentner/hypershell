@@ -39,5 +39,5 @@ setup(
                         'Operating System :: Microsoft :: Windows',
                         'License :: OSI Approved :: Apache Software License', ],
     install_requires = ['cmdkit>=1.0.0', 'logalpha>=2.0.0', 'psutil', ],
-    entry_points     = {'console_scripts': ['hyper-shell=hyper-shell:main', ]},
+    entry_points     = {'console_scripts': ['hyper-shell=hyper_shell:main', ]},
 )
