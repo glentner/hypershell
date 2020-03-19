@@ -24,10 +24,10 @@ from subprocess import run
 from parsl import python_app
 
 # internal libs
-from ..core.logging import logger
+from ..core.logging import logger, setup as logging_setup
 
 SENTINEL = None
-log = logger.with_name('hyper-shell.parsl.')
+log = logger.with_name('hyper-shell.client')
 
 
 @python_app
@@ -56,15 +56,20 @@ class ParslScheduler(Thread):
     futures: Queue = None
     template: str = '{}'
 
-    def __init__(self, tasks: Queue, futures: Queue, template: str, *args, **kwargs) -> None:
+    def __init__(self, tasks: Queue, futures: Queue, template: str, *args,
+                 debug: bool = False, verbose: bool = False, logging: bool = False, **kwargs) -> None:
         """Initialize thread with access to queues."""
         super().__init__(*args, **kwargs)
         self.tasks = tasks
         self.futures = futures
         self.template = template
 
+        # setup logging within the thread
+        logging_setup(log, debug, verbose, logging)
+
     def run(self) -> None:
         """Launch tasks using Parsl and put 'future' on queue."""
+
         for task_id, task_line in iter(self.tasks.get, SENTINEL):
             log.info(f'running task_id={task_id}')
             log.debug(f'running task_id={task_id}: {task_line}')
@@ -79,11 +84,15 @@ class ParslCollector(Thread):
     futures: Queue = None
     finished: JoinableQueue = None
 
-    def __init__(self, futures: Queue, finished: JoinableQueue, *args, **kwargs) -> None:
+    def __init__(self, futures: Queue, finished: JoinableQueue, *args,
+                 debug: bool = False, verbose: bool = False, logging: bool = False, **kwargs) -> None:
         """Initialize thread with access to futures queue."""
         super().__init__(*args, **kwargs)
         self.futures = futures
         self.finished = finished
+
+        # setup logging within the thread
+        logging_setup(log, debug, verbose, logging)
 
     def run(self) -> None:
         """Wait for results of tasks."""

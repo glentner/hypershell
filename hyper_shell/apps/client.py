@@ -170,21 +170,23 @@ class Client(Application):
         futures = Queue()
 
         # start the consumer thread that pushes tasks to parsl
-        scheduler = ParslScheduler(tasks, futures, self.template)
+        scheduler = ParslScheduler(tasks, futures, self.template,
+                                   debug=self.debug, verbose=self.verbose,
+                                   logging=self.logging)
         scheduler.start()
 
         # start the collector thread that waits on futures
-        collector = ParslCollector(futures, self.server.finished)
+        collector = ParslCollector(futures, self.server.finished,
+                                   debug=self.debug, verbose=self.verbose,
+                                   logging=self.logging)
         collector.start()
 
         # publish all tasks from server to shared queue
         get_task = partial(self.server.tasks.get, timeout=self.timeout)
         try:
             for task_id, task_line in iter(get_task, SENTINEL):
-                # NOTE: signalling task_done immediately allows other clients to get a task
-                #       without having to wait for this one to finish
-                self.server.tasks.task_done()
                 tasks.put((task_id, task_line))
+                self.server.tasks.task_done()
 
             log.debug('received sentinel, shutting down')
         except Empty:
