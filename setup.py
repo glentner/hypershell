@@ -11,32 +11,25 @@
 """Build and installation script for hyper-shell."""
 
 # standard libs
-import os
 from setuptools import setup, find_packages
 
-# internal libs
-from hypershell.__meta__ import (__appname__, __version__, __authors__, __contact__,
-                                 __license__, __website__, __keywords__, __description__)
 
-
-def readme_file():
-    """Use README.md as long_description."""
-    with open(os.path.join(os.path.dirname(__file__), "README.md"), 'r') as readme:
-        return readme.read()
-
+with open('README.rst', mode='r') as readme:
+    long_description = readme.read()
 
 setup(
-    name             = __appname__,
-    version          = __version__,
-    author           = __authors__,
-    author_email     = __contact__,
-    description      = ' '.join(__description__.split('\n')),
-    license          = __license__,
-    keywords         = __keywords__,
-    url              = __website__,
+    name             = 'hyper-shell',
+    version          = '1.6.0',
+    author           = 'Geoffrey Lentner',
+    author_email     = 'glentner@purdue.edu',
+    description      = ('A cross-platform, high performance computing utility for processing'
+                        'shell commands over a distributed, asynchronous queue.'),
+    license          = 'Apache Software License',
+    keywords         = ('distributed-computing command-line-tool shell-scripting '
+                        'high-performance-computing'),
+    url              = 'https://github.com/glentner/hyper-shell',
     packages         = find_packages(),
-    long_description = readme_file(),
-    long_description_content_type='text/markdown',
+    long_description = long_description,
     classifiers      = ['Development Status :: 4 - Beta',
                         'Topic :: Utilities',
                         'Programming Language :: Python :: 3.7',
@@ -46,5 +39,5 @@ setup(
                         'Operating System :: Microsoft :: Windows',
                         'License :: OSI Approved :: Apache Software License', ],
     install_requires = ['cmdkit>=1.0.0', 'logalpha>=2.0.0', 'psutil', ],
-    entry_points     = {'console_scripts': ['hyper-shell=hypershell:main', ]},
+    entry_points     = {'console_scripts': ['hyper-shell=hyper_shell:main', ]},
 )

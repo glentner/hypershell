@@ -11,11 +11,14 @@ pylint = "*"
 sphinx = "*"
 sphinx-rtd-theme = "*"
 twine = "*"
+parsl = "*"
 
 [packages]
 cmdkit = ">=1.2.1"
 logalpha = ">=2.0.2"
 psutil = "*"
+bleach = ">=3.1.1"  # security vulnerability
+hyper-shell = {editable = true,path = "."}
 
 [requires]
 python_version = "3.7"

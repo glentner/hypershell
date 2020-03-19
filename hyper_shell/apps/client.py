@@ -15,17 +15,15 @@ from __future__ import annotations
 from typing import IO
 
 # standard libs
-import os
 import sys
-from queue import Empty
+from queue import Queue, Empty
 from functools import partial
-from subprocess import Popen, PIPE
-from multiprocessing import JoinableQueue
+from subprocess import Popen
+
 
 # internal libs
-from ..core.logging import logger, HOST, DETAILED_HANDLER
+from ..core.logging import logger, HOST, setup as logging_setup
 from ..core.queue import QueueClient, ADDRESS, AUTHKEY, SENTINEL
-from ..__meta__ import __appname__, __copyright__, __contact__, __website__
 
 # external libs
 from cmdkit.app import Application, exit_status
@@ -37,7 +35,7 @@ TEMPLATE = '{}'
 
 # program name is constructed from module file name
 NAME = 'client'
-PROGRAM = f'{__appname__} {NAME}'
+PROGRAM = 'hyper-shell client'
 PADDING = ' ' * len(PROGRAM)
 
 USAGE = f"""\
@@ -57,6 +55,8 @@ options:
 -p, --port     SIZE  Port number for clients (default: {ADDRESS[1]}).
 -k, --authkey  KEY   Cryptographic authkey for connection (default: {AUTHKEY}).
 -x, --timeout  SEC   Length of time in seconds before disconnecting (default: 600).
+    --parsl          Hand-off tasks to Parsl.
+    --profile  NAME  Parsl configuration (default: local).
 -v, --verbose        Show info messages.
 -d, --debug          Show debugging messages.
 -l, --logging        Show detailed syslog style messages.
@@ -65,18 +65,18 @@ options:
 
 
 # initialize module level logger
-log = logger.with_name(NAME)
+log = logger.with_name('hyper-shell.client')
 
 
 def received_eof(exc) -> int:
     """The server shutdown and caused an EOFError."""
-    log.critical(f'server disconnected')
+    log.critical('server disconnected')
     return exit_status.runtime_error
 
 
 def connection_refused(exc) -> int:
     """The client raised a ConnectionRefusedError."""
-    log.critical(f'connection refused')
+    log.critical('connection refused')
     return exit_status.runtime_error
 
 
@@ -99,7 +99,7 @@ class Client(Application):
     template: str = TEMPLATE
     interface.add_argument('-t', '--template', default=template)
 
-    timeout: int = 600
+    timeout: int = 0
     interface.add_argument('-w', '--timeout', default=timeout, type=int)
 
     debug: bool = False
@@ -111,6 +111,12 @@ class Client(Application):
     logging: bool = False
     interface.add_argument('-l', '--logging', action='store_true')
 
+    use_parsl: bool = False
+    interface.add_argument('--parsl', action='store_true', dest='use_parsl')
+
+    profile: str = 'local'
+    interface.add_argument('--profile', default=profile)
+
     exceptions = {
         EOFError: received_eof,
         ConnectionRefusedError: connection_refused
@@ -121,6 +127,13 @@ class Client(Application):
 
     def run(self) -> None:
         """Run the hyper-shell client."""
+        if not self.use_parsl:
+            self.run_local()
+        else:
+            self.run_parsl()
+
+    def run_local(self) -> None:
+        """Run local hyper-shell client."""
 
         get_task = partial(self.server.tasks.get, timeout=self.timeout)
         run_task = partial(Popen, shell=True, stdout=self.output, stderr=sys.stderr)
@@ -140,20 +153,56 @@ class Client(Application):
             log.debug('received sentinel, shutting down')
 
         except Empty:
-            log.debug(f'timeout reached, shutting down')
+            log.debug('timeout reached, shutting down')
+
+    def run_parsl(self) -> None:
+        """Run local hyper-shell client."""
+
+        # local import allows for optional dependency on parsl
+        from ..parsl.config import load_config
+        from ..parsl.client import ParslScheduler, ParslCollector
+
+        # load parsl configuration
+        load_config(name=self.profile)
+
+        # queues for sharing task futures
+        tasks = Queue()
+        futures = Queue()
+
+        # start the consumer thread that pushes tasks to parsl
+        scheduler = ParslScheduler(tasks, futures, self.template,
+                                   debug=self.debug, verbose=self.verbose,
+                                   logging=self.logging)
+        scheduler.start()
+
+        # start the collector thread that waits on futures
+        collector = ParslCollector(futures, self.server.finished,
+                                   debug=self.debug, verbose=self.verbose,
+                                   logging=self.logging)
+        collector.start()
+
+        # publish all tasks from server to shared queue
+        get_task = partial(self.server.tasks.get, timeout=self.timeout)
+        try:
+            for task_id, task_line in iter(get_task, SENTINEL):
+                tasks.put((task_id, task_line))
+                self.server.tasks.task_done()
+
+            log.debug('received sentinel, shutting down')
+        except Empty:
+            log.debug('timeout reached, shutting down')
+
+        # publish sentinal to parsl scheduler and wait
+        tasks.put(SENTINEL)
+        scheduler.join()
+
+        # scheduler puts the SENTINEL on the futures queue
+        collector.join()
 
     def __enter__(self) -> Client:
         """Initialize resources."""
 
-        if self.logging:
-            log.handlers[0] = DETAILED_HANDLER
-        if self.debug:
-            log.handlers[0].level = logger.levels[0]
-        elif self.verbose:
-            log.handlers[0].level = logger.levels[1]
-        else:
-            log.handlers[0].level = logger.levels[2]
-
+        logging_setup(log, self.debug, self.verbose, self.logging)
         self.server = QueueClient((self.host, self.port), authkey=self.authkey).__enter__()
         self.server.connected.put(HOST)
         log.debug(f'connected to {self.host}:{self.port}')
@@ -161,6 +210,8 @@ class Client(Application):
         self.output = sys.stdout if self.outfile == '-' else open(self.outfile, 'w')
         log.debug(f'writing outputs to {"<stdout>" if self.outfile == "-" else self.outfile}')
 
+        # timeout of zero means no timeout
+        self.timeout = None if self.timeout == 0 else self.timeout
         return self
 
     def __exit__(self, *exc) -> None:
@@ -168,7 +219,7 @@ class Client(Application):
 
         if self.server is not None:
             self.server.__exit__()
-            log.debug(f'disconnected')
+            log.debug('disconnected')
 
         if self.output is not sys.stdout:
             self.output.close()

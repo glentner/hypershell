@@ -10,11 +10,10 @@
 
 """Run the hyper-shell server."""
 
-# allow for return annotations
+# type annotations
 from __future__ import annotations
 
 # standard libs
-import os
 import sys
 import time
 import functools
@@ -22,22 +21,18 @@ from queue import Empty
 from multiprocessing import Process, JoinableQueue, Value
 
 # internal libs
-from ..core.logging import logger, Logger, DETAILED_HANDLER
+from ..core.logging import logger, setup as logging_setup
 from ..core.queue import QueueServer, ADDRESS, AUTHKEY, MAXSIZE, SENTINEL
 from ..core.exceptions import print_and_exit
-from ..__meta__ import __appname__, __copyright__, __contact__, __website__
 
 # external libs
 from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
 
-# type annotations
-from typing import IO
-
 
 # program name is constructed from module file name
 NAME = 'server'
-PROGRAM = f'{__appname__} {NAME}'
+PROGRAM = 'hyper-shell server'
 PADDING = ' ' * len(PROGRAM)
 
 USAGE = f"""\
@@ -69,22 +64,14 @@ options:
 
 
 # initialize module level logger
-log = logger.with_name(NAME)
+log = logger.with_name('hyper-shell.server')
 
 
 def queue_tasks(filepath: str, tasks: JoinableQueue, tasks_queued: Value,
                 debug: bool = False, verbose: bool = False, logging: bool = False) -> None:
     """Read lines from `filepath` and publish to `tasks` queue."""
 
-    from ..core.logging import logger, DETAILED_HANDLER
-    log = logger.with_name(NAME)
-    if logging:
-        log.handlers[0] = DETAILED_HANDLER
-    if debug:
-        log.handlers[0].level = logger.levels[0]
-    elif verbose:
-        log.handlers[0].level = logger.levels[1]
-
+    logging_setup(log, debug, verbose, logging)
     # NOTE: Python has unfortunate behavior of setting stdin=/dev/null with
     #       Process creation. Work around: stackoverflow.com #30134297
     sys.stdin = open(0)
@@ -111,15 +98,7 @@ def record_results(filepath: str, finished: JoinableQueue, tasks_finished: Value
                    debug: bool = False, verbose: bool = False, logging: bool = False) -> None:
     """Get lines from `finished` queue and write failures back to `filepath`."""
 
-    from ..core.logging import logger, DETAILED_HANDLER
-    log = logger.with_name(NAME)
-    if logging:
-        log.handlers[0] = DETAILED_HANDLER
-    if debug:
-        log.handlers[0].level = logger.levels[0]
-    elif verbose:
-        log.handlers[0].level = logger.levels[1]
-
+    logging_setup(log, debug, verbose, logging)
     output = sys.stdout if filepath == '-' else open(filepath, 'w')
 
     try:
@@ -182,7 +161,7 @@ class Server(Application):
     def run(self) -> None:
         """Run the hyper-shell server."""
 
-         # count of all tasks published
+        # count of all tasks published
         tasks_queued = Value('i', 0)
         tasks_finished = Value('i', 0)
 
@@ -226,28 +205,17 @@ class Server(Application):
 
     def __enter__(self) -> Server:
         """Initialize resources."""
-
-        if self.logging:
-            log.handlers[0] = DETAILED_HANDLER
-        if self.debug:
-            log.handlers[0].level = logger.levels[0]
-        elif self.verbose:
-            log.handlers[0].level = logger.levels[1]
-        else:
-            log.handlers[0].level = logger.levels[2]
-
+        logging_setup(log, self.debug, self.verbose, self.logging)
         self.server = QueueServer((self.host, self.port), authkey=self.authkey,
                                   max_tasks=self.maxsize).__enter__()
-
-        log.debug(f'started')
+        log.debug('started')
         return self
 
     def __exit__(self, *exc) -> None:
         """Release resources."""
-
         if self.server is not None:
             self.server.__exit__()
-            log.debug(f'stopped')
+            log.debug('stopped')
 
 
 # inherit docstring from module

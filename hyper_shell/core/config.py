@@ -8,12 +8,14 @@
 # You should have received a copy of the Apache License along with this program.
 # If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
 
-"""Package initialization for hyper-shell."""
+"""Hyper-shell configuration."""
 
-import sys
-from .apps import HyperShell
+# standard libs
+import os
 
 
-def main() -> int:
-    """Entry-point for `hyper-shell` console application."""
-    return HyperShell.main(sys.argv[1:2])  # only first argument if present
+CONFIG_DIR = os.path.join(os.getenv('HOME'), '.hyper-shell')
+
+def init_config() -> None:
+    """Ensure the configuration directory exists."""
+    os.makedirs(CONFIG_DIR, exist_ok=True)
