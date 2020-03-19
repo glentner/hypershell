@@ -22,7 +22,7 @@ setup(
     version          = '1.6.0',
     author           = 'Geoffrey Lentner',
     author_email     = 'glentner@purdue.edu',
-    description      = ('A cross-platform, high performance computing utility for processing'
+    description      = ('A cross-platform, high performance computing utility for processing '
                         'shell commands over a distributed, asynchronous queue.'),
     license          = 'Apache Software License',
     keywords         = ('distributed-computing command-line-tool shell-scripting '
