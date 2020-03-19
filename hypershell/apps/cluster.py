@@ -24,7 +24,7 @@ from subprocess import Popen, PIPE
 
 # internal libs
 from ..__meta__ import __appname__
-from ..core.logging import logger, HOST, DETAILED_HANDLER
+from ..core.logging import logger, HOST, setup as logging_setup
 from ..core.queue import ADDRESS, MAXSIZE
 from ..core.exceptions import print_and_exit
 from .client import TEMPLATE
@@ -72,8 +72,7 @@ options:
 """
 
 
-# initialize module level logger
-log = logger.with_name(NAME)
+log = logger.with_name('hyper-shell.cluster')
 
 
 class Cluster(Application):
@@ -125,7 +124,7 @@ class Cluster(Application):
         RuntimeError: functools.partial(print_and_exit, logger=log.critical,
                                         status=exit_status.runtime_error),
         FileNotFoundError: functools.partial(print_and_exit, logger=log.critical,
-                                            status=exit_status.runtime_error)
+                                             status=exit_status.runtime_error)
     }
 
     def run(self) -> None:
@@ -141,29 +140,19 @@ class Cluster(Application):
     def run_local(self) -> None:
         """Run the cluster in 'local' mode."""
 
-        logging = ''
-        if self.debug:
-            logging += '--debug'
-        if self.verbose:
-            logging += '--verbose'
-        if self.logging:
-            logging += ' --logging'
-
-        authkey = secrets.token_hex(nbytes=16)
         failures = '' if self.failures is None else f'--output {self.failures}'
+        server_invocation = (f'hyper-shell server {self.taskfile} {failures} --port {self.port} '
+                             f'--authkey {self.authkey} --maxsize {self.maxsize} {self.logging_args}')
 
-        server_invocation = (f'{sys.argv[0]} server {self.taskfile} {failures} --port {self.port} '
-                             f'--authkey {authkey} --maxsize {self.maxsize} {logging}')
-
-        log.debug(f'starting server: "{server_invocation}"')
+        log.debug(f'starting server: {server_invocation}')
         server_process = Popen(server_invocation, shell=True, stdin=sys.stdin, stdout=PIPE, stderr=sys.stderr)
 
-        client_invocation = (f'{sys.argv[0]} client --port {self.port} --authkey {authkey} {logging} '
-                             f'--template "{self.template}"')
+        client_invocation = (f'hyper-shell client --port {self.port} --authkey {self.authkey} '
+                             f'{self.logging_args} --template "{self.template}"')
 
         num_cores = self.num_cores if self.num_cores is not None else psutil.cpu_count()
-        log.debug(f'starting {num_cores} clients: "{client_invocation}"')
-        time.sleep(2)
+        log.debug(f'starting {num_cores} clients: {client_invocation}')
+        time.sleep(2)  # o.w. clients might start too fast and be refused
 
         client_processes = []
         for _ in range(num_cores):
@@ -178,41 +167,32 @@ class Cluster(Application):
     def run_ssh(self) -> None:
         """Run the cluster in 'ssh' mode."""
 
-        logging = ''
-        if self.debug:
-            logging += '--debug'
-        if self.verbose:
-            logging += '--verbose'
-        if self.logging:
-            logging += ' --logging'
-
         if self.nodefile is None:
-            raise ArgumentError(f'no nodefile given')
+            raise ArgumentError('no nodefile given')
 
-        with open(self.nodefile, 'r') as nodefile:
+        with open(self.nodefile, mode='r') as nodefile:
             log.debug(f'reading hostnames from {self.nodefile}')
             hostnames = [hostname.strip() for hostname in nodefile.readlines()]
 
-        authkey = secrets.token_hex(nbytes=16)
         failures = '' if self.failures is None else f'--output {self.failures}'
+        server_invocation = (f'hyper-shell server {self.taskfile} {failures} --host 0.0.0.0 --port {self.port} '
+                             f'--authkey {self.authkey} --maxsize {self.maxsize} {self.logging_args}')
 
-        server_invocation = (f'{sys.argv[0]} server {self.taskfile} {failures} --host 0.0.0.0 --port {self.port} '
-                             f'--authkey {authkey} --maxsize {self.maxsize} {logging}')
-
-        log.debug(f'starting server: "{server_invocation}"')
+        log.debug(f'starting server: {server_invocation}')
         server_process = Popen(server_invocation, shell=True, stdin=sys.stdin, stdout=PIPE, stderr=sys.stderr)
 
-        client_invocation = (f'{sys.argv[0]} client --host {HOST} --port {self.port} --authkey {authkey} '
-                             f' {logging} --template "{self.template}"')
+        client_invocation = (f'hyper-shell client --host {HOST} --port {self.port} --authkey {self.authkey} '
+                             f'{self.logging_args} --template "{self.template}"')
 
         num_hosts = len(set(hostnames))
         num_clients = len(hostnames)
-        log.debug(f'starting {num_clients} clients across {num_hosts} hosts: "{client_invocation}"')
+        log.debug(f'starting {num_clients} clients across {num_hosts} hosts: {client_invocation}')
         time.sleep(2)
 
         client_processes = []
         for hostname in hostnames:
-            client = Popen(f'ssh {hostname} {client_invocation}', shell=True, stdout=sys.stdout, stderr=sys.stderr)
+            client = Popen(f'ssh {hostname} {client_invocation}', shell=True,
+                           stdout=sys.stdout, stderr=sys.stderr)
             client_processes.append(client)
 
         for client in client_processes:
@@ -223,29 +203,18 @@ class Cluster(Application):
     def run_mpi(self) -> None:
         """Run the cluster in 'mpi' mode."""
 
-        logging = ''
-        if self.debug:
-            logging += '--debug'
-        if self.verbose:
-            logging += '--verbose'
-        if self.logging:
-            logging += ' --logging'
-
-        if self.nodefile is None:
-            raise ArgumentError(f'no nodefile given')
-
-        authkey = secrets.token_hex(nbytes=16)
         failures = '' if self.failures is None else f'--output {self.failures}'
-        server_invocation = (f'{sys.argv[0]} server {self.taskfile} {failures} --host 0.0.0.0 '
-                             f'--port {self.port} --authkey {authkey} --maxsize {self.maxsize} {logging}')
+        server_invocation = (f'hyper-shell server {self.taskfile} {failures} --host 0.0.0.0 '
+                             f'--port {self.port} --authkey {self.authkey} --maxsize {self.maxsize} '
+                             f'{self.logging_args}')
 
-        log.debug(f'starting server: "{server_invocation}"')
+        log.debug(f'starting server: {server_invocation}')
         server_process = Popen(server_invocation, shell=True, stdin=sys.stdin, stderr=sys.stderr)
 
-        client_invocation = (f'{sys.argv[0]} client --host {HOST} --port {self.port} --authkey {authkey} {logging} '
-                             f'--template "{self.template}"')
+        client_invocation = (f'hyper-shell client --host {HOST} --port {self.port} --authkey {self.authkey} '
+                             f'{self.logging_args} --template "{self.template}"')
 
-        log.debug(f'starting clients: "{client_invocation}"')
+        log.debug(f'starting clients: {client_invocation}')
         time.sleep(2)
 
         mpi_invocation = f'mpiexec -machinefile {self.nodefile} {client_invocation}'
@@ -255,22 +224,49 @@ class Cluster(Application):
         server_process.wait()
 
     def run_parsl(self) -> None:
-        """Run the cluster in 'parsl' mode."""
-        raise ArgumentError(f'cluster mode "parsl" is not currently implemented')
+        """Run cluster in 'parsl' mode."""
+
+        failures = '' if self.failures is None else f'--output {self.failures}'
+        server_invocation = (f'hyper-shell server {self.taskfile} {failures} --port {self.port} '
+                             f'--authkey {self.authkey} --maxsize {self.maxsize} {self.logging_args}')
+
+        log.debug(f'starting server: {server_invocation}')
+        server = Popen(server_invocation, shell=True, stdin=sys.stdin, stderr=sys.stderr)
+
+        client_invocation = (f'hyper-shell client --port {self.port} --authkey {self.authkey} '
+                             f'{self.logging_args} --template "{self.template}" '
+                             f'--parsl --profile "{self.profile}"')
+
+        time.sleep(2)  # o.w. clients might start too fast and be refused
+        log.debug(f'starting client: {client_invocation}')
+        client = Popen(client_invocation, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+        client.wait()
+
+        # server exits when all clients signal
+        server.wait()
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def logging_args(self) -> str:
+        """Necessary logging arguments for subprocess invocation."""
+        args = ''
+        if self.debug:
+            args += '--debug'
+        if self.verbose:
+            args += '--verbose'
+        if self.logging:
+            args += ' --logging'
+        return args
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def authkey(self) -> str:
+        """One-time cryptographic key for server/client connection."""
+        return secrets.token_hex(nbytes=16)
 
     def __enter__(self) -> Cluster:
         """Initialize resources."""
-
-        if self.logging:
-            log.handlers[0] = DETAILED_HANDLER
-        if self.debug:
-            log.handlers[0].level = logger.levels[0]
-        elif self.verbose:
-            log.handlers[0].level = logger.levels[1]
-        else:
-            log.handlers[0].level = logger.levels[2]
-
-
+        logging_setup(log, self.debug, self.verbose, self.logging)
         return self
 
     def __exit__(self, *exc) -> None:

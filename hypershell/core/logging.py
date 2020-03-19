@@ -77,7 +77,7 @@ class ConsoleHandler(handlers.Handler):
     def format(self, msg: Message) -> str:
         """Syslog style with padded spaces."""
         timestamp = msg.timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        return f'{timestamp} {HOST} {msg.level.name} [{__appname__}] {msg.source}: {msg.content}'
+        return f'{timestamp} {HOST} {msg.level.name:<8} {msg.source}: {msg.content}'
 
 
 @dataclass
@@ -101,3 +101,18 @@ logger.handlers.append(SIMPLE_HANDLER)
 
 # inject logger back into cmdkit library
 _cmdkit_logging.log = logger
+
+
+def setup(logger: Logger, debug: bool = False, verbose: bool = False, logging: bool = False):
+    """
+    Setup process used by command-line interface.
+    Also required to repeat setup for forked process.
+    """
+    if logging:
+        logger.handlers[0] = DETAILED_HANDLER
+    if debug:
+        logger.handlers[0].level = logger.levels[0]
+    elif verbose:
+        logger.handlers[0].level = logger.levels[1]
+    else:
+        logger.handlers[0].level = logger.levels[2]
