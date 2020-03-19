@@ -19,7 +19,7 @@ with open('README.rst', mode='r') as readme:
 
 setup(
     name             = 'hyper-shell',
-    version          = '1.5.5',
+    version          = '1.6.0',
     author           = 'Geoffrey Lentner',
     author_email     = 'glentner@purdue.edu',
     description      = ('A cross-platform, high performance computing utility for processing'
