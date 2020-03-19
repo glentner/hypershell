@@ -10,8 +10,13 @@
 
 """Package initialization for hyper-shell."""
 
+# standard libs
 import sys
+
+# internal libs
 from .apps import HyperShell
+from .__meta__ import (__appname__, __version__, __authors__, __description__,  # noqa: W0611
+                       __contact__, __license__, __copyright__, __keywords__)
 
 
 def main() -> int:
