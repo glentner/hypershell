@@ -58,6 +58,9 @@ def load_config(name: str) -> Dict[str, 'parsl.config.Config']:
     from parsl import load
     from parsl.config import Config
 
+    # initialize parsl configuration if needed
+    init_config()
+
     # dynamically load config as a module
     sys.path.append(CONFIG_DIR)
     parsl_config = importlib.import_module('parsl_config')
