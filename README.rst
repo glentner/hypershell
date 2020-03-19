@@ -19,7 +19,7 @@ hyper-shell
 
 
 A cross-platform, high performance computing utility for processing shell commands
-over a distributed, asynchronous queue. _hyper-shell_ is a single producer
+over a distributed, asynchronous queue. *hyper-shell* is a single producer
 (server) many consumer (client) system.
 
 *hyper-shell* is pure Python and has been tested on Linux, macOS, and Windows 10 in
@@ -30,14 +30,14 @@ platform.
 Installation
 ------------
 
-To install _hyper-shell_:
+To install *hyper-shell*:
 
 .. code-block::
 
     pip install hyper-shell
 
 For general use on a production system such as a shared computing cluster it is more robust
-to encapsulate _hyper-shell_ within its own environment or module.
+to encapsulate *hyper-shell* within its own environment or module.
 
 
 Documentation

@@ -30,6 +30,7 @@ setup(
     url              = 'https://github.com/glentner/hyper-shell',
     packages         = find_packages(),
     long_description = long_description,
+    long_description_content_type = 'text/x-rst',
     classifiers      = ['Development Status :: 4 - Beta',
                         'Topic :: Utilities',
                         'Programming Language :: Python :: 3.7',
