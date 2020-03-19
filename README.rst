@@ -22,7 +22,7 @@ A cross-platform, high performance computing utility for processing shell comman
 over a distributed, asynchronous queue. _hyper-shell_ is a single producer
 (server) many consumer (client) system.
 
-_hyper-shell_ is pure Python and has been tested on Linux, macOS, and Windows 10 in
+*hyper-shell* is pure Python and has been tested on Linux, macOS, and Windows 10 in
 Python 3.7 environments. The server and clients don't even need to be using the same
 platform.
 
