@@ -33,8 +33,8 @@ from ..__meta__ import __appname__
 from typing import Callable
 
 
-LEVELS = levels.Level.from_names(['DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL'])
-COLORS = colors.Color.from_names(['blue', 'green', 'white', 'yellow', 'red', 'magenta'])
+LEVELS = levels.Level.from_names(['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
+COLORS = colors.Color.from_names(['blue', 'green', 'yellow', 'red', 'magenta'])
 RESET = colors.Color.reset
 HOST = socket.gethostname()
 
