@@ -12,7 +12,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import Tuple
+from typing import Tuple, IO
 
 # standard libs
 import sys
@@ -40,8 +40,8 @@ PROGRAM = f'{__appname__} {NAME}'
 PADDING = ' ' * len(PROGRAM)
 
 USAGE = f"""\
-usage: {PROGRAM} FILE [--failures PATH] [--port NUM] [--maxsize SIZE] [--template CMD]
-       {PADDING} [--local [--num-cores NUM] | [--ssh | --mpi] --nodefile PATH | --parsl [--profile NAME]]
+usage: {PROGRAM} FILE [--failures FILE] [--output FILE] [--port NUM] [--maxsize SIZE] [--template CMD]
+       {PADDING} [--local [--num-cores NUM] | (--ssh | --mpi) --nodefile FILE | --parsl [--profile NAME]]
        {PADDING} [--verbose | --debug] [--logging]
        {PADDING} [--help]
 
@@ -55,18 +55,20 @@ arguments:
 FILE                  Path to file for command list.
 
 options:
--f, --failures  PATH  Path to file to write failed commands.
+-f, --failures  FILE  Path to file to write failed commands.
+-o, --output    FILE  Path to file for command outputs (default: <stdout>).
 -p, --port      PORT  Port number for server (default: {ADDRESS[1]}).
 -s, --maxsize   SIZE  Maximum items allowed in the queue (default: {MAXSIZE}).
 -t, --template  CMD   Template command (default: "{TEMPLATE}").
     --local           Run cluster locally (uses --num-cores).
+    --ssh             Run distributed cluster with SSH (uses --nodefile).
     --mpi             Run distributed cluster with MPI (uses --nodefile).
-    --parsl           Run cluster using Parsl (uses --profile).
+    --parsl           Run elastic cluster with Parsl (uses --profile).
 -N, --num-cores NUM   Number of cores to use (see --local).
-    --nodefile  PATH  Path to node file (see --mpi).
+    --nodefile  FILE  Path to node file (see --ssh, --mpi).
     --profile   NAME  Name of parsl config to use.
 -v, --verbose         Show info messages.
--d, --debug           Show debugging messages.
+-d, --debug           Show debug messages.
 -l, --logging         Show detailed syslog style messages.
 -h, --help            Show this message and exit.
 """
@@ -90,6 +92,9 @@ class Cluster(Application):
 
     failures: str = None
     interface.add_argument('-f', '--failures', default=None)
+
+    outfile: str = '-'
+    interface.add_argument('-o', '--output', default=outfile, dest='outfile')
 
     template: str = TEMPLATE
     interface.add_argument('-t', '--template', default=template)
@@ -119,6 +124,8 @@ class Cluster(Application):
 
     logging: bool = False
     interface.add_argument('-l', '--logging', action='store_true')
+
+    output: IO = None
 
     exceptions = {
         RuntimeError: functools.partial(print_and_exit, logger=log.critical,
@@ -156,7 +163,7 @@ class Cluster(Application):
 
         client_processes = []
         for _ in range(num_cores):
-            client = Popen(client_invocation, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+            client = Popen(client_invocation, shell=True, stdout=self.output, stderr=sys.stderr)
             client_processes.append(client)
 
         for client in client_processes:
@@ -192,7 +199,7 @@ class Cluster(Application):
         client_processes = []
         for hostname in hostnames:
             client = Popen(f'ssh {hostname} {client_invocation}', shell=True,
-                           stdout=sys.stdout, stderr=sys.stderr)
+                           stdout=self.output, stderr=sys.stderr)
             client_processes.append(client)
 
         for client in client_processes:
@@ -218,7 +225,7 @@ class Cluster(Application):
         time.sleep(2)
 
         mpi_invocation = f'mpiexec -machinefile {self.nodefile} {client_invocation}'
-        mpi_process = Popen(mpi_invocation, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+        mpi_process = Popen(mpi_invocation, shell=True, stdout=self.output, stderr=sys.stderr)
 
         mpi_process.wait()
         server_process.wait()
@@ -239,7 +246,7 @@ class Cluster(Application):
 
         time.sleep(2)  # o.w. clients might start too fast and be refused
         log.debug(f'starting client: {client_invocation}')
-        client = Popen(client_invocation, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+        client = Popen(client_invocation, shell=True, stdout=self.output, stderr=sys.stderr)
         client.wait()
 
         # server exits when all clients signal
@@ -267,10 +274,14 @@ class Cluster(Application):
     def __enter__(self) -> Cluster:
         """Initialize resources."""
         logging_setup(log, self.debug, self.verbose, self.logging)
+        self.output = sys.stdout if self.outfile == '-' else open(self.outfile, 'w')
+        log.debug(f'writing outputs to {"<stdout>" if self.outfile == "-" else self.outfile}')
         return self
 
     def __exit__(self, *exc) -> None:
         """Release resources."""
+        if self.output is not sys.stdout:
+            self.output.close()
 
 
 # inherit docstring from module

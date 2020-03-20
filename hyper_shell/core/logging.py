@@ -90,7 +90,7 @@ class SimpleConsoleHandler(handlers.Handler):
     def format(self, msg: Message) -> str:
         """Colorize the log level and with only the message."""
         COLOR = Logger.colors[msg.level.value].foreground
-        return f'{COLOR}{msg.level.name.lower()}{RESET} {msg.source}: {msg.content}'
+        return f'{COLOR}{msg.source}: {msg.content}{RESET}'
 
 
 DETAILED_HANDLER = ConsoleHandler(LEVELS[2])
