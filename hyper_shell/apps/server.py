@@ -57,7 +57,7 @@ options:
 -p, --port     PORT  Port number for server (default: {ADDRESS[1]}).
 -k, --authkey  KEY   Cryptographic key for connection (default: {AUTHKEY}).
 -v, --verbose        Show info messages.
--d, --debug          Show debugging messages.
+-d, --debug          Show debug messages.
 -l, --logging        Show detailed syslog style messages.
 -h, --help           Show this message and exit.
 """
