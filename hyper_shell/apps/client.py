@@ -39,7 +39,8 @@ PROGRAM = 'hyper-shell client'
 PADDING = ' ' * len(PROGRAM)
 
 USAGE = f"""\
-usage: {PROGRAM} [--template CMD] [--host ADDR] [--port PORT] [--authkey KEY] [--timeout SEC]
+usage: {PROGRAM} [--host ADDR] [--port PORT] [--authkey KEY] [--timeout SEC]
+       {PADDING} [--template CMD] [--output FILE]
        {PADDING} [--verbose | --debug] [--logging]
        {PADDING} [--help]
 
@@ -50,15 +51,16 @@ HELP = f"""\
 {USAGE}
 
 options:
--t, --template CMD   Template command (default: "{TEMPLATE}").
 -H, --host     ADDR  Hostname of server (default: {ADDRESS[0]}).
 -p, --port     SIZE  Port number for clients (default: {ADDRESS[1]}).
 -k, --authkey  KEY   Cryptographic authkey for connection (default: {AUTHKEY}).
 -x, --timeout  SEC   Length of time in seconds before disconnecting (default: 600).
+-t, --template CMD   Template command (default: "{TEMPLATE}").
+-o, --output   FILE  Path to file for command outputs (default: <stdout>).
     --parsl          Hand-off tasks to Parsl.
     --profile  NAME  Parsl configuration (default: local).
 -v, --verbose        Show info messages.
--d, --debug          Show debugging messages.
+-d, --debug          Show debug messages.
 -l, --logging        Show detailed syslog style messages.
 -h, --help           Show this message and exit.
 """
