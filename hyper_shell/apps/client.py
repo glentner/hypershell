@@ -158,7 +158,7 @@ class Client(Application):
             log.debug('timeout reached, shutting down')
 
     def run_parsl(self) -> None:
-        """Run local hyper-shell client."""
+        """Run hyper-shell client in Parsl mode."""
 
         # local import allows for optional dependency on parsl
         from ..parsl.config import load_config
