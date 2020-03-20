@@ -8,7 +8,7 @@
 # You should have received a copy of the Apache License along with this program.
 # If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
 
-"""Run hyper-shell cluster, server and clients."""
+"""Run the hyper-shell cluster."""
 
 # type annotations
 from __future__ import annotations
@@ -45,7 +45,8 @@ usage: {PROGRAM} FILE [--failures FILE] [--output FILE] [--port NUM] [--maxsize 
        {PADDING} [--verbose | --debug] [--logging]
        {PADDING} [--help]
 
-{__doc__}\
+{__doc__}
+This launches clients using one of the available schemes.\
 """
 
 HELP = f"""\

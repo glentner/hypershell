@@ -24,8 +24,8 @@ from ..core import config as hyper_shell_config
 from ..core.logging import logger
 
 
-# only called by cluster mode
-log = logger.with_name('hyper-shell.cluster')
+# only called by client
+log = logger.with_name('hyper-shell.client')
 
 
 CONFIG_DIR = hyper_shell_config.CONFIG_DIR
