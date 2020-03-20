@@ -14,10 +14,6 @@
 from typing import Callable
 
 
-# class RuntimeError(Exception):
-#     """A runtime error within hyper-shell."""
-
-
 def print_and_exit(exc: Exception, logger: Callable[[str], None], status: int) -> int:
     """Log the exception argument and exit with `status`."""
     logger(*exc.args)
