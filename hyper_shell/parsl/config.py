@@ -10,9 +10,6 @@
 
 """Get Parsl config object from file; set default config file."""
 
-# type annotations
-from typing import Dict
-
 # standard libs
 import os
 import sys
@@ -51,7 +48,7 @@ def init_config() -> None:
             config_file.write(DEFAULT_CONFIG)
 
 
-def load_config(name: str) -> Dict[str, 'parsl.config.Config']:
+def load_config(name: str) -> None:
     """Load config objects from module."""
 
     # local import relaxes parsl dependency
