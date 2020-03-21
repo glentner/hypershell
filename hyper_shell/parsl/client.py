@@ -11,7 +11,7 @@
 """Specialized client for Parsl mode."""
 
 # type annotations
-from typing import Tuple
+from typing import Tuple, Dict
 
 # standard libs
 import sys
@@ -25,27 +25,35 @@ from parsl import python_app
 
 # internal libs
 from ..core.logging import logger, setup as logging_setup
+from ..core.config import CWD, ENV
+from ..core.task import format_cmd
+
 
 SENTINEL = None
 log = logger.with_name('hyper-shell.client')
 
+# parsl function import type
+CmdSpec = Tuple[str, str, Dict[str, str]]
+
 
 @python_app
-def execute(cmdline: str) -> Tuple[int, str, str]:
+def execute(cmdspec: CmdSpec) -> Tuple[int, str, str]:
     """
-    Execute `cmdline` as a subprocess.
+    Execute a subprocess.
 
     Arguments
     ---------
-    cmdline: str
-        The shell command to execute.
+    cmdspec: Tuple[str, str, Dict[str, str]]
+        This contains the `cmdline` to be executed, the `cwd` for
+        the subprocess and any `env` variables to set.
 
     Returns
     -------
     (exit_status, stdout, stderr): (int, str, str)
         The status and outputs of the command.
     """
-    task = run(cmdline, shell=True, capture_output=True)
+    cmdline, cwd, env = cmdspec
+    task = run(cmdline, shell=True, capture_output=True, cwd=cwd, env=env)
     return task.returncode, task.stdout.decode(), task.stderr.decode()
 
 
@@ -70,10 +78,12 @@ class ParslScheduler(Thread):
     def run(self) -> None:
         """Launch tasks using Parsl and put 'future' on queue."""
 
-        for task_id, task_line in iter(self.tasks.get, SENTINEL):
+        for task_id, task_arg in iter(self.tasks.get, SENTINEL):
+            task_line = format_cmd(task_arg, self.template)
             log.info(f'running task_id={task_id}')
             log.debug(f'running task_id={task_id}: {task_line}')
-            task_future = execute(self.template.format(task_line))
+            task_future = execute((task_line, CWD, {'TASK_ID': str(task_id),
+                                                    'TASK_ARG': task_arg, **ENV}))
             self.futures.put((task_id, task_line, task_future))
         self.futures.put(SENTINEL)
 
