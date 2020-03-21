@@ -16,6 +16,7 @@ from typing import IO
 
 # standard libs
 import sys
+import functools
 from queue import Queue, Empty
 from functools import partial
 from subprocess import Popen
@@ -24,14 +25,14 @@ from subprocess import Popen
 # internal libs
 from ..core.logging import logger, HOST, setup as logging_setup
 from ..core.queue import QueueClient, ADDRESS, AUTHKEY, SENTINEL
+from ..core.config import CWD, ENV
+from ..core.task import format_cmd, TEMPLATE
+from ..core.exceptions import print_and_exit
 
 # external libs
 from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
 
-
-# default command template
-TEMPLATE = '{}'
 
 # program name is constructed from module file name
 NAME = 'client'
@@ -121,7 +122,9 @@ class Client(Application):
 
     exceptions = {
         EOFError: received_eof,
-        ConnectionRefusedError: connection_refused
+        ConnectionRefusedError: connection_refused,
+        RuntimeError: functools.partial(print_and_exit, logger=log.critical,
+                                        status=exit_status.runtime_error)
     }
 
     server: QueueClient = None
@@ -138,16 +141,18 @@ class Client(Application):
         """Run local hyper-shell client."""
 
         get_task = partial(self.server.tasks.get, timeout=self.timeout)
-        run_task = partial(Popen, shell=True, stdout=self.output, stderr=sys.stderr)
+        run_task = partial(Popen, shell=True, stdout=self.output, stderr=sys.stderr, cwd=CWD)
 
         try:
-            for task_id, task_line in iter(get_task, SENTINEL):
+            for task_id, task_arg in iter(get_task, SENTINEL):
                 # NOTE: signalling task_done immediately allows other clients to get a task
                 #       without having to wait for this one to finish
                 self.server.tasks.task_done()
+                task_line = format_cmd(task_arg, self.template)
                 log.info(f'running task_id={task_id}')
                 log.debug(f'running task_id={task_id}: {task_line}')
-                process = run_task(self.template.format(task_line))
+                process = run_task(task_line, env={'TASK_ID': str(task_id),
+                                                   'TASK_ARG': task_arg, **ENV})
                 process.wait()
                 log.info(f'finished task_id={task_id}, status={process.returncode}')
                 self.server.finished.put((task_id, task_line, process.returncode))

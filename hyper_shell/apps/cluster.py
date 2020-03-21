@@ -27,7 +27,8 @@ from ..__meta__ import __appname__
 from ..core.logging import logger, HOST, setup as logging_setup
 from ..core.queue import ADDRESS, MAXSIZE
 from ..core.exceptions import print_and_exit
-from .client import TEMPLATE
+from ..core.config import EXE
+from ..core.task import TEMPLATE
 
 # external libs
 from cmdkit.app import Application, exit_status
@@ -149,14 +150,16 @@ class Cluster(Application):
         """Run the cluster in 'local' mode."""
 
         failures = '' if self.failures is None else f'--output {self.failures}'
-        server_invocation = (f'hyper-shell server {self.taskfile} {failures} --port {self.port} '
+        server_invocation = (f'{sys.argv[0]} server {self.taskfile} {failures} --port {self.port} '
                              f'--authkey {self.authkey} --maxsize {self.maxsize} {self.logging_args}')
 
         log.debug(f'starting server: {server_invocation}')
         server_process = Popen(server_invocation, shell=True, stdin=sys.stdin, stdout=PIPE, stderr=sys.stderr)
 
-        client_invocation = (f'hyper-shell client --port {self.port} --authkey {self.authkey} '
-                             f'{self.logging_args} --template "{self.template}"')
+        # NOTE: single quotes are critical around the template argument so shell
+        #       variables do not expand until AFTER they are executed by the task
+        client_invocation = (f'{sys.argv[0]} client --port {self.port} --authkey {self.authkey} '
+                             f'{self.logging_args} --template \'{self.template}\'')
 
         num_cores = self.num_cores if self.num_cores is not None else psutil.cpu_count()
         log.debug(f'starting {num_cores} clients: {client_invocation}')
@@ -183,14 +186,16 @@ class Cluster(Application):
             hostnames = [hostname.strip() for hostname in nodefile.readlines()]
 
         failures = '' if self.failures is None else f'--output {self.failures}'
-        server_invocation = (f'hyper-shell server {self.taskfile} {failures} --host 0.0.0.0 --port {self.port} '
+        server_invocation = (f'{EXE} server {self.taskfile} {failures} --host 0.0.0.0 --port {self.port} '
                              f'--authkey {self.authkey} --maxsize {self.maxsize} {self.logging_args}')
 
         log.debug(f'starting server: {server_invocation}')
         server_process = Popen(server_invocation, shell=True, stdin=sys.stdin, stdout=PIPE, stderr=sys.stderr)
 
-        client_invocation = (f'hyper-shell client --host {HOST} --port {self.port} --authkey {self.authkey} '
-                             f'{self.logging_args} --template "{self.template}"')
+        # NOTE: single quotes are critical around the template argument so shell
+        #       variables do not expand until AFTER they are executed by the task
+        client_invocation = (f'{EXE} client --host {HOST} --port {self.port} --authkey {self.authkey} '
+                             f'{self.logging_args} --template \'{self.template}\'')
 
         num_hosts = len(set(hostnames))
         num_clients = len(hostnames)
@@ -212,15 +217,17 @@ class Cluster(Application):
         """Run the cluster in 'mpi' mode."""
 
         failures = '' if self.failures is None else f'--output {self.failures}'
-        server_invocation = (f'hyper-shell server {self.taskfile} {failures} --host 0.0.0.0 '
+        server_invocation = (f'{EXE} server {self.taskfile} {failures} --host 0.0.0.0 '
                              f'--port {self.port} --authkey {self.authkey} --maxsize {self.maxsize} '
                              f'{self.logging_args}')
 
         log.debug(f'starting server: {server_invocation}')
         server_process = Popen(server_invocation, shell=True, stdin=sys.stdin, stderr=sys.stderr)
 
-        client_invocation = (f'hyper-shell client --host {HOST} --port {self.port} --authkey {self.authkey} '
-                             f'{self.logging_args} --template "{self.template}"')
+        # NOTE: single quotes are critical around the template argument so shell
+        #       variables do not expand until AFTER they are executed by the task
+        client_invocation = (f'{EXE} client --host {HOST} --port {self.port} --authkey {self.authkey} '
+                             f'{self.logging_args} --template \'{self.template}\'')
 
         log.debug(f'starting clients: {client_invocation}')
         time.sleep(2)
@@ -235,15 +242,17 @@ class Cluster(Application):
         """Run cluster in 'parsl' mode."""
 
         failures = '' if self.failures is None else f'--output {self.failures}'
-        server_invocation = (f'hyper-shell server {self.taskfile} {failures} --port {self.port} '
+        server_invocation = (f'{EXE} server {self.taskfile} {failures} --port {self.port} '
                              f'--authkey {self.authkey} --maxsize {self.maxsize} {self.logging_args}')
 
         log.debug(f'starting server: {server_invocation}')
         server = Popen(server_invocation, shell=True, stdin=sys.stdin, stderr=sys.stderr)
 
-        client_invocation = (f'hyper-shell client --port {self.port} --authkey {self.authkey} '
-                             f'{self.logging_args} --template "{self.template}" '
-                             f'--parsl --profile "{self.profile}"')
+        # NOTE: single quotes are critical around the template argument so shell
+        #       variables do not expand until AFTER they are executed by the task
+        client_invocation = (f'{EXE} client --port {self.port} --authkey {self.authkey} '
+                             f'{self.logging_args} --template \'{self.template}\' '
+                             f'--parsl --profile {self.profile}')
 
         time.sleep(2)  # o.w. clients might start too fast and be refused
         log.debug(f'starting client: {client_invocation}')
