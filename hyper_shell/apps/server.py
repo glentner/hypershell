@@ -78,11 +78,11 @@ def queue_tasks(filepath: str, tasks: JoinableQueue, tasks_queued: Value,
     source = sys.stdin if filepath == '-' else open(filepath, 'r')
 
     try:
-        for i, task_line in enumerate(map(str.strip, source)):
+        for i, task_arg in enumerate(map(str.strip, source)):
             task_id = i + 1
-            tasks.put((task_id, task_line))
+            tasks.put((task_id, task_arg))
             log.info(f'queued task_id={task_id}')
-            log.debug(f'queued task_id={task_id}: {task_line}')
+            log.debug(f'queued task_id={task_id}: {task_arg}')
             with tasks_queued.get_lock():
                 tasks_queued.value += 1
 
