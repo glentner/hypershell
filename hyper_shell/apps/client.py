@@ -31,10 +31,9 @@ from ..core.exceptions import print_and_exit
 
 # external libs
 from cmdkit.app import Application, exit_status
-from cmdkit.cli import Interface
+from cmdkit.cli import Interface, ArgumentError
 
 
-# program name is constructed from module file name
 NAME = 'client'
 PROGRAM = 'hyper-shell client'
 PADDING = ' ' * len(PROGRAM)
@@ -86,6 +85,11 @@ def connection_refused(exc) -> int:
 class Client(Application):
 
     interface = Interface(PROGRAM, USAGE, HELP)
+
+    # allow for the user to passively provide a single "--"
+    # to execute without specifying any other arguments
+    stub: str = "--"
+    interface.add_argument('stub', nargs='?', default=stub)
 
     outfile: str = '-'
     interface.add_argument('-o', '--output', default=outfile, dest='outfile')
@@ -208,6 +212,9 @@ class Client(Application):
 
     def __enter__(self) -> Client:
         """Initialize resources."""
+
+        if self.stub != '--':
+            raise ArgumentError(f'unrecognized arguments: {self.stub}')
 
         logging_setup(log, self.debug, self.verbose, self.logging)
         self.server = QueueClient((self.host, self.port), authkey=self.authkey).__enter__()
