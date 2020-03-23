@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Tuple, IO
 
 # standard libs
+import os
 import sys
 import time
 import secrets
@@ -35,14 +36,14 @@ from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface, ArgumentError
 
 
-# program name is constructed from module file name
 NAME = 'cluster'
 PROGRAM = f'{__appname__} {NAME}'
 PADDING = ' ' * len(PROGRAM)
 
 USAGE = f"""\
-usage: {PROGRAM} FILE [--failures FILE] [--output FILE] [--port NUM] [--maxsize SIZE] [--template CMD]
-       {PADDING} [--local [--num-cores NUM] | (--ssh | --mpi) --nodefile FILE | --parsl [--profile NAME]]
+usage: {PROGRAM} [FILE] [-f FILE] [-o FILE] [-p NUM] [-s SIZE] [-t CMD] [-k KEY]
+       {PADDING} [--local [--num-cores NUM] | (--ssh | --mpi) --nodefile FILE |
+                  --parsl [--profile NAME]]
        {PADDING} [--verbose | --debug] [--logging]
        {PADDING} [--help]
 
@@ -54,13 +55,14 @@ HELP = f"""\
 {USAGE}
 
 arguments:
-FILE                  Path to file for command list.
+FILE                  Path to file for command list (default: <stdin>).
 
 options:
--f, --failures  FILE  Path to file to write failed commands.
--o, --output    FILE  Path to file for command outputs (default: <stdout>).
+-f, --failures  FILE  Path to file to record failed commands.
+-o, --output    FILE  Path to file for output (default: <stdout>).
 -p, --port      PORT  Port number for server (default: {ADDRESS[1]}).
 -s, --maxsize   SIZE  Maximum items allowed in the queue (default: {MAXSIZE}).
+-k, --authkey   KEY   Cryptographic authkey for server (default: <auto>).
 -t, --template  CMD   Template command (default: "{TEMPLATE}").
     --local           Run cluster locally (uses --num-cores).
     --ssh             Run distributed cluster with SSH (uses --nodefile).
@@ -68,7 +70,7 @@ options:
     --parsl           Run elastic cluster with Parsl (uses --profile).
 -N, --num-cores NUM   Number of cores to use (see --local).
     --nodefile  FILE  Path to node file (see --ssh, --mpi).
-    --profile   NAME  Name of parsl config to use.
+    --profile   NAME  Name config to use (see --parsl).
 -v, --verbose         Show info messages.
 -d, --debug           Show debug messages.
 -l, --logging         Show detailed syslog style messages.
@@ -84,7 +86,7 @@ class Cluster(Application):
     interface = Interface(PROGRAM, USAGE, HELP)
 
     taskfile: str = '-'
-    interface.add_argument('taskfile')
+    interface.add_argument('taskfile', nargs='?', default=taskfile)
 
     port: int = ADDRESS[1]
     interface.add_argument('-p', '--port', default=port, type=int)
@@ -100,6 +102,10 @@ class Cluster(Application):
 
     template: str = TEMPLATE
     interface.add_argument('-t', '--template', default=template)
+
+    # auto generate if not given explicitly
+    authkey: bytes = secrets.token_hex(nbytes=16)
+    interface.add_argument('-k', '--authkey', default=authkey, type=str)
 
     # clustering method
     cluster_mode: str = 'local'
@@ -275,17 +281,20 @@ class Cluster(Application):
             args += ' --logging'
         return args
 
-    @property
-    @functools.lru_cache(maxsize=1)
-    def authkey(self) -> str:
-        """One-time cryptographic key for server/client connection."""
-        return secrets.token_hex(nbytes=16)
-
     def __enter__(self) -> Cluster:
         """Initialize resources."""
+
+        # setup logging behavior
         logging_setup(log, self.debug, self.verbose, self.logging)
+
+        # redirect output
         self.output = sys.stdout if self.outfile == '-' else open(self.outfile, 'w')
         log.debug(f'writing outputs to {"<stdout>" if self.outfile == "-" else self.outfile}')
+
+        # check input file before sending to server
+        if self.taskfile != '-' and not os.path.isfile(self.taskfile):
+            raise FileNotFoundError(f'file not found: {self.taskfile}')
+
         return self
 
     def __exit__(self, *exc) -> None:
