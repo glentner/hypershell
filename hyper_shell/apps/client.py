@@ -16,10 +16,10 @@ from typing import IO
 
 # standard libs
 import sys
-import functools
 from queue import Queue, Empty
 from functools import partial
 from subprocess import Popen
+from multiprocessing.context import AuthenticationError
 
 
 # internal libs
@@ -27,14 +27,12 @@ from ..core.logging import logger, HOST, setup as logging_setup
 from ..core.queue import QueueClient, ADDRESS, AUTHKEY, SENTINEL
 from ..core.config import CWD, ENV
 from ..core.task import format_cmd, TEMPLATE
-from ..core.exceptions import print_and_exit
 
 # external libs
 from cmdkit.app import Application, exit_status
-from cmdkit.cli import Interface
+from cmdkit.cli import Interface, ArgumentError
 
 
-# program name is constructed from module file name
 NAME = 'client'
 PROGRAM = 'hyper-shell client'
 PADDING = ' ' * len(PROGRAM)
@@ -76,16 +74,30 @@ def received_eof(exc) -> int:
     log.critical('server disconnected')
     return exit_status.runtime_error
 
-
 def connection_refused(exc) -> int:
     """The client raised a ConnectionRefusedError."""
-    log.critical('connection refused')
+    log.critical('connection refused (server may be down)')
+    return exit_status.runtime_error
+
+def runtime_error(exc) -> int:
+    """Display the runtime error."""
+    log.critical(f'runtime_error: {exc.args}')
+    return exit_status.runtime_error
+
+def authentication_error(exc) -> int:
+    """The authkey was bad."""
+    log.critical('authentication error (bad key)')
     return exit_status.runtime_error
 
 
 class Client(Application):
 
     interface = Interface(PROGRAM, USAGE, HELP)
+
+    # allow for the user to passively provide a single "--"
+    # to execute without specifying any other arguments
+    stub: str = "--"
+    interface.add_argument('stub', nargs='?', default=stub)
 
     outfile: str = '-'
     interface.add_argument('-o', '--output', default=outfile, dest='outfile')
@@ -123,8 +135,8 @@ class Client(Application):
     exceptions = {
         EOFError: received_eof,
         ConnectionRefusedError: connection_refused,
-        RuntimeError: functools.partial(print_and_exit, logger=log.critical,
-                                        status=exit_status.runtime_error)
+        AuthenticationError: authentication_error,
+        RuntimeError: runtime_error
     }
 
     server: QueueClient = None
@@ -208,6 +220,9 @@ class Client(Application):
 
     def __enter__(self) -> Client:
         """Initialize resources."""
+
+        if self.stub != '--':
+            raise ArgumentError(f'unrecognized arguments: {self.stub}')
 
         logging_setup(log, self.debug, self.verbose, self.logging)
         self.server = QueueClient((self.host, self.port), authkey=self.authkey).__enter__()

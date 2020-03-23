@@ -11,7 +11,7 @@
 """Metadata for the hyper-shell package."""
 
 __appname__     = 'hyper-shell'
-__version__     = '1.7.0'
+__version__     = '1.7.1'
 __authors__     = 'Geoffrey Lentner'
 __contact__     = 'glentner@purdue.edu'
 __license__     = 'Apache Software License'
