@@ -30,7 +30,6 @@ from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
 
 
-# program name is constructed from module file name
 NAME = 'server'
 PROGRAM = 'hyper-shell server'
 PADDING = ' ' * len(PROGRAM)
@@ -63,7 +62,6 @@ options:
 """
 
 
-# initialize module level logger
 log = logger.with_name('hyper-shell.server')
 
 
@@ -125,7 +123,7 @@ class Server(Application):
     interface = Interface(PROGRAM, USAGE, HELP)
 
     taskfile: str = '-'
-    interface.add_argument('taskfile')
+    interface.add_argument('taskfile', nargs='?', default=taskfile)
 
     outfile: str = '-'
     interface.add_argument('-o', '--output', default=outfile, dest='outfile')
