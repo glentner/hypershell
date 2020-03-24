@@ -43,7 +43,7 @@ PADDING = ' ' * len(PROGRAM)
 USAGE = f"""\
 usage: {PROGRAM} [FILE] [-f FILE] [-o FILE] [-p NUM] [-s SIZE] [-t CMD] [-k KEY]
        {PADDING} [--local [--num-cores NUM] | (--ssh | --mpi) --nodefile FILE |
-                  --parsl [--profile NAME]]
+       {PADDING}  --parsl [--profile NAME]]
        {PADDING} [--verbose | --debug] [--logging]
        {PADDING} [--help]
 
