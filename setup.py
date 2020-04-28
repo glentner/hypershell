@@ -11,6 +11,7 @@
 """Build and installation script for hyper-shell."""
 
 # standard libs
+import os
 from setuptools import setup, find_packages
 
 # metadata
@@ -21,6 +22,14 @@ from hyper_shell.__meta__ import (__appname__, __version__, __description__,
 
 with open('README.rst', mode='r') as readme:
     long_description = readme.read()
+
+
+# basic dependencies
+DEPS = ['cmdkit>=1.2.2', 'logalpha>=2.0.2', 'psutil>=5.7.0']
+
+# add dependencies for readthedocs.io
+if os.environ.get('READTHEDOCS') == 'True':
+    DEPS.extend(['sphinxbootstrap4theme'])
 
 
 setup(
@@ -44,7 +53,7 @@ setup(
                         'Operating System :: MacOS',
                         'Operating System :: Microsoft :: Windows',
                         'License :: OSI Approved :: Apache Software License', ],
-    install_requires = ['cmdkit>=1.2.2', 'logalpha>=2.0.2', 'psutil>=5.7.0', ],
+    install_requires = DEPS,
     entry_points     = {'console_scripts': ['hyper-shell=hyper_shell.apps:main', ]},
     data_files = [
         ('share/man/man1', ['man/man1/hyper-shell.1', ])
