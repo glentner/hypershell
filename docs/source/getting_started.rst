@@ -9,7 +9,7 @@ Installation
 
 *Hyper-Shell* is built on Python 3.7+ and can be installed using Pip.
 
-.. code-block::
+.. code-block:: none
 
     ➜ pip install hyper-shell
 
@@ -31,14 +31,14 @@ file, ``TASKFILE``, that lists shell commands that you might otherwise
 execute alone (which would run each line in serial), pass that file
 to *hyper-shell* to process those commands in parallel.
 
-.. code-block::
+.. code-block:: none
 
     ➜ hyper-shell cluster TASKFILE
 
 To specify the number of tasks to execute simultaneously, use ``--num-cores``
 (or ``-N`` for short).
 
-.. code-block::
+.. code-block:: none
 
     ➜ hyper-shell cluster TASKFILE -N16
 
@@ -51,7 +51,7 @@ Some commands may fail for whatever reason. To track which input commands
 had a non-zero exit status, specify the ``--failed`` (or ``-f`` for short)
 option. This output file will contain lines from the input file that failed.
 
-.. code-block::
+.. code-block:: none
 
     ➜ hyper-shell cluster TASKFILE -N16 -f TASKFILE.failed
 

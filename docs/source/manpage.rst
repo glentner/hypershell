@@ -41,11 +41,11 @@ remote connections. The port number and authkey are arbitrary choices.
     the bind address to use. For clients to be allowed to connect you will
     need to set this to 0.0.0.0 for the server.
 
-.. code-block::
+.. code-block:: none
 
     user@host-1 ~$ hyper-shell server -H 0.0.0.0
 
-.. code-block::
+.. code-block:: none
 
     user@host-2 ~$ hyper-shell client -H host-1
 
@@ -117,7 +117,7 @@ The output of commands are simply redirected to ``stdout`` unless otherwise
 specified by ``--output``. To isolate output from individual commands, you can
 specify how to redirect from inside the command template; e.g.,
     
-.. code-block::
+.. code-block:: none
 
     $ hyper-shell client ... -t '{} >$TASK_ID.out'
 
@@ -125,7 +125,7 @@ With no arguments, the client will just print a usage statement and exit.
 To prompt the client to run with all default arguments, a ``--`` is 
 interpreted as a simple noarg.
 
-.. code-block::
+.. code-block:: none
 
     $ hyper-shell client --
 
@@ -219,7 +219,7 @@ injected into the execution environment of the tasks with the prefix stripped.
 
 Example:
 
-.. code-block::
+.. code-block:: none
 
     $ export HYPERSHELL_PATH=/other/bin:$PATH
     $ export HYPERSHELL_OTHER=FOO
@@ -236,7 +236,7 @@ as a new variable, ``OTHER``.
 
 .. code-block:: bash
 
-    export HYPERSHELL_EXE=/other/bin/hyper-shell
+    $ export HYPERSHELL_EXE=/other/bin/hyper-shell
 
 ``HYPERSHELL_CWD``
 
@@ -246,7 +246,7 @@ as a new variable, ``OTHER``.
 
 .. code-block:: bash
 
-    export HYPERSHELL_CWD=$HOME/other
+    $ export HYPERSHELL_CWD=$HOME/other
 
 All tasks will also have special variables defined within their environment
 that are specific to that instance.
@@ -271,7 +271,7 @@ Simple Cluster
 Process an existing list of commands from some ``taskfile``. Presumably, one
 could execute ``taskfile`` directly and the lines would be executed in serial.
 
-.. code-block::
+.. code-block:: none
 
     $ hyper-shell cluster taskfile -f taskfile.failed
 
@@ -282,7 +282,7 @@ all-caps to mark files as being transient in nature. In this case, ``TASKFILE``
 is like a queue unto itself. Enable verbose logging with ``-vl``, redirect
 outputs and view logging messages but also append them to a file using ``tee``.
 
-.. code-block::
+.. code-block:: none
 
     $ tail -f TASKFILE | hyper-shell cluster -vl -N4 -f FAILED \
         2>&1 1>OUTPUTS | tee -a hyper-shell.log
@@ -292,14 +292,14 @@ Server and Clients
 Start a server manually to publish tasks. Define an access key using ``-k``
 and set the bind address for the server so clients can connect remotely.
 
-.. code-block::
+.. code-block:: none
 
     $ hyper-shell server -dlk 'some-key' -H 0.0.0.0 < taskfile > taskfile.failed
 
 On different machines launch one or more clients. This can be done manually,
 or in an automated fashion.
 
-.. code-block::
+.. code-block:: none
 
     $ hyper-shell client -dlk 'some-key' -H 'server-hostname' > local.out
 
@@ -331,7 +331,7 @@ load.
 
 On a login-node on the cluster:
 
-.. code-block::
+.. code-block:: none
 
     $ hyper-shell cluster -dl --parsl --profile=myconfig < TASKFILE \
         >OUTPUTS 2>>hyper-shell.log
@@ -371,13 +371,13 @@ the DAG and execution formulae; if one defines a top-level target that simply
 prints all the final targets of the tasks, you can pipe that into something like
 *hyper-shell* to run in a distributed context when necessary.
 
-.. code-block::
+.. code-block:: none
 
     $ make list | hyper-shell cluster -t 'make {}' --mpi --nodefile $NODEFILE
 
 You might even embed that in the *Makefile* itself to run in a distributed mode.
 
-.. code-block::
+.. code-block:: none
 
     cluster:
         $(make) list | hyper-shell cluster -t '$(make) {}' --mpi --nodefile $(NODEFILE)

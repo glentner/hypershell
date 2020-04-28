@@ -10,7 +10,6 @@ Tutorials
 
 **Sections**
 
-
 .. toctree::
     :maxdepth: 3
 

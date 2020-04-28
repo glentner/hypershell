@@ -17,7 +17,7 @@ specify how to redirect from inside the command template; e.g.,
 
 With no arguments, the client will just print a usage statement and exit.
 
-.. code-block::
+.. code-block:: none
 
     ➜ hyper-shell client
     usage: hyper-shell client [--host ADDR] [--port PORT] [--authkey KEY] [--timeout SEC]
@@ -32,7 +32,7 @@ With no arguments, the client will just print a usage statement and exit.
 To prompt the client to run with all default arguments a double dash, ``--``, is
 interpreted as a simple noarg.
 
-.. code-block::
+.. code-block:: none
 
     ➜ hyper-shell client --
 
@@ -50,7 +50,7 @@ interpreted as a simple noarg.
 
     To automatically disconnect and shutdown after 10 minutes without tasks:
 
-    .. code-block::
+    .. code-block:: none
 
         ➜ hyper-shell client -x600
 
@@ -78,7 +78,7 @@ interpreted as a simple noarg.
     Instead of using a shell redirect, write outputs to an explicitly named
     file path, ``outputs.txt``:
 
-    .. code-block::
+    .. code-block:: none
 
         ➜ hyper-shell client -o outputs.txt
 

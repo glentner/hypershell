@@ -42,7 +42,7 @@ the available *cluster* mode to process locally, automatically scale out using *
 *MPI*, or configure `Parsl <https://parsl-project.org>`_ to scale elastically using an HPC scheduler
 like *Slurm* or in the cloud with *Kubernetes*.
 
-.. code-block::
+.. code-block:: none
 
     ➜ seq -w 10000 | hyper-shell cluster -N24 -t 'echo {}' | tail -4
     09997
@@ -61,7 +61,7 @@ Start the *hyper-shell server* and set the bind address to ``0.0.0.0`` to allow 
 The server acts like a sieve, reading tasks from a file (or ``stdin``), publishing them to the queue, and
 recording failed commands to a file (or ``stdout``).
 
-.. code-block::
+.. code-block:: none
 
     ➜ hyper-shell server -H 0.0.0.0 -k MY_KEY < TASKFILE > TASKFILE.failed
 
@@ -69,7 +69,7 @@ Connect to the running server from a different host (even from a different platf
 You can connect with any number of clients from any number of hosts. The separate client connections
 will each pull individual tasks off the queue asynchronously, balancing the load.
 
-.. code-block::
+.. code-block:: none
 
     ➜ hyper-shell client -H host-1 -k MY_KEY > TASKFILE.out
 

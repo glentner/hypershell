@@ -25,7 +25,7 @@ binaries out (and maybe specific libraries).
 
 Example:
 
-.. code-block::
+.. code-block:: none
 
     .
     ├── bin/

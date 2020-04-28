@@ -11,7 +11,7 @@ In this way, the server acts like a sieve, consuming commands and emitting failu
 The basic premise is as follows, for a given ``TASKFILE`` consisting of
 input command lines:
 
-.. code-block::
+.. code-block:: none
 
     ➜ hyper-shell server - < TASKFILE > TASKFILE.failed
 
@@ -22,7 +22,7 @@ from ``TASKFILE``.
 
 With no arguments, the server will just print a usage statement and exit.
 
-.. code-block::
+.. code-block:: none
 
     ➜ hyper-shell server
     usage: hyper-shell server FILE [--output FILE] [--maxsize SIZE]
