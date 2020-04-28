@@ -19,7 +19,7 @@ from ..__meta__ import (__appname__, __version__, __description__,
                         __copyright__, __contact__, __website__)
 
 # external libs
-from cmdkit.app import Application, exit_status
+from cmdkit.app import Application
 from cmdkit.cli import Interface, ArgumentError
 
 # commands
@@ -79,7 +79,7 @@ class CompletedCommand(Exception):
 
 
 class HyperShell(Application):
-    """Entry-point for hyper-shell console-app."""
+    """Top-level application class for hyper-shell."""
 
     interface = Interface(PROGRAM, USAGE, HELP)
     interface.add_argument('-v', '--version', version=__version__, action='version')
@@ -101,3 +101,8 @@ class HyperShell(Application):
         except KeyError as error:
             cmd, = error.args
             raise ArgumentError(f'"{cmd}" is not an available command.')
+
+
+def main() -> int:
+    """Entry-point for `hyper-shell` console application."""
+    return HyperShell.main(sys.argv[1:2])  # only first argument if present

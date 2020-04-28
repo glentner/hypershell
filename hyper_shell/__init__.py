@@ -10,15 +10,7 @@
 
 """Package initialization for hyper-shell."""
 
-# standard libs
-import sys
 
-# internal libs
-from .apps import HyperShell
-from .__meta__ import (__appname__, __version__, __authors__, __description__,  # noqa: W0611
+# metadata
+from .__meta__ import (__appname__, __version__, __authors__, __description__,
                        __contact__, __license__, __copyright__, __keywords__)
-
-
-def main() -> int:
-    """Entry-point for `hyper-shell` console application."""
-    return HyperShell.main(sys.argv[1:2])  # only first argument if present

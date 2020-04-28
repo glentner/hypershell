@@ -13,22 +13,27 @@
 # standard libs
 from setuptools import setup, find_packages
 
+# metadata
+from hyper_shell.__meta__ import (__appname__, __version__, __description__,
+                                  __authors__, __contact__, __keywords__,
+                                  __license__, __website__)
+
 
 with open('README.rst', mode='r') as readme:
     long_description = readme.read()
 
+
 setup(
-    name             = 'hyper-shell',
-    version          = '1.7.2',
-    author           = 'Geoffrey Lentner',
-    author_email     = 'glentner@purdue.edu',
-    description      = ('A cross-platform, high performance computing utility for processing '
-                        'shell commands over a distributed, asynchronous queue.'),
-    license          = 'Apache Software License',
-    keywords         = ('distributed-computing command-line-tool shell-scripting '
-                        'high-performance-computing'),
-    url              = 'https://github.com/glentner/hyper-shell',
+    name             = __appname__,
+    version          = __version__,
+    author           = __authors__,
+    author_email     = __contact__,
+    description      = ' '.join(__description__.strip().split('\n')),
+    license          = __license__,
+    keywords         = __keywords__,
+    url              = __website__,
     packages         = find_packages(),
+    include_package_data = True,
     long_description = long_description,
     long_description_content_type = 'text/x-rst',
     classifiers      = ['Development Status :: 4 - Beta',
@@ -39,6 +44,9 @@ setup(
                         'Operating System :: MacOS',
                         'Operating System :: Microsoft :: Windows',
                         'License :: OSI Approved :: Apache Software License', ],
-    install_requires = ['cmdkit>=1.0.0', 'logalpha>=2.0.0', 'psutil', ],
-    entry_points     = {'console_scripts': ['hyper-shell=hyper_shell:main', ]},
+    install_requires = ['cmdkit>=1.2.2', 'logalpha>=2.0.2', 'psutil>=5.7.0', ],
+    entry_points     = {'console_scripts': ['hyper-shell=hyper_shell.apps:main', ]},
+    data_files = [
+        ('share/man/man1', ['man/man1/hyper-shell.1', ])
+    ],
 )
