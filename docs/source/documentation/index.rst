@@ -12,7 +12,7 @@ option to any top-level command will print a full help listing.
 You can view much of the same documentation provided here directly from the command
 line by viewing the manual page,
 
-.. code-block::
+.. code-block:: none
 
     ➜ man hyper-shell
 

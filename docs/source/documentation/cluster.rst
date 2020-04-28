@@ -23,7 +23,7 @@ invoked. See the :ref:`Parsl <parsl_doc>` documentation page for details.
 
 With no arguments, the cluster will just print a usage statement and exit.
 
-.. code-block::
+.. code-block:: none
 
     ➜ hyper-shell cluster
     usage: hyper-shell cluster [FILE] [-f FILE] [-o FILE] [-p NUM] [-s SIZE] [-t CMD] [-k KEY]

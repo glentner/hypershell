@@ -31,13 +31,13 @@ for the clients when executing in *cluster* mode.
 
     Start the server and set the bind address to allow for remote clients:
 
-    .. code-block::
+    .. code-block:: none
 
         ➜ hyper-shell server -H 0.0.0.0
 
     Connect to the server running at ``host-1``:
 
-    .. code-block::
+    .. code-block:: none
 
         ➜ hyper-shell client -H host-1
 
@@ -50,13 +50,13 @@ for the clients when executing in *cluster* mode.
 
     Specify a particular port number when starting the server:
 
-    .. code-block::
+    .. code-block:: none
 
         ➜ hyper-shell server -H 0.0.0.0 -p 54321
 
     Connect to the server:
 
-    .. code-block::
+    .. code-block:: none
 
         ➜ hyper-shell client -H host-1 -p 54321
 
@@ -71,13 +71,13 @@ for the clients when executing in *cluster* mode.
 
     Use a particular authorization key for the server instance:
 
-    .. code-block::
+    .. code-block:: none
 
         ➜ hyper-shell server -H 0.0.0.0 -k MY_SPECIAL_KEY
 
     Connect to the server using the key:
 
-    .. code-block::
+    .. code-block:: none
 
         ➜ hyper-shell client -H host-1 -k MY_SPECIAL_KEY
 
