@@ -8,16 +8,16 @@ ipython = "*"
 pytest = "*"
 hypothesis = "*"
 pylint = "*"
-sphinx = "*"
-sphinx-rtd-theme = "*"
+sphinx = "<3"  # broken manpage rendering
+sphinxbootstrap4theme = "*"
 twine = "*"
+bleach = ">=3.1.4"  # security vulnerability
 parsl = "*"
 
 [packages]
 cmdkit = ">=1.2.2"
 logalpha = ">=2.0.2"
-psutil = "*"
-bleach = ">=3.1.1"  # security vulnerability
+psutil = ">=5.7.0"
 hyper-shell = {editable = true,path = "."}
 
 [requires]

@@ -17,6 +17,10 @@ hyper-shell
     :target: https://hyper-shell.readthedocs.io
     :alt: Documentation
 
+.. image:: https://pepy.tech/badge/hyper-shell
+    :target: https://pepy.tech/badge/hyper-shell
+    :alt: Downloads
+
 
 A cross-platform, high performance computing utility for processing shell commands
 over a distributed, asynchronous queue. *hyper-shell* is a single producer
@@ -34,7 +38,7 @@ To install *hyper-shell*:
 
 .. code-block::
 
-    pip install hyper-shell
+    ➜ pip install hyper-shell
 
 For general use on a production system such as a shared computing cluster it is more robust
 to encapsulate *hyper-shell* within its own environment or module.

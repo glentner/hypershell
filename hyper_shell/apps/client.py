@@ -74,15 +74,18 @@ def received_eof(exc) -> int:
     log.critical('server disconnected')
     return exit_status.runtime_error
 
+
 def connection_refused(exc) -> int:
     """The client raised a ConnectionRefusedError."""
     log.critical('connection refused (server may be down)')
     return exit_status.runtime_error
 
+
 def runtime_error(exc) -> int:
     """Display the runtime error."""
     log.critical(f'runtime_error: {exc.args}')
     return exit_status.runtime_error
+
 
 def authentication_error(exc) -> int:
     """The authkey was bad."""
@@ -115,7 +118,7 @@ class Client(Application):
     interface.add_argument('-t', '--template', default=template)
 
     timeout: int = 0
-    interface.add_argument('-w', '--timeout', default=timeout, type=int)
+    interface.add_argument('-x', '--timeout', default=timeout, type=int)
 
     debug: bool = False
     verbose: bool = False
@@ -211,7 +214,7 @@ class Client(Application):
         except Empty:
             log.debug('timeout reached, shutting down')
 
-        # publish sentinal to parsl scheduler and wait
+        # publish sentinel to parsl scheduler and wait
         tasks.put(SENTINEL)
         scheduler.join()
 

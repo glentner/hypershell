@@ -28,7 +28,7 @@ from ..__meta__ import __appname__
 from ..core.logging import logger, HOST, setup as logging_setup
 from ..core.queue import ADDRESS, MAXSIZE
 from ..core.exceptions import print_and_exit
-from ..core.config import EXE
+from ..core.config import EXE, CONFIG_DIR
 from ..core.task import TEMPLATE
 
 # external libs
@@ -185,7 +185,11 @@ class Cluster(Application):
         """Run the cluster in 'ssh' mode."""
 
         if self.nodefile is None:
-            raise ArgumentError('no nodefile given')
+            default_nodefile = os.path.join(CONFIG_DIR, 'nodefile')
+            if os.path.exists(default_nodefile):
+                self.nodefile = default_nodefile
+            else:
+                raise FileNotFoundError('no nodefile given and ~/.hyper-shell/nodefile missing')
 
         with open(self.nodefile, mode='r') as nodefile:
             log.debug(f'reading hostnames from {self.nodefile}')
@@ -222,6 +226,21 @@ class Cluster(Application):
     def run_mpi(self) -> None:
         """Run the cluster in 'mpi' mode."""
 
+        nodefile_opt = ''
+        if self.nodefile is None:
+            default_nodefile = os.path.join(CONFIG_DIR, 'nodefile')
+            if os.path.exists(default_nodefile):
+                self.nodefile = default_nodefile
+                nodefile_opt = f'-machinefile {self.nodefile}'
+                log.debug('using default ~/.hyper-shell/nodefile')
+            else:
+                log.debug('nodefile not given')
+        else:
+            if os.path.isfile(self.nodefile):
+                nodefile_opt = f'-machinefile {self.nodefile}'
+            else:
+                raise FileNotFoundError(f'file {self.nodefile}')
+
         failures = '' if self.failures is None else f'--output {self.failures}'
         server_invocation = (f'{EXE} server {self.taskfile} {failures} --host 0.0.0.0 '
                              f'--port {self.port} --authkey {self.authkey} --maxsize {self.maxsize} '
@@ -238,7 +257,7 @@ class Cluster(Application):
         log.debug(f'starting clients: {client_invocation}')
         time.sleep(2)
 
-        mpi_invocation = f'mpiexec -machinefile {self.nodefile} {client_invocation}'
+        mpi_invocation = f'mpiexec {nodefile_opt} {client_invocation}'
         mpi_process = Popen(mpi_invocation, shell=True, stdout=self.output, stderr=sys.stderr)
 
         mpi_process.wait()

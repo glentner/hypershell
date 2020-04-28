@@ -10,19 +10,21 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
+import os
+import sys
+sys.path.insert(0, os.path.abspath('../..'))
 
+import hyper_shell  # noqa
 
 # -- Project information -----------------------------------------------------
 
 project = 'hyper-shell'
-copyright = '2019, Geoffrey Lentner'
-author = 'Geoffrey Lentner'
+copyright = '2019 Geoffrey Lentner'
+author = 'Geoffrey Lentner <glentner@purdue.edu>'
 
 # The full version, including alpha/beta/rc tags
-release = '1.5.5'
+release = hyper_shell.__version__
+version = hyper_shell.__version__
 
 
 # -- General configuration ---------------------------------------------------
@@ -31,13 +33,11 @@ release = '1.5.5'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.viewcode'
+    'sphinx.ext.viewcode',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
-
-# source_suffix = ['.rst', '.md']
 source_suffix = '.rst'
 
 # The master toctree document.
@@ -56,9 +56,22 @@ pygments_style = 'sphinx'
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'sphinxbootstrap4theme'
+
+import sphinxbootstrap4theme
+html_theme_path = [sphinxbootstrap4theme.get_path()]
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+# manual pages options
+man_pages = [(
+    'manpage',
+    'hyper-shell',
+    'process shell commands in parallel',
+    'Geoffrey Lentner <glentner@purdue.edu>.',
+    '1'
+),
+]
