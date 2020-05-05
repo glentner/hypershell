@@ -2,7 +2,7 @@ Philosophy
 ==========
 
 *Hyper-shell* was created out of a need to solve specific challenges. It's initial
-implementation was only the *server* and *client* as a loose wrapper around Python's
+implementation was only the *server* and *client* as a thin wrapper around Python's
 distributed queue from the *multiprocessing* library.
 
 Currently, there exist many nice behaviors and a generally user-friendly interface

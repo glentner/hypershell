@@ -1,7 +1,7 @@
 Server Usage
 ============
 
-The *server* reads command lines from a file (or ``stdin``) and published
+The *server* reads command lines from a file (or ``stdin``) and publishes
 them to a distributed queue.
 
 Any command that returns a non-zero exit status will have a warning message

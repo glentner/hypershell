@@ -17,7 +17,7 @@ These variables are available within the body of a command line.
 |
 
 ``TASK_ARG``
-    The input argument for this command. This the variable equivalent of '{}'
+    The input argument for this command. This is the variable equivalent of '{}'
     and can be substituted as such. This may be useful for shell-isms in
     the command template.
 
