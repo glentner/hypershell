@@ -25,7 +25,9 @@ context such as a pipeline or job.
 
 Logging messages are colored according to their severity; blue,
 green, yellow, red, and purple for debug, info, warning, error, and critical,
-respectively. A non-zero exit status by a task is considered a warning, not
+respectively. If ``stderr`` is being redirected, colors will be disabled.
+
+A non-zero exit status by a task is considered a warning, not
 an error. A critical message is reserved for situations in which *hyper-shell*
 cannot continue to run.
 
