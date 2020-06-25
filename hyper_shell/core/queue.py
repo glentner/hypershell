@@ -38,9 +38,22 @@ class QueueServer(BaseManager):
         self.tasks = JoinableQueue(maxsize=max_tasks)
         self.finished = JoinableQueue(maxsize=max_tasks)
         self.connected = JoinableQueue(maxsize=max_connections)  # FIXME: can this be unbounded?
-        self.register('_get_tasks', callable=lambda:self.tasks)
-        self.register('_get_finished', callable=lambda:self.finished)
-        self.register('_get_connected', callable=lambda:self.connected)
+        self.register('_get_tasks', callable=self._get_tasks)
+        self.register('_get_finished', callable=self._get_finished)
+        self.register('_get_connected', callable=self._get_connected)
+
+    # NOTE: In Python3.8 there is a change in Popen that affects
+    #       our ability to use a local lambdas in QueueServer.__init__.
+    #       These class level functions do the trick however.
+
+    def _get_tasks(self) -> JoinableQueue:
+        return self.tasks
+
+    def _get_finished(self) -> JoinableQueue:
+        return self.finished
+
+    def _get_connected(self) -> JoinableQueue:
+        return self.connected
 
     def __enter__(self) -> 'QueueServer':
         """Start the server."""

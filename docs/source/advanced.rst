@@ -36,14 +36,14 @@ Example:
     │   ...
     ├── man -> source/man/
     ├── modulefiles/
-    │   └── hyper-shell/[VERSION].lau
+    │   └── hyper-shell/[VERSION].lua
     └── source/
         ├── ...
         └── setup.py
 
 The *build* directory is a *Miniconda* environment with the hyper-shell *source*
 repository installed *into* it. The constructed executable is lifted out without
-polluting the users' PATH. The *LMOD* module specification file exposed only a
+polluting the users' PATH. The *LMOD* module specification file exposes only a
 minimal PATH and MANPATH extension.
 
 Additional steps may be necessary to make Parsl available to a remote *hyper-shell*

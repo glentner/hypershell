@@ -25,7 +25,7 @@ from subprocess import Popen, PIPE
 
 # internal libs
 from ..__meta__ import __appname__
-from ..core.logging import logger, HOST, setup as logging_setup
+from ..core.logging import Logger, HOST, setup as logging_setup
 from ..core.queue import ADDRESS, MAXSIZE
 from ..core.exceptions import print_and_exit
 from ..core.config import EXE, CONFIG_DIR
@@ -78,7 +78,7 @@ options:
 """
 
 
-log = logger.with_name('hyper-shell.cluster')
+log = Logger('hyper-shell.cluster')
 
 
 class Cluster(Application):
@@ -141,6 +141,9 @@ class Cluster(Application):
         FileNotFoundError: functools.partial(print_and_exit, logger=log.critical,
                                              status=exit_status.runtime_error)
     }
+
+    # override error logging in Application.main
+    log_error = log.critical
 
     def run(self) -> None:
         """Run the hyper-shell cluster."""

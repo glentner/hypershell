@@ -17,7 +17,7 @@ These variables are available within the body of a command line.
 |
 
 ``TASK_ARG``
-    The input argument for this command. This the variable equivalent of '{}'
+    The input argument for this command. This is the variable equivalent of '{}'
     and can be substituted as such. This may be useful for shell-isms in
     the command template.
 
@@ -61,6 +61,27 @@ There are a few environment variables that *you* can define that affect
 
 |
 
+``HYPERSHELL_LOGGING_LEVEL``
+    You can specify what logging level to use without the need for a command line
+    switch by defining this variable. Both numbered and named values are allowed;
+    e.g., 0-4 or one of DEBUG, INFO, WARNING, ERROR, and CRITICAL.
+
+    .. code-block:: bash
+
+        $ export HYPERSHELL_LOGGING_LEVEL=DEBUG
+
+|
+
+``HYPERSHELL_LOGGING_HANDLER``
+    You can specify what logging style to use without the need for a command line
+    switch by defining this variable. Allowed values are STANDARD or DETAILED,
+    corresponding to the basic colorized messages and the syslog style detailed
+    messages, respectively.
+
+    .. code-block:: bash
+
+        $ export HYPERSHELL_LOGGING_HANDLER=DETAILED
+
 -------------------
 
 |
@@ -78,6 +99,13 @@ Example:
 
 All tasks will have ``PATH=/other/bin:$PATH`` defined for the task as well
 as a new variable, ``OTHER=foo``.
+
+
+.. note::
+
+    If running in *cluster* mode, the clients may or may not inherit these
+    variables. The ``--mpi`` mode might export your variables to the remote
+    environment for you.
 
 
 .. toctree::
