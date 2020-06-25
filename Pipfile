@@ -21,4 +21,4 @@ psutil = ">=5.7.0"
 hyper-shell = {editable = true,path = "."}
 
 [requires]
-python_version = "3.7"
+python_version = "3.8.3"
