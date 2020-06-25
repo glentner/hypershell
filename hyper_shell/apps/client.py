@@ -23,7 +23,7 @@ from multiprocessing.context import AuthenticationError
 
 
 # internal libs
-from ..core.logging import logger, HOST, setup as logging_setup
+from ..core.logging import Logger, HOST, setup as logging_setup
 from ..core.queue import QueueClient, ADDRESS, AUTHKEY, SENTINEL
 from ..core.config import CWD, ENV
 from ..core.task import format_cmd, TEMPLATE
@@ -66,7 +66,7 @@ options:
 
 
 # initialize module level logger
-log = logger.with_name('hyper-shell.client')
+log = Logger('hyper-shell.client')
 
 
 def received_eof(exc) -> int:
@@ -144,6 +144,9 @@ class Client(Application):
 
     server: QueueClient = None
     output: IO = None
+
+    # override error logging in Application.main
+    log_error = log.critical
 
     def run(self) -> None:
         """Run the hyper-shell client."""

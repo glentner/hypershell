@@ -14,7 +14,7 @@
 import sys
 
 # internal libs
-from ..core.logging import logger
+from ..core.logging import Logger
 from ..__meta__ import (__appname__, __version__, __description__,
                         __copyright__, __contact__, __website__)
 
@@ -71,7 +71,7 @@ learn more about their usage.
 
 
 # initialize module level logger
-log = logger.with_name(__appname__)
+log = Logger(__appname__)
 
 
 class CompletedCommand(Exception):
@@ -91,6 +91,9 @@ class HyperShell(Application):
         # extract exit status from exception arguments
         CompletedCommand: (lambda exc: int(exc.args[0])),
     }
+
+    # override error logging in Application.main
+    log_error = log.critical
 
     def run(self) -> None:
         """Show usage/help/version or defer to subcommand."""

@@ -21,7 +21,7 @@ from queue import Empty
 from multiprocessing import Process, JoinableQueue, Value
 
 # internal libs
-from ..core.logging import logger, setup as logging_setup
+from ..core.logging import Logger, setup as logging_setup
 from ..core.queue import QueueServer, ADDRESS, AUTHKEY, MAXSIZE, SENTINEL
 from ..core.exceptions import print_and_exit
 
@@ -62,7 +62,7 @@ options:
 """
 
 
-log = logger.with_name('hyper-shell.server')
+log = Logger('hyper-shell.server')
 
 
 def queue_tasks(filepath: str, tasks: JoinableQueue, tasks_queued: Value,
@@ -148,6 +148,9 @@ class Server(Application):
 
     logging: bool = False
     interface.add_argument('-l', '--logging', action='store_true')
+
+    # override error logging in Application.main
+    log_error = log.critical
 
     exceptions = {
         RuntimeError: functools.partial(print_and_exit, logger=log.critical,
