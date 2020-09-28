@@ -1,7 +1,7 @@
 Hyper-Shell
 ===========
 
-Release v\ |release|. (:ref:`Getting Started <getting_started>`)
+Release v\ |release| (:ref:`Getting Started <getting_started>`)
 
 .. image:: https://img.shields.io/badge/license-Apache-blue.svg?style=flat
     :target: https://www.apache.org/licenses/LICENSE-2.0
