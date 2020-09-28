@@ -18,11 +18,11 @@ import importlib
 
 # internal libs
 from ..core import config as hyper_shell_config
-from ..core.logging import logger
+from ..core.logging import Logger
 
 
 # only called by client
-log = logger.with_name('hyper-shell.client')
+log = Logger('hyper-shell.client')
 
 
 CONFIG_DIR = hyper_shell_config.CONFIG_DIR

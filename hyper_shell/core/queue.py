@@ -11,7 +11,6 @@
 """Queue server/client implementation."""
 
 # standard libs
-from abc import ABC as AbstractBase, abstractmethod
 from multiprocessing.managers import BaseManager
 from multiprocessing import JoinableQueue
 from typing import Tuple
@@ -82,9 +81,9 @@ class QueueClient(BaseManager):
     def __enter__(self) -> 'QueueClient':
         """Connect to the server."""
         self.connect()
-        self.tasks = self._get_tasks()  # pylint: disable=no-member
-        self.finished = self._get_finished()  # pylint: disable=no-member
-        self.connected = self._get_connected()  # pylint: disable=no-member
+        self.tasks = self._get_tasks()  # noqa: no-member
+        self.finished = self._get_finished()  # noqa: no-member
+        self.connected = self._get_connected()  # noqa: no-member
         return self
 
     def __exit__(self, *exc) -> None:

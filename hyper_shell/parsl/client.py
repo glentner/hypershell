@@ -24,13 +24,13 @@ from subprocess import run
 from parsl import python_app
 
 # internal libs
-from ..core.logging import logger, setup as logging_setup
+from ..core.logging import Logger, setup as logging_setup
 from ..core.config import CWD, ENV
 from ..core.task import format_cmd
 
 
 SENTINEL = None
-log = logger.with_name('hyper-shell.client')
+log = Logger('hyper-shell.client')
 
 # parsl function import type
 CmdSpec = Tuple[str, str, Dict[str, str]]
