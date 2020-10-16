@@ -52,7 +52,7 @@ Email: <{__contact__}>.\
 """
 
 HELP = f"""\
-{USAGE}
+{USAGE}\
 
 commands:
 server                 {Server.__doc__}
