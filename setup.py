@@ -25,7 +25,7 @@ with open('README.rst', mode='r') as readme:
 
 
 # basic dependencies
-DEPS = ['cmdkit>=1.2.2', 'logalpha>=2.0.2', 'psutil>=5.7.0']
+DEPS = ['cmdkit==1.5.5', 'logalpha==2.0.2', 'psutil>=5.7.0']
 
 # add dependencies for readthedocs.io
 if os.environ.get('READTHEDOCS') == 'True':
@@ -49,6 +49,7 @@ setup(
                         'Topic :: Utilities',
                         'Programming Language :: Python :: 3.7',
                         'Programming Language :: Python :: 3.8',
+                        'Programming Language :: Python :: 3.9',
                         'Operating System :: POSIX :: Linux',
                         'Operating System :: MacOS',
                         'Operating System :: Microsoft :: Windows',

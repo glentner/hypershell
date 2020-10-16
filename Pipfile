@@ -4,21 +4,22 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
-ipython = "*"
-pytest = "*"
-hypothesis = "*"
-pylint = "*"
-sphinx = ">=3.1.1"  # broken manpage rendering
-sphinxbootstrap4theme = "*"
-twine = "*"
-bleach = ">=3.1.4"  # security vulnerability
-parsl = "*"
+pylint = ">=2.6.0"
+pytest = ">=6.1.1"
+pytest-cov = ">=2.10.1"
+hypothesis = ">=5.18.0"
+mypy = ">=0.790"
+ipython = ">=7.18.1"
+sphinx = "==3.1.2"  # man pages broken w/ >3.2.0
+sphinxbootstrap4theme = ">=0.6.0"
+twine = ">=3.2.0"
+parsl = ">=1.0.0"
 
 [packages]
-cmdkit = ">=1.5.3"
-logalpha = ">=2.0.2"
+cmdkit = "1.5.5"
+logalpha = "2.0.2"
 psutil = ">=5.7.0"
 hyper-shell = {editable = true,path = "."}
 
 [requires]
-python_version = "3.8.3"
+python_version = "3.8.5"
