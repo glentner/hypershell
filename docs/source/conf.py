@@ -12,14 +12,16 @@
 #
 import os
 import sys
+import datetime
 sys.path.insert(0, os.path.abspath('../..'))
 
 import hyper_shell  # noqa
 
 # -- Project information -----------------------------------------------------
 
+year = datetime.datetime.now().year
 project = 'hyper-shell'
-copyright = '2019 Geoffrey Lentner'
+copyright = f'2019-{year} Geoffrey Lentner'
 author = 'Geoffrey Lentner <glentner@purdue.edu>'
 
 # The full version, including alpha/beta/rc tags
