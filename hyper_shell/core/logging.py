@@ -28,7 +28,7 @@ from dataclasses import dataclass
 
 # external libraries
 from logalpha import levels, colors, messages, handlers, loggers
-from cmdkit.app import Application, exit_status
+from cmdkit.app import exit_status
 
 # internal library
 from ..__meta__ import __appname__
