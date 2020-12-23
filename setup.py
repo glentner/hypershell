@@ -15,9 +15,9 @@ import os
 from setuptools import setup, find_packages
 
 # metadata
-from hyper_shell.__meta__ import (__appname__, __version__, __description__,
-                                  __authors__, __contact__, __keywords__,
-                                  __license__, __website__)
+from hypershell.__meta__ import (__appname__, __version__, __description__,
+                                 __authors__, __contact__, __keywords__,
+                                 __license__, __website__)
 
 
 with open('README.rst', mode='r') as readme:
@@ -55,8 +55,8 @@ setup(
                         'Operating System :: Microsoft :: Windows',
                         'License :: OSI Approved :: Apache Software License', ],
     install_requires = DEPS,
-    entry_points     = {'console_scripts': ['hyper-shell=hyper_shell.apps:main', ]},
+    entry_points     = {'console_scripts': ['hypershell=hypershell.apps:main', ]},
     data_files = [
-        ('share/man/man1', ['man/man1/hyper-shell.1', ])
+        ('share/man/man1', ['man/man1/hypershell.1', ])
     ],
 )

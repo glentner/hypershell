@@ -10,13 +10,13 @@
 
 """Metadata for the hyper-shell package."""
 
-__appname__     = 'hyper-shell'
+__appname__     = 'hypershell'
 __version__     = '1.8.3'
 __authors__     = 'Geoffrey Lentner'
 __contact__     = 'glentner@purdue.edu'
 __license__     = 'Apache Software License'
 __copyright__   = 'Copyright Geoffrey Lentner 2019. All Rights Reserved.'
-__website__     = 'https://github.com/glentner/hyper-shell'
+__website__     = 'https://github.com/glentner/HyperShell'
 __keywords__    = 'distributed-computing command-line-tool shell-scripting high-performance-computing'
 __description__ = """\
 A cross-platform, high performance computing utility for processing
