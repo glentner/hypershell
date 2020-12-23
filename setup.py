@@ -10,6 +10,7 @@
 
 """Build and installation script for hyper-shell."""
 
+
 # standard libs
 import os
 import re
