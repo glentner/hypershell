@@ -12,16 +12,21 @@
 
 # standard libs
 import os
+import re
 from setuptools import setup, find_packages
 
-# metadata
-from hypershell.__meta__ import (__appname__, __version__, __description__,
-                                 __authors__, __contact__, __keywords__,
-                                 __license__, __website__)
 
-
+# get long description from README.rst
 with open('README.rst', mode='r') as readme:
     long_description = readme.read()
+
+
+# get package metadata by parsing __meta__ module
+with open('hypershell/__meta__.py', mode='r') as source:
+    content = source.read().strip()
+    metadata = {key: re.search(key + r'\s*=\s*[\'"]([^\'"]*)[\'"]', content).group(1)
+                for key in ['__version__', '__authors__', '__contact__', '__description__',
+                            '__license__', '__keywords__', '__website__']}
 
 
 # core dependencies
@@ -34,14 +39,14 @@ if os.environ.get('READTHEDOCS') == 'True':
 
 
 setup(
-    name             = __appname__,
-    version          = __version__,
-    author           = __authors__,
-    author_email     = __contact__,
-    description      = ' '.join(__description__.strip().split('\n')),
-    license          = __license__,
-    keywords         = __keywords__,
-    url              = __website__,
+    name             = 'hypershell',
+    version          = metadata['__version__'],
+    author           = metadata['__authors__'],
+    author_email     = metadata['__contact__'],
+    description      = metadata['__description__'],
+    license          = metadata['__license__'],
+    keywords         = metadata['__keywords__'],
+    url              = metadata['__website__'],
     packages         = find_packages(),
     include_package_data = True,
     long_description = long_description,
