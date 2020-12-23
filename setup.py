@@ -24,12 +24,13 @@ with open('README.rst', mode='r') as readme:
     long_description = readme.read()
 
 
-# basic dependencies
-DEPS = ['cmdkit==1.5.5', 'logalpha==2.0.2', 'psutil>=5.7.0']
+# core dependencies
+DEPS = ['cmdkit>=2.1.3', 'toml>=0.10.2', 'rich>=9.4.0', 'sqlalchemy>=1.3.19', ]
+
 
 # add dependencies for readthedocs.io
 if os.environ.get('READTHEDOCS') == 'True':
-    DEPS.extend(['sphinxbootstrap4theme'])
+    DEPS.extend(['pydata-sphinx-theme'])
 
 
 setup(

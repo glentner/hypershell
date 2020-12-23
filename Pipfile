@@ -4,21 +4,21 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
-pytest = ">=6.1.1"
+pytest = ">=6.1.2"
 pytest-cov = ">=2.10.1"
-hypothesis = ">=5.18.0"
-mypy = ">=0.790"
-line-profiler = ">=3.0.2"
-memory-profiler = ">=0.57.0"
-ipython = ">=7.18.1"
-sphinx = "==3.1.2"  # NOTE: man pages broken w/ >3.2.0
-sphinxbootstrap4theme = ">=0.6.0"
+hypothesis = ">=5.41.4"
+ipython = ">=7.19.0"
 twine = ">=3.2.0"
-parsl = ">=1.0.0"
+sphinx = ">=3.3.1"
+pydata-sphinx-theme = ">=0.4.1"
+psycopg2 = ">=2.8.5"
 
 [packages]
-cmdkit = ">=2.0.2"
-hyper-shell = {editable = true, path = "."}
+rich = ">=9.4.0"
+toml = ">=0.10.2"
+cmdkit = ">=2.1.3"
+sqlalchemy = ">=1.3.19"
+hypershell = {editable = true, path = "."}
 
 [requires]
-python_version = "3.8.6"
+python_version = "3.9.1"
