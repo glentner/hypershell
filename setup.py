@@ -62,7 +62,7 @@ setup(
                         'Operating System :: Microsoft :: Windows',
                         'License :: OSI Approved :: Apache Software License', ],
     install_requires = DEPS,
-    entry_points     = {'console_scripts': ['hypershell=hypershell.apps:main', ]},
+    entry_points     = {'console_scripts': ['hypershell=hypershell:main', ]},
     data_files = [
         ('share/man/man1', ['man/man1/hypershell.1', ])
     ],
