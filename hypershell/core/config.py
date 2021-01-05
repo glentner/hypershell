@@ -59,7 +59,8 @@ if os.name == 'nt':
     })
 else:
     is_admin = os.getuid() == 0
-    site = Namespace(system='/', user=os.path.join(home, '.hypershell'), local=cwd)
+    site = Namespace(system='/', user=os.path.join(home, '.hypershell'),
+                     local=os.path.join(cwd, '.hypershell'))
     path = Namespace({
         'system': {
             'lib': os.path.join(site.system, 'var', 'lib', 'hypershell'),
