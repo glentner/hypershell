@@ -25,6 +25,8 @@ from hypershell.core.logging import initialize_logging
 from hypershell.__meta__ import (__appname__, __version__, __authors__, __description__,
                                  __contact__, __license__, __copyright__, __keywords__, __website__)
 
+# commands
+from hypershell.submit import SubmitApp
 
 # render uncaught exceptions with highlighting
 if sys.stdout.isatty():
@@ -53,6 +55,7 @@ _main_help = f"""\
 commands:
 database               ...
 config                 ...
+submit                 {SubmitApp.__doc__}
 
 options:
 -h, --help             Show this message and exit.
@@ -73,12 +76,14 @@ class HyperShellApp(ApplicationGroup):
     """Top-level application class for console application."""
 
     interface = Interface(_main_name, _main_usage, _main_help)
-    interface.add_argument('command')
+
     interface.add_argument('-v', '--version', action='version', version=__version__)
+    interface.add_argument('command')
 
     command = None
     commands = {
-                }
+        'submit': SubmitApp,
+    }
 
 
 def main() -> int:
