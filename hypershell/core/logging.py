@@ -15,12 +15,15 @@
 import socket
 import logging as _logging
 
+# external libs
+from cmdkit.config import ConfigurationError
+
 # internal libs
 from hypershell.core.config import config
 
 
 # cached for frequent use
-host = socket.gethostname()
+hostname = socket.gethostname()
 
 
 # escape sequences
@@ -38,7 +41,7 @@ class LogRecord(_logging.LogRecord):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.host = host
+        self.hostname = hostname
         self.ansi_color = ANSI_CODES['foreground'][LEVEL_COLORS[self.levelname.lower()]]
         self.ansi_reset = ANSI_RESET
 
@@ -50,6 +53,9 @@ _logging.setLogRecordFactory(LogRecord)
 # called by entry-point to configure console handler
 def initialize_logging() -> None:
     """Configure with func:`logging.basicConfig` for command-line interface."""
-    _logging.basicConfig(level=getattr(_logging, config.logging.level.upper()),
-                         format=config.logging.format,
-                         datefmt=config.logging.datefmt)
+    try:
+        _logging.basicConfig(level=getattr(_logging, config.logging.level.upper()),
+                             format=config.logging.format,
+                             datefmt=config.logging.datefmt)
+    except Exception as error:
+        raise ConfigurationError('Failed logging configuration') from error
