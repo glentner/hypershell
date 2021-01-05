@@ -28,8 +28,7 @@ log = logging.getLogger(__name__)
 # depth-first merged with defaults
 DEFAULT: Namespace = Namespace({
     'database': {
-        'backend': 'sqlite',
-        'database': ':memory:'
+        'provider': 'sqlite',
     },
     'logging': {
         'level': 'warning',
