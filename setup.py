@@ -8,7 +8,7 @@
 # You should have received a copy of the Apache License along with this program.
 # If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
 
-"""Build and installation script for hyper-shell."""
+"""Build and installation script for hypershell."""
 
 
 # standard libs
@@ -17,12 +17,12 @@ import re
 from setuptools import setup, find_packages
 
 
-# get long description from README.rst
+# long description from README.rst
 with open('README.rst', mode='r') as readme:
     long_description = readme.read()
 
 
-# get package metadata by parsing __meta__ module
+# package metadata by parsing __meta__ module
 with open('hypershell/__meta__.py', mode='r') as source:
     content = source.read().strip()
     metadata = {key: re.search(key + r'\s*=\s*[\'"]([^\'"]*)[\'"]', content).group(1)
@@ -54,7 +54,6 @@ setup(
     long_description_content_type = 'text/x-rst',
     classifiers      = ['Development Status :: 4 - Beta',
                         'Topic :: Utilities',
-                        'Programming Language :: Python :: 3.7',
                         'Programming Language :: Python :: 3.8',
                         'Programming Language :: Python :: 3.9',
                         'Operating System :: POSIX :: Linux',
@@ -62,6 +61,9 @@ setup(
                         'Operating System :: Microsoft :: Windows',
                         'License :: OSI Approved :: Apache Software License', ],
     install_requires = DEPS,
+    extra_requires = {
+        'postgres': ['psycopg2>=2.8.5', ],
+    },
     entry_points     = {'console_scripts': ['hypershell=hypershell:main', ]},
     data_files = [
         ('share/man/man1', ['man/man1/hypershell.1', ])
