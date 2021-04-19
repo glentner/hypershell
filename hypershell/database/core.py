@@ -22,6 +22,7 @@ from urllib.parse import urlencode
 # external libs
 from cmdkit.config import Namespace, ConfigurationError
 from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.exc import ArgumentError
 
@@ -89,10 +90,8 @@ class DatabaseURL(dict):
             raise AttributeError('Must provide \'user\' if \'password\' provided')
 
     def _validate_for_sqlite(self) -> None:
-        if self.file is None:
-            raise AttributeError('Must provide \'file\' for SQLite')
-        if self.database is not None:
-            raise AttributeError('Must provide \'file\' not \'database\' for SQLite')
+        if self.file is not None and self.database is not None:
+            raise AttributeError('Cannot provide both \'file\' and \'database\' for SQLite')
         for field in ('user', 'password', 'host', 'port'):
             if self.get(field) is not None:
                 raise AttributeError(f'Cannot provide \'{field}\' for SQLite')
@@ -122,8 +121,10 @@ class DatabaseURL(dict):
     def _format_database_or_file(self) -> str:
         if self.database:
             return f'/{self.database}'
-        else:
+        elif self.file:
             return f'/{self.file}'
+        else:
+            return ''
 
     def _format_host_and_port(self) -> str:
         if self.host and self.port:
@@ -166,8 +167,8 @@ class DatabaseURL(dict):
         return cls(**fields)
 
 
-# allowed database backends
-# mapping translates from name to library/package name (actual)
+# allowed database providers
+# mapping translates from name to library/implementation name
 providers = {
     'sqlite': 'sqlite',
     'mysql': 'mysql',
@@ -179,21 +180,38 @@ providers = {
 
 config = Namespace(config.database.copy())
 schema = config.pop('schema', None)
+engine_echo = config.pop('echo', False)
 connect_args = config.pop('connect_args', {})
+
+
+# additional parameters for engine creation
+engine_config = {}
+
+
+# sqlite specific configuration
+if config.provider == 'sqlite':
+    in_memory = (config.get('file', None) or config.get('database', None)) in ('', ':memory:', None)
+    if in_memory:
+        engine_config['poolclass'] = StaticPool
+    if 'check_same_thread' not in connect_args:
+        connect_args['check_same_thread'] = False
 
 
 if config.provider not in providers:
     raise ConfigurationError(f'Unsupported database \'{config.provider}\'')
 
 
-_url_params = Namespace(**{**config.copy(), **{'provider': providers[config.provider]}})
-_url = DatabaseURL.from_namespace(_url_params)
+# NOTE: override provider with correct library implementation name
+params = Namespace({**config, 'provider': providers[config.provider]})
+url = DatabaseURL.from_namespace(params)
 try:
-    engine = create_engine(_url.encode(), connect_args=connect_args)
+    engine = create_engine(url.encode(), connect_args=connect_args, **engine_config)
+    if engine_echo:
+        engine.echo = True
 except ArgumentError as error:
-    raise ConfigurationError(f'Database URL: {repr(_url)}') from error
+    raise ConfigurationError(f'Database URL: {repr(url)}') from error
 
 
-# create thread-local sessions
+# manage thread-local sessions
 factory = sessionmaker(bind=engine)
 Session = scoped_session(factory)
