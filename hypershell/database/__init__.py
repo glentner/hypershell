@@ -16,25 +16,12 @@ import logging
 
 # internal libs
 from hypershell.database.core import engine, Session, config
-from hypershell.database.model import Base
+from hypershell.database.model import Model
 
 
 # initialize module level logger
 log = logging.getLogger(__name__)
 
 
-def init_database() -> None:
-    """Initialize all database objects."""
-    log.info('Creating database objects')
-    Base.metadata.create_all(engine)
-
-
-def drop_database() -> None:
-    """Drop all database objects."""
-    log.warning('Dropping database objects')
-    Base.metadata.drop_all(engine)
-
-
-# automatically initialize in-memory database
-if config.provider == 'sqlite' and config.file in ('', ':memory:'):
-    init_database()
+log.debug('Initializing database objects')
+Model.metadata.create_all(engine)
