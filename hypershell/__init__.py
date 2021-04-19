@@ -12,26 +12,28 @@
 
 
 # standard libs
+import os
 import sys
 import logging
+import datetime
+import traceback
 
 # external libs
-from cmdkit.app import Application, ApplicationGroup
+from cmdkit.app import Application, ApplicationGroup, exit_status
 from cmdkit.cli import Interface
 
 # internal libs
-from hypershell.core.config import config
+from hypershell.core.config import config, get_site, init_paths
 from hypershell.core.logging import initialize_logging
 from hypershell.__meta__ import (__appname__, __version__, __authors__, __description__,
                                  __contact__, __license__, __copyright__, __keywords__, __website__)
 
 # commands
 from hypershell.submit import SubmitApp
+from hypershell.server import ServerApp
 
-# render uncaught exceptions with highlighting
-if sys.stdout.isatty():
-    from rich.traceback import install
-    install()
+# public interface
+__all__ = ['HyperShellApp', 'main', ]
 
 
 # initialize application logger
@@ -43,18 +45,16 @@ Application.log_critical = log.critical
 Application.log_exception = log.exception
 
 
-_main_name = 'hypershell'
-_main_usage = f"""\
-usage: {_main_name} [-h] [-v] <command> [<args>...]
+APP_NAME = 'hypershell'
+APP_USAGE = f"""\
+usage: {APP_NAME} [-h] [-v] <command> [<args>...]
 {__description__}\
 """
 
-_main_help = f"""\
-{_main_usage}
+APP_HELP = f"""\
+{APP_USAGE}
 
 commands:
-database               ...
-config                 ...
 submit                 {SubmitApp.__doc__}
 
 options:
@@ -65,18 +65,32 @@ Use the -h/--help flag with the above commands to
 learn more about their usage.
 
 Documentation and issue tracking at:
-{__website__}
-
-Copyright {__copyright__}
-{__authors__} <{__contact__}>\
+{__website__}\
 """
+
+
+# NOTE: catching base Exception avoids the 'raise' in Application.main
+def uncaught_exception(exc: Exception) -> int:
+    """Write exception to file and return exit code."""
+    time = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+    path = os.path.join(get_site()['log'], f'exception-{time}.log')
+    with open(path, mode='w') as stream:
+        print(traceback.format_exc(), file=stream)
+    msg = str(exc).replace('\n', ' - ')
+    log.critical(f'{exc.__class__.__name__}: {msg}')
+    log.critical(f'Exception traceback written to {path}')
+    return exit_status.uncaught_exception
+
+
+Application.exceptions = {
+    Exception: uncaught_exception,
+}
 
 
 class HyperShellApp(ApplicationGroup):
     """Top-level application class for console application."""
 
-    interface = Interface(_main_name, _main_usage, _main_help)
-
+    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
     interface.add_argument('-v', '--version', action='version', version=__version__)
     interface.add_argument('command')
 
@@ -88,6 +102,7 @@ class HyperShellApp(ApplicationGroup):
 
 def main() -> int:
     """Entry-point for console application."""
+    init_paths()
     initialize_logging()
     return HyperShellApp.main(sys.argv[1:])
 
