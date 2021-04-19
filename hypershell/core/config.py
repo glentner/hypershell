@@ -15,9 +15,14 @@
 import os
 import ctypes
 import logging
+import functools
 
 # external libs
 from cmdkit.config import Namespace, Configuration
+
+
+# public interface
+__all__ = ['config', 'get_site', 'init_paths', 'load', 'update', ]
 
 
 # initialize module level logger
@@ -32,7 +37,7 @@ DEFAULT: Namespace = Namespace({
     },
     'logging': {
         'level': 'warning',
-        'format': '%(ansi_color)s%(levelname)s%(ansi_reset)s [%(name)s] %(msg)s',
+        'format': '%(ansi_color)s%(levelname)-7s%(ansi_reset)s [%(name)s] %(msg)s',
         'datefmt': '%Y-%m-%d %H:%M:%S'
     }
 })
@@ -48,13 +53,16 @@ if os.name == 'nt':
     path = Namespace({
         'system': {
             'lib': os.path.join(site.system, 'Library'),
-            'config': os.path.join(site.system, 'Config.toml')},
+            'config': os.path.join(site.system, 'Config.toml'),
+            'log': os.path.join(site.system, 'Logs')},
         'user': {
             'lib': os.path.join(site.user, 'Library'),
-            'config': os.path.join(site.user, 'Config.toml')},
+            'config': os.path.join(site.user, 'Config.toml'),
+            'log': os.path.join(site.user, 'Logs')},
         'local': {
             'lib': os.path.join(site.local, 'lib'),
-            'config': os.path.join(site.local, 'config.toml')},
+            'config': os.path.join(site.local, 'config.toml'),
+            'log': os.path.join(site.local, 'log')},
     })
 else:
     is_admin = os.getuid() == 0
@@ -63,14 +71,29 @@ else:
     path = Namespace({
         'system': {
             'lib': os.path.join(site.system, 'var', 'lib', 'hypershell'),
-            'config': os.path.join(site.system, 'etc', 'hypershell.toml')},
+            'config': os.path.join(site.system, 'etc', 'hypershell.toml'),
+            'log': os.path.join(site.system, 'var', 'log', 'hypershell')},
         'user': {
             'lib': os.path.join(site.user, 'lib'),
-            'config': os.path.join(site.user, 'config.toml')},
+            'config': os.path.join(site.user, 'config.toml'),
+            'log': os.path.join(site.user, 'log')},
         'local': {
             'lib': os.path.join(site.local, 'lib'),
-            'config': os.path.join(site.local, 'config.toml')},
+            'config': os.path.join(site.local, 'config.toml'),
+            'log': os.path.join(site.local, 'log')},
     })
+
+
+@functools.cache
+def get_site() -> Namespace:
+    """Retrieve path namespace for either 'system' (if admin) or 'user'."""
+    return path.system if is_admin else path.user
+
+
+def init_paths() -> None:
+    """Automatically create necessary directories."""
+    os.makedirs(get_site().get('lib'), exist_ok=True)
+    os.makedirs(get_site().get('log'), exist_ok=True)
 
 
 def load() -> Configuration:
