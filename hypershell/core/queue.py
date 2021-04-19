@@ -10,51 +10,52 @@
 
 """Queue server/client implementation."""
 
+
+# type annotations
+from __future__ import annotations
+from typing import Tuple, Callable
+
 # standard libs
 from multiprocessing.managers import BaseManager
 from multiprocessing import JoinableQueue
-from typing import Tuple
 
 
 # default connection details
-ADDRESS  = 'localhost', 50001
-AUTHKEY  = b'--BADKEY--'
-MAXSIZE  = 10_000  # arbitrary for now
+DEFAULT_BIND = 'localhost'
+DEFAULT_PORT = 50001
+DEFAULT_AUTH = b'--BADKEY--'
+DEFAULT_SIZE = 1  # arbitrary for now
 SENTINEL = None
 
 
 class QueueServer(BaseManager):
     """Server for managing queue."""
 
-    tasks: JoinableQueue
-    finished: JoinableQueue
+    scheduled: JoinableQueue
+    completed: JoinableQueue
     connected: JoinableQueue
 
-    def __init__(self, address: Tuple[str, int] = ADDRESS, authkey: bytes = AUTHKEY,
-                 max_tasks: int = MAXSIZE, max_connections: int = MAXSIZE) -> None:
-        """Initialize manager."""
+    def __init__(self, address: Tuple[str, int] = (DEFAULT_BIND, DEFAULT_PORT),
+                 authkey: bytes = DEFAULT_AUTH, maxsize: int = DEFAULT_SIZE) -> None:
+        """Initialize queue manager."""
         super().__init__(address=address, authkey=authkey)
-        self.tasks = JoinableQueue(maxsize=max_tasks)
-        self.finished = JoinableQueue(maxsize=max_tasks)
-        self.connected = JoinableQueue(maxsize=max_connections)  # FIXME: can this be unbounded?
-        self.register('_get_tasks', callable=self._get_tasks)
-        self.register('_get_finished', callable=self._get_finished)
+        self.scheduled = JoinableQueue(maxsize=maxsize)
+        self.completed = JoinableQueue(maxsize=maxsize)
+        self.connected = JoinableQueue(maxsize=0)  # Note: platform specific max (unbounded in practice)
+        self.register('_get_scheduled', callable=self._get_scheduled)
+        self.register('_get_completed', callable=self._get_completed)
         self.register('_get_connected', callable=self._get_connected)
 
-    # NOTE: In Python3.8 there is a change in Popen that affects
-    #       our ability to use a local lambdas in QueueServer.__init__.
-    #       These class level functions do the trick however.
+    def _get_scheduled(self) -> JoinableQueue:
+        return self.scheduled
 
-    def _get_tasks(self) -> JoinableQueue:
-        return self.tasks
-
-    def _get_finished(self) -> JoinableQueue:
-        return self.finished
+    def _get_completed(self) -> JoinableQueue:
+        return self.completed
 
     def _get_connected(self) -> JoinableQueue:
         return self.connected
 
-    def __enter__(self) -> 'QueueServer':
+    def __enter__(self) -> QueueServer:
         """Start the server."""
         self.start()
         return self
@@ -67,24 +68,33 @@ class QueueServer(BaseManager):
 class QueueClient(BaseManager):
     """Client connection to queue manager."""
 
-    tasks: JoinableQueue = None
-    finished: JoinableQueue = None
+    scheduled: JoinableQueue = None
+    completed: JoinableQueue = None
     connected: JoinableQueue = None
 
-    def __init__(self, address: Tuple[str, int] = ADDRESS, authkey: bytes = AUTHKEY) -> None:
-        """Initialize manager."""
+    _get_scheduled: Callable[[], JoinableQueue]
+    _get_completed: Callable[[], JoinableQueue]
+    _get_connected: Callable[[], JoinableQueue]
+
+    def __init__(self, address: Tuple[str, int] = (DEFAULT_BIND, DEFAULT_PORT),
+                 authkey: bytes = DEFAULT_AUTH) -> None:
+        """Initialize queue manager."""
         super().__init__(address=address, authkey=authkey)
-        self.register('_get_tasks')
-        self.register('_get_finished')
+        self.register('_get_scheduled')
+        self.register('_get_completed')
         self.register('_get_connected')
 
-    def __enter__(self) -> 'QueueClient':
-        """Connect to the server."""
+    def connect(self) -> None:
+        """Connect to server."""
+        super().connect()
+        self.scheduled = self._get_scheduled()
+        self.completed = self._get_completed()
+        self.connected = self._get_connected()
+
+    def __enter__(self) -> QueueClient:
+        """Connect to server."""
         self.connect()
-        self.tasks = self._get_tasks()  # noqa: no-member
-        self.finished = self._get_finished()  # noqa: no-member
-        self.connected = self._get_connected()  # noqa: no-member
         return self
 
     def __exit__(self, *exc) -> None:
-        """Disconnect from the server."""
+        """Disconnect from server."""
