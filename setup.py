@@ -31,7 +31,7 @@ with open('hypershell/__meta__.py', mode='r') as source:
 
 
 # core dependencies
-DEPS = ['cmdkit>=2.1.3', 'toml>=0.10.2', 'rich>=9.4.0', 'sqlalchemy>=1.3.19', ]
+DEPS = ['cmdkit>=2.3.0', 'toml>=0.10.2', 'sqlalchemy>=1.3.19', ]
 
 
 # add dependencies for readthedocs.io
