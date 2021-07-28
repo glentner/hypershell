@@ -1,19 +1,12 @@
-# This program is free software: you can redistribute it and/or modify it under the
-# terms of the Apache License (v2.0) as published by the Apache Software Foundation.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-# PARTICULAR PURPOSE. See the Apache License for more details.
-#
-# You should have received a copy of the Apache License along with this program.
-# If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
+# SPDX-FileCopyrightText: 2021 Geoffrey Lentner
+# SPDX-License-Identifier: Apache-2.0
 
 """
 Schedule and collect bundles tasks from the database.
 
 Example:
     >>> from hypershell.server import serve_forever
-    >>> serve_from(source=['echo a', 'echo b'], bind=('0.0.0.0', 8080), bundlesize=10)
+    >>> serve_from(source=['echo a', 'echo b'])
 
 Embed a `ServerThread` in your application directly. Call `stop()` to stop early.
 
@@ -37,71 +30,43 @@ Warning:
 
 # type annotations
 from __future__ import annotations
-from typing import List, Tuple, Iterable, IO, Optional
+from typing import List, Dict, Tuple, Iterable, IO, Optional, Callable
 
 # standard libs
 import sys
 import time
 import logging
 import functools
-from queue import Queue, Empty
+from enum import Enum
+from queue import Empty as QueueEmpty, Full as QueueFull
 
 # external libs
 from cmdkit.app import Application
 from cmdkit.cli import Interface, ArgumentError
 
 # internal libs
-from hypershell.core.fsm import State, StateMachine, HALT
+from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
-from hypershell.core.queue import QueueServer, DEFAULT_BIND, DEFAULT_PORT, DEFAULT_AUTH, SENTINEL
+from hypershell.core.queue import QueueServer, QueueConfig
 from hypershell.database.model import Task
-from hypershell.submit import SubmitThread, DEFAULT_BUFFERTIME
+from hypershell.submit import SubmitThread, DEFAULT_BUFFERTIME, LiveSubmitThread
 
 # public interface
-__all__ = ['serve_from', 'serve_file', 'serve_forever', 'ServerThread', 'ServerApp', ]
+__all__ = ['serve_from', 'serve_file', 'serve_forever', 'ServerThread', 'ServerApp',
+           'DEFAULT_BUNDLESIZE', 'DEFAULT_ATTEMPTS', ]
 
 
 # module level logger
 log = logging.getLogger(__name__)
 
 
-class __SchedulerStart(State):
-    def run(self, machine: SchedulerImpl) -> State:
-        """Initial state for scheduler."""
-        log.debug('Starting scheduler')
-        return SCHEDULER_GET
-
-
-# pause between queries to not over burden the database
-DEFAULT_QUERY_PAUSE = 5
-
-
-class __SchedulerGet(State):
-    def run(self, machine: SchedulerImpl) -> State:
-        """Get the next task bundle from the database."""
-        machine.tasks = Task.next(limit=machine.bundlesize, attempts=machine.attempts, eager=machine.eager)
-        if machine.tasks:
-            return SCHEDULER_PUT
-        # NOTE: an empty database must wait for at least one task
-        elif Task.count_remaining() == 0 and not machine.forever_mode and Task.count() > 0:
-            return HALT
-        else:
-            time.sleep(DEFAULT_QUERY_PAUSE)
-            return SCHEDULER_GET
-
-
-class __SchedulerPut(State):
-    def run(self, machine: SchedulerImpl) -> State:
-        """Enqueue loaded task bundle."""
-        machine.queue.put([task.to_json() for task in machine.tasks])
-        for task in machine.tasks:
-            log.debug(f'Scheduled task ({task.id})')
-        return SCHEDULER_GET
-
-
-SCHEDULER_START = __SchedulerStart()
-SCHEDULER_GET = __SchedulerGet()
-SCHEDULER_PUT = __SchedulerPut()
+class SchedulerState(State, Enum):
+    """Finite states of the scheduler."""
+    START = 0
+    LOAD = 1
+    PACK = 2
+    POST = 3
+    HALT = 4
 
 
 # Note: unless specified otherwise for larger problems, a bundle of size one allows
@@ -109,114 +74,189 @@ SCHEDULER_PUT = __SchedulerPut()
 DEFAULT_BUNDLESIZE: int = 1
 DEFAULT_ATTEMPTS: int = 1
 DEFAULT_EAGER_MODE: bool = False
+DEFAULT_QUERY_PAUSE = 5
 
 
-class SchedulerImpl(StateMachine):
+class Scheduler(StateMachine):
     """Enqueue tasks from database."""
 
     tasks: List[Task]
-    queue: Queue[Optional[List[str]]]
+    queue: QueueServer
+    bundle: List[bytes]
+
     bundlesize: int
     attempts: int
     eager: bool
     forever_mode: bool
 
-    def __init__(self, queue: Queue[Optional[List[str]]], bundlesize: int = DEFAULT_BUNDLESIZE,
+    state = SchedulerState.START
+    states = SchedulerState
+
+    def __init__(self, queue: QueueServer, bundlesize: int = DEFAULT_BUNDLESIZE,
                  attempts: int = DEFAULT_ATTEMPTS, eager: bool = DEFAULT_EAGER_MODE,
                  forever_mode: bool = False) -> None:
         """Initialize queue and parameters."""
         self.queue = queue
+        self.bundle = []
         self.bundlesize = bundlesize
         self.attempts = attempts
         self.eager = eager
         self.forever_mode = forever_mode
-        super().__init__(start=SCHEDULER_START)
+
+    @functools.cached_property
+    def actions(self) -> Dict[SchedulerState, Callable[[], SchedulerState]]:
+        return {
+            SchedulerState.START: self.start,
+            SchedulerState.LOAD: self.load_bundle,
+            SchedulerState.PACK: self.pack_bundle,
+            SchedulerState.POST: self.post_bundle,
+        }
+
+    @staticmethod
+    def start() -> SchedulerState:
+        """Jump to LOAD state."""
+        log.debug('Starting scheduler')
+        return SchedulerState.LOAD
+
+    def load_bundle(self) -> SchedulerState:
+        """Load the next task bundle from the database."""
+        self.tasks = Task.next(limit=self.bundlesize, attempts=self.attempts, eager=self.eager)
+        if self.tasks:
+            return SchedulerState.PACK
+        # NOTE: an empty database must wait for at least one task
+        elif not self.forever_mode and Task.count() > 0 and Task.count_remaining() == 0:
+            return SchedulerState.HALT
+        else:
+            time.sleep(DEFAULT_QUERY_PAUSE)
+            return SchedulerState.LOAD
+
+    def pack_bundle(self) -> SchedulerState:
+        """Pack tasks into bundle (list)."""
+        self.bundle = [task.pack() for task in self.tasks]
+        return SchedulerState.POST
+
+    def post_bundle(self) -> SchedulerState:
+        """Put bundle on outbound queue."""
+        try:
+            self.queue.scheduled.put(self.bundle, timeout=2)
+            for task in self.tasks:
+                log.debug(f'Scheduled task ({task.id})')
+            return SchedulerState.LOAD
+        except QueueFull:
+            return SchedulerState.POST
 
 
 class SchedulerThread(Thread):
     """Run scheduler within dedicated thread."""
 
-    def __init__(self, queue: Queue[Optional[List[str]]], bundlesize: int = DEFAULT_BUNDLESIZE,
+    def __init__(self, queue: QueueServer, bundlesize: int = DEFAULT_BUNDLESIZE,
                  attempts: int = DEFAULT_ATTEMPTS, eager: bool = DEFAULT_EAGER_MODE,
                  forever_mode: bool = False) -> None:
-        super().__init__(name='hypershell-server')
-        self.machine = SchedulerImpl(queue=queue, bundlesize=bundlesize, attempts=attempts, eager=eager,
-                                     forever_mode=forever_mode)
+        """Initialize machine."""
+        super().__init__(name='hypershell-scheduler')
+        self.machine = Scheduler(queue=queue, bundlesize=bundlesize, attempts=attempts, eager=eager,
+                                 forever_mode=forever_mode)
 
     def run(self) -> None:
+        """Run machine."""
         self.machine.run()
         log.debug('Stopping scheduler')
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
+        """Stop machine."""
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
 
-class __ReceiverStart(State):
-    def run(self, machine: ReceiverImpl) -> State:
-        """Initial state for receiver."""
-        log.debug('Started receiver')
-        return RECEIVER_GET
+class ReceiverState(State, Enum):
+    """Finite states for receiver."""
+    START = 0
+    UNLOAD = 1
+    UNPACK = 2
+    UPDATE = 3
+    HALT = 4
 
 
-class __ReceiverGet(State):
-    def run(self, machine: ReceiverImpl) -> State:
-        """Get the next task bundle from the incoming queue."""
+class Receiver(StateMachine):
+    """Collect incoming finished task bundles and update database."""
+
+    tasks: List[Task]
+    queue: QueueServer
+    bundle: List[bytes]
+
+    live: bool
+    print_on_failure: bool
+
+    state = ReceiverState.START
+    states = ReceiverState
+
+    def __init__(self, queue: QueueServer, live: bool = False, print_on_failure: bool = False) -> None:
+        """Initialize receiver."""
+        self.queue = queue
+        self.bundle = []
+        self.live = live
+        self.print_on_failure = print_on_failure
+
+    @functools.cached_property
+    def actions(self) -> Dict[ReceiverState, Callable[[], ReceiverState]]:
+        return {
+            ReceiverState.START: self.start,
+            ReceiverState.UNLOAD: self.unload_bundle,
+            ReceiverState.UNPACK: self.unpack_bundle,
+            ReceiverState.UPDATE: self.update_tasks,
+        }
+
+    @staticmethod
+    def start() -> ReceiverState:
+        """Jump to UNLOAD state."""
+        log.debug('Starting receiver')
+        return ReceiverState.UNLOAD
+
+    def unload_bundle(self) -> ReceiverState:
+        """Get the next bundle from the completed task queue."""
         try:
-            bundle = machine.queue.get(timeout=1)
-            if bundle is not None:
-                machine.tasks = [Task.from_json(data) for data in bundle]
-                return RECEIVER_UPDATE
+            self.bundle = self.queue.completed.get(timeout=2)
+            if self.bundle is not None:
+                return ReceiverState.UNPACK
             else:
-                return HALT
-        except Empty:
-            return RECEIVER_GET
+                log.debug('Stopping receiver')
+                return ReceiverState.HALT
+        except QueueEmpty:
+            return ReceiverState.UNLOAD
 
+    def unpack_bundle(self) -> ReceiverState:
+        """Unpack previous bundle into list of tasks."""
+        self.tasks = [Task.unpack(data) for data in self.bundle]
+        return ReceiverState.UPDATE
 
-class __ReceiverUpdate(State):
-    def run(self, machine: ReceiverImpl) -> State:
+    def update_tasks(self) -> ReceiverState:
         """Update tasks in database with run details."""
-        Task.update_all([task.to_dict() for task in machine.tasks])
-        for task in machine.tasks:
+        if not self.live:
+            Task.update_all([task.to_dict() for task in self.tasks])
+        for task in self.tasks:
             log.debug(f'Completed task ({task.id})')
             if task.exit_status != 0:
                 log.warning(f'Non-zero exit status ({task.exit_status}) for task ({task.id})')
-                if machine.print_on_failure:
+                if self.print_on_failure:
                     print(task.args)
-        return RECEIVER_GET
-
-
-RECEIVER_START = __ReceiverStart()
-RECEIVER_GET = __ReceiverGet()
-RECEIVER_UPDATE = __ReceiverUpdate()
-
-
-class ReceiverImpl(StateMachine):
-    """Collect incoming finished tasks and update database."""
-
-    tasks: List[Task]
-    queue: Queue[Optional[List[str]]]
-    print_on_failure: bool
-
-    def __init__(self, queue: Queue[Optional[List[str]]], print_on_failure: bool = False) -> None:
-        """Initialize IO `stream` to read tasks and submit to database."""
-        self.queue = queue
-        self.print_on_failure = print_on_failure
-        super().__init__(start=RECEIVER_START)
+        return ReceiverState.UNLOAD
 
 
 class ReceiverThread(Thread):
     """Run receiver within dedicated thread."""
 
-    def __init__(self, queue: Queue[Optional[List[str]]]) -> None:
-        super().__init__(name='hypershell-server')
-        self.machine = ReceiverImpl(queue=queue)
+    def __init__(self, queue: QueueServer, live: bool = False, print_on_failure: bool = False) -> None:
+        """Initialize machine."""
+        super().__init__(name='hypershell-receiver')
+        self.machine = Receiver(queue=queue, live=live, print_on_failure=print_on_failure)
 
     def run(self) -> None:
+        """Run machine."""
         self.machine.run()
-        log.debug('Stopping receiver')
+        self.stop()
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
+        """Stop machine."""
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
@@ -224,27 +264,36 @@ class ReceiverThread(Thread):
 class ServerThread(Thread):
     """Manage asynchronous task bundle scheduling and receiving."""
 
-    server: QueueServer
-    submitter: SubmitThread
-    scheduler: SchedulerThread
+    queue: QueueServer
+    submitter: Optional[SubmitThread]
+    scheduler: Optional[SchedulerThread]
     receiver: ReceiverThread
 
-    def __init__(self, source: Iterable[str] = None, bundlesize: int = DEFAULT_BUNDLESIZE,
-                 bind: Tuple[str, int] = (DEFAULT_BIND, DEFAULT_PORT), auth: bytes = DEFAULT_AUTH,
-                 buffertime: int = DEFAULT_BUFFERTIME, forever_mode: bool = False,
-                 max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = False) -> None:
+    def __init__(self,
+                 source: Iterable[str] = None, live: bool = False, forever_mode: bool = False,
+                 bundlesize: int = DEFAULT_BUNDLESIZE, buffertime: int = DEFAULT_BUFFERTIME,
+                 address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
+                 max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = False,
+                 print_on_failure: bool = False) -> None:
         """Initialize queue manager and child threads."""
-        self.server = QueueServer(address=bind, authkey=auth, maxsize=1)
-        self.submitter = None if not source else SubmitThread(source, buffersize=bundlesize, buffertime=buffertime)
-        self.scheduler = SchedulerThread(queue=self.server.scheduled, bundlesize=bundlesize,
-                                         attempts=max_retries + 1, eager=eager, forever_mode=forever_mode)
-        self.receiver = ReceiverThread(queue=self.server.completed)
+        queue_config = QueueConfig(host=address[0], port=address[1], auth=auth)
+        self.queue = QueueServer(config=queue_config)
+        if live:
+            log.info('Running live (no scheduler)')
+            self.scheduler = None
+            self.submitter = None if not source else LiveSubmitThread(
+                source, queue_config=queue_config, buffersize=bundlesize, buffertime=buffertime)
+        else:
+            self.submitter = None if not source else SubmitThread(source, buffersize=bundlesize, buffertime=buffertime)
+            self.scheduler = SchedulerThread(queue=self.queue, bundlesize=bundlesize, attempts=max_retries + 1,
+                                             eager=eager, forever_mode=forever_mode)
+        self.receiver = ReceiverThread(queue=self.queue, live=live, print_on_failure=print_on_failure)
         super().__init__(name='hypershell-server')
 
     def run(self) -> None:
         """Start child threads, wait."""
         log.debug('Starting server')
-        with self.server:
+        with self.queue:
             self.start_threads()
             self.wait_submitter()
             self.wait_scheduler()
@@ -254,7 +303,8 @@ class ServerThread(Thread):
         """Start child threads."""
         if self.submitter is not None:
             self.submitter.start()
-        self.scheduler.start()
+        if self.scheduler is not None:
+            self.scheduler.start()
         self.receiver.start()
 
     def wait_submitter(self) -> None:
@@ -264,60 +314,65 @@ class ServerThread(Thread):
 
     def wait_scheduler(self) -> None:
         """Wait for all tasks to be completed."""
-        self.scheduler.join()
+        if self.scheduler is not None:
+            self.scheduler.join()
 
     def wait_clients(self) -> None:
         """Send disconnect signal to each clients."""
         try:
-            log.debug('Sending disconnect request to clients')
-            for hostname in iter(functools.partial(self.server.connected.get, timeout=1), None):
-                self.server.scheduled.put(SENTINEL)  # NOTE: one for each
-                self.server.connected.task_done()
+            log.info('Sending disconnect request to clients')
+            for hostname in iter(functools.partial(self.queue.connected.get, timeout=2), None):
+                self.queue.scheduled.put(None)  # NOTE: one for each
+                self.queue.connected.task_done()
                 log.debug(f'Disconnect request sent ({hostname})')
-        except Empty:
+        except QueueEmpty:
             pass
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
         if self.submitter is not None:
             self.submitter.stop(wait=wait, timeout=timeout)
-        self.scheduler.stop(wait=wait, timeout=timeout)
-        self.server.completed.put(None)
+        if self.scheduler is not None:
+            self.scheduler.stop(wait=wait, timeout=timeout)
+        self.queue.completed.put(None)
         self.receiver.stop(wait=wait, timeout=timeout)
         super().stop(wait=wait, timeout=timeout)
 
 
-def serve_from(source: Iterable[str], bundlesize: int = DEFAULT_BUNDLESIZE, buffertime: int = DEFAULT_BUFFERTIME,
-               bind: Tuple[str, int] = (DEFAULT_BIND, DEFAULT_PORT), auth: bytes = DEFAULT_AUTH,
+def serve_from(source: Iterable[str], live: bool = False, print_on_failure: bool = False,
+               bundlesize: int = DEFAULT_BUNDLESIZE, buffertime: int = DEFAULT_BUFFERTIME,
+               address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE) -> None:
     """Run server with the given task `source`, run until complete."""
-    thread = ServerThread(source=source, buffertime=buffertime, bundlesize=bundlesize,
-                          bind=bind, auth=auth, max_retries=max_retries, eager=eager)
+    thread = ServerThread.new(source=source, live=live, print_on_failure=print_on_failure,
+                              buffertime=buffertime, bundlesize=bundlesize,
+                              address=address, auth=auth, max_retries=max_retries, eager=eager)
     try:
-        thread.start()
         thread.join()
     except Exception:
         thread.stop()
         raise
 
 
-def serve_file(path: str, bundlesize: int = DEFAULT_BUNDLESIZE, buffertime: int = DEFAULT_BUFFERTIME,
-               bind: Tuple[str, int] = (DEFAULT_BIND, DEFAULT_PORT), auth: bytes = DEFAULT_AUTH,
+def serve_file(path: str, live: bool = False, print_on_failure: bool = False,
+               bundlesize: int = DEFAULT_BUNDLESIZE, buffertime: int = DEFAULT_BUFFERTIME,
+               address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE, **file_options) -> None:
     """Run server with tasks from a local file `path`, run until complete."""
     with open(path, mode='r', **file_options) as stream:
-        serve_from(stream, bundlesize=bundlesize, buffertime=buffertime, bind=bind, auth=auth,
+        serve_from(stream, live=live, print_on_failure=print_on_failure,
+                   bundlesize=bundlesize, buffertime=buffertime, address=address, auth=auth,
                    max_retries=max_retries, eager=eager)
 
 
-def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE,
-                  bind: Tuple[str, int] = (DEFAULT_BIND, DEFAULT_PORT), auth: bytes = DEFAULT_AUTH,
+def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, print_on_failure: bool = False,
+                  address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                   max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE) -> None:
     """Run server forever."""
-    thread = ServerThread(source=None, bundlesize=bundlesize, bind=bind, auth=auth,
-                          forever_mode=True, max_retries=max_retries, eager=eager)
+    thread = ServerThread.new(source=None, live=live, print_on_failure=print_on_failure,
+                              bundlesize=bundlesize, address=address, auth=auth,
+                              forever_mode=True, max_retries=max_retries, eager=eager)
     try:
-        thread.start()
         thread.join()
     except Exception:
         thread.stop()
@@ -327,6 +382,7 @@ def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE,
 APP_NAME = 'hypershell server'
 APP_USAGE = f"""\
 usage: {APP_NAME} [-h] [FILE | --server-forever] [--bundle-size NUM] [--max-retries NUM [--eager]]
+                       [--live] [--print-on-failure]
 Run server.\
 """
 
@@ -349,7 +405,7 @@ arguments:
 FILE                        Path to task file ("-" for <stdin>).
 
 options:
-    --server-forever        Do no halt even if all tasks finished.
+    --serve-forever         Do no halt even if all tasks finished.
 -b, --bundlesize      NUM   Number of lines to buffer (default: {DEFAULT_BUNDLESIZE}).
 -t, --buffertime      SEC   Seconds to wait before flushing tasks (with FILE, default: {DEFAULT_BUFFERTIME}).
 -r, --max-retries     NUM   Resubmit failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
@@ -364,8 +420,8 @@ class ServerApp(Application):
     name = APP_NAME
     interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
 
-    source: Optional[IO]
     filepath: str
+    source: Optional[IO] = None
     interface.add_argument('filepath', nargs='?', default=None)
 
     bundlesize: int = DEFAULT_BUNDLESIZE
@@ -374,44 +430,49 @@ class ServerApp(Application):
     buffertime: int = DEFAULT_BUFFERTIME
     interface.add_argument('-t', '--buffertime', type=int, default=buffertime)
 
-    max_retires: int = DEFAULT_ATTEMPTS - 1
     eager_mode: bool = False
-    interface.add_argument('-r', '--max-retries', type=int, default=max_retires)
+    max_retries: int = DEFAULT_ATTEMPTS - 1
+    interface.add_argument('-r', '--max-retries', type=int, default=max_retries)
     interface.add_argument('--eager', action='store_true')
 
     serve_forever_mode: bool = False
-    interface.add_argument('--serve-forever', action='store_true')
+    interface.add_argument('--serve-forever', action='store_true', dest='serve_forever_mode')
 
-    bind_address: str = DEFAULT_BIND
-    interface.add_argument('--bind', default=bind_address)
+    host: str = QueueConfig.host
+    interface.add_argument('-H', '--bind', default=host, dest='host')
 
-    port_number: int = DEFAULT_PORT
-    interface.add_argument('--port', type=int, default=port_number)
+    port: int = QueueConfig.port
+    interface.add_argument('-p', '--port', type=int, default=port)
 
-    authkey: bytes = DEFAULT_AUTH
-    interface.add_argument('--auth', type=str.encode, default=authkey)
+    auth: str = QueueConfig.auth
+    interface.add_argument('--auth', default=auth)
 
-    thread: ServerThread
+    live_mode: bool = False
+    interface.add_argument('--live', action='store_true', dest='live_mode')
+
+    print_on_failure: bool = False
+    interface.add_argument('--print-on-failure', action='store_true')
 
     def run(self) -> None:
         """Run server."""
-        self.check_args()
         if self.serve_forever_mode:
-            serve_forever(bundlesize=self.bundlesize, bind=(self.bind_address, self.port_number), auth=self.authkey)
+            serve_forever(bundlesize=self.bundlesize, address=(self.host, self.port), auth=self.auth,
+                          live=self.live_mode, print_on_failure=self.print_on_failure, max_retries=self.max_retries)
         else:
             serve_from(source=self.source, bundlesize=self.bundlesize, buffertime=self.buffertime,
-                       bind=(self.bind_address, self.port_number), auth=self.authkey)
+                       address=(self.host, self.port), auth=self.auth, max_retries=self.max_retries,
+                       live=self.live_mode, print_on_failure=self.print_on_failure)
 
     def check_args(self):
         """Fail particular argument combinations."""
-        if self.filepath is None and not self.serve_forever_mode:
-            raise ArgumentError('Missing either FILE or --serve-forever')
         if self.filepath and self.serve_forever_mode:
             raise ArgumentError('Cannot specify both FILE and --serve-forever')
+        if self.filepath is None and not self.serve_forever_mode:
+            self.filepath = '-'  # NOTE: assume STDIN
 
     def __enter__(self) -> ServerApp:
         """Open file if not stdin."""
-        self.source = None
+        self.check_args()
         if self.filepath is not None:
             self.source = sys.stdin if self.filepath == '-' else open(self.filepath, mode='r')
         return self

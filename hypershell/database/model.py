@@ -1,12 +1,5 @@
-# This program is free software: you can redistribute it and/or modify it under the
-# terms of the Apache License (v2.0) as published by the Apache Software Foundation.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-# PARTICULAR PURPOSE. See the Apache License for more details.
-#
-# You should have received a copy of the Apache License along with this program.
-# If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
+# SPDX-FileCopyrightText: 2021 Geoffrey Lentner
+# SPDX-License-Identifier: Apache-2.0
 
 """Database models."""
 
@@ -30,7 +23,7 @@ from sqlalchemy.types import Integer, DateTime, Text, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 
 # internal libs
-from hypershell.core.logging import hostname
+from hypershell.core.logging import HOSTNAME
 from hypershell.database.core import schema, Session
 
 
@@ -95,8 +88,8 @@ class Task(Model):
     completion_time = Column(DateTime(timezone=True), nullable=True)
     exit_status = Column(Integer(), nullable=True)
 
-    attempt = Column(Integer(), nullable=True)
-    retried = Column(Boolean(), nullable=True)
+    attempt = Column(Integer(), nullable=False)
+    retried = Column(Boolean(), nullable=False)
     previous_id = Column(Text().with_variant(UUID(), 'postgresql'), unique=True, nullable=True)
 
     columns = {
@@ -112,7 +105,6 @@ class Task(Model):
         'completion_time': datetime,
         'exit_status': int,
         'attempt': int,
-        'retried': bool,
         'previous_id': str,
     }
 
@@ -138,19 +130,28 @@ class Task(Model):
         """Convert record to dictionary."""
         return {name: getattr(self, name) for name in self.columns}
 
-    def to_json(self) -> str:
+    def to_json(self) -> Dict[str, RT]:
         """Convert record to JSON-serializable dictionary."""
-        return json.dumps({key: to_json_type(value) for key, value in self.to_dict().items()})
+        return {key: to_json_type(value) for key, value in self.to_dict().items()}
+
+    def pack(self) -> bytes:
+        """Encode as raw JSON bytes."""
+        return json.dumps(self.to_json()).encode()
 
     @classmethod
-    def from_dict(cls: Type[Model], data: Dict[str, Any]) -> Task:
+    def from_dict(cls: Type[Model], data: Dict[str, VT]) -> Task:
         """Build record from existing dictionary."""
         return cls(**data)
 
     @classmethod
-    def from_json(cls, text: str) -> Task:
+    def from_json(cls, data: Dict[str, RT]) -> Task:
         """Build record from JSON `text` string."""
-        return cls.from_dict({key: from_json_type(value) for key, value in json.loads(text).items()})
+        return cls.from_dict({key: from_json_type(value) for key, value in data.items()})
+
+    @classmethod
+    def unpack(cls, data: bytes) -> Task:
+        """Unpack raw JSON byte string."""
+        return cls.from_json(json.loads(data.decode()))
 
     @classmethod
     def from_id(cls, id: str) -> Task:
@@ -163,11 +164,11 @@ class Task(Model):
             raise cls.NotDistinct(f'Multiple tasks with id={id}') from error
 
     @classmethod
-    def new(cls, args: str, attempt: int = 1, **other) -> Task:
+    def new(cls, args: str, attempt: int = 1, retried: bool = False, **other) -> Task:
         """Create a new Task."""
         return Task(id=str(gen_uuid()), args=str(args).strip(),
-                    submit_time=datetime.now().astimezone(), submit_host=hostname,
-                    attempt=attempt, **other)
+                    submit_time=datetime.now().astimezone(), submit_host=HOSTNAME,
+                    attempt=attempt, retried=retried, **other)
 
     @classmethod
     def query(cls) -> Query:
@@ -195,12 +196,7 @@ class Task(Model):
         cls.add_all([task, ])
 
     @classmethod
-    def count(cls) -> int:
-        """Count of tasks in database."""
-        return cls.query().count()
-
-    @classmethod
-    def next_unscheduled(cls, limit: int) -> List[Task]:
+    def select_new(cls, limit: int) -> List[Task]:
         """Select unscheduled tasks up to some `limit` in order of submit_time."""
         return (cls.query()
                 .order_by(cls.submit_time)
@@ -208,13 +204,13 @@ class Task(Model):
                 .limit(limit).all())
 
     @classmethod
-    def next_failed(cls, attempts: int, limit: int) -> List[Task]:
+    def select_failed(cls, attempts: int, limit: int) -> List[Task]:
         """Select failed tasks for retry up to some `limit` under given number of `attempts`."""
         return (cls.query()
                 .order_by(cls.completion_time)
                 .filter(cls.exit_status.isnot(None))
                 .filter(cls.exit_status != 0)
-                .filter(cls.attempt <= attempts)
+                .filter(cls.attempt < attempts)
                 .filter(cls.retried.is_(False))
                 .limit(limit).all())
 
@@ -222,30 +218,46 @@ class Task(Model):
     def next(cls, limit: int, attempts: int = 1, eager: bool = False) -> List[Task]:
         """Select tasks for scheduling including failed tasks for re-scheduling."""
         if eager:
-            old_tasks = cls.next_failed(attempts=attempts, limit=limit)
-            log.debug(f'Selected {len(old_tasks)} previously failed tasks')
-            tasks = [Task.new(args=task.args, attempt=task.attempt + 1, previous_id=task.id) for task in old_tasks]
-            Task.add_all(tasks)
-            Task.update_all([{'id': task.id, 'retried': True} for task in old_tasks])
-            if len(tasks) < limit:
-                new_tasks = Task.next_unscheduled(limit=limit - len(tasks))
-                tasks.extend(new_tasks)
-                log.debug(f'Selected {len(new_tasks)} new tasks')
+            tasks = cls.__next_eager(attempts=attempts, limit=limit)
         else:
-            tasks = Task.next_unscheduled(limit=limit)
-            log.debug(f'Selected {len(tasks)} new tasks')
-            if len(tasks) < limit and attempts > 1:
-                old_tasks = cls.next_failed(attempts=attempts, limit=limit - len(tasks))
-                log.debug(f'Selected {len(old_tasks)} previously failed tasks')
-                Task.update_all([{'id': task.id, 'retried': True} for task in old_tasks])
-                new_tasks = [Task.new(args=task.args, attempt=task.attempt + 1, previous_id=task.id)
-                             for task in old_tasks]
-                Task.add_all(new_tasks)
-                tasks.extend(new_tasks)
+            tasks = cls.__next_not_eager(attempts, limit)
         for task in tasks:
             task.schedule_time = datetime.now().astimezone()
-            task.server_host = hostname
+            task.server_host = HOSTNAME
         Session.commit()
+        return tasks
+
+    @classmethod
+    def __next_eager(cls, attempts: int, limit: int) -> List[Task]:
+        """Select next batch of tasks from database preferring previously failed tasks."""
+        tasks = cls.__schedule_next_failed_tasks(attempts, limit)
+        if len(tasks) < limit:
+            new_tasks = cls.select_new(limit=limit - len(tasks))
+            tasks.extend(new_tasks)
+            log.debug(f'Selected {len(new_tasks)} new tasks')
+        return tasks
+
+    @classmethod
+    def __next_not_eager(cls, attempts: int, limit: int) -> List[Task]:
+        """Select next batch of tasks for database preferring novel tasks to old failed ones."""
+        tasks = cls.select_new(limit=limit)
+        log.debug(f'Selected {len(tasks)} new tasks')
+        if len(tasks) < limit and attempts > 1:
+            failed_tasks = cls.__schedule_next_failed_tasks(attempts=attempts, limit=limit - len(tasks))
+            tasks.extend(failed_tasks)
+        return tasks
+
+    @classmethod
+    def __schedule_next_failed_tasks(cls, attempts: int, limit: int) -> List[Task]:
+        """Select previously failed tasks for scheduling."""
+        tasks = []
+        failed_tasks = cls.select_failed(attempts=attempts, limit=limit)
+        if failed_tasks:
+            log.debug(f'Selected {len(failed_tasks)} previously failed tasks')
+            tasks.extend([cls.new(args=task.args, attempt=task.attempt + 1, previous_id=task.id)
+                          for task in failed_tasks])
+            cls.add_all(tasks)
+            cls.update_all([{'id': task.id, 'retried': True} for task in failed_tasks])
         return tasks
 
     @classmethod
@@ -267,21 +279,19 @@ class Task(Model):
             ...     {'id': '0b1944e8-a4dd-4964-80a8-3383e187b908', 'scheduled': True},
             ...     {'id': '85075d9a-267d-4e0c-bbf2-7b0919de4cf0', 'scheduled': True}])
         """
-        Session.bulk_update_mappings(cls, changes)
-        Session.commit()  # FIXME: necessary?
+        if changes:
+            Session.bulk_update_mappings(cls, changes)
+            Session.commit()  # NOTE: why is this necessary?
 
     @classmethod
     def update(cls, id: str, **changes) -> None:
-        """
-        Update single task by `id` with `changes`.
-
-        See Also:
-            `Task.update_all`
-
-        Example:
-            >>> Task.update('0b1944e8-a4dd-4964-80a8-3383e187b908', scheduled=True)
-        """
+        """Update single task by `id` with `changes`."""
         cls.update_all([{'id': id, **changes}, ])
+
+    @classmethod
+    def count(cls) -> int:
+        """Count of tasks in database."""
+        return cls.query().count()
 
     @classmethod
     def count_remaining(cls) -> int:

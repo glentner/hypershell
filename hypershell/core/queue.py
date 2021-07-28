@@ -1,58 +1,99 @@
-# This program is free software: you can redistribute it and/or modify it under the
-# terms of the Apache License (v2.0) as published by the Apache Software Foundation.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-# PARTICULAR PURPOSE. See the Apache License for more details.
-#
-# You should have received a copy of the Apache License along with this program.
-# If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
+# SPDX-FileCopyrightText: 2021 Geoffrey Lentner
+# SPDX-License-Identifier: Apache-2.0
 
 """Queue server/client implementation."""
 
 
 # type annotations
 from __future__ import annotations
-from typing import Tuple, Callable
+from typing import Dict, List, Callable, Union, Optional, Any, Iterable
 
 # standard libs
 from multiprocessing.managers import BaseManager
 from multiprocessing import JoinableQueue
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+# internal libs
+from .logging import HOSTNAME
+from .config import config as _config
+
+# public interface
+__all__ = ['QueueConfig', 'QueueInterface', 'QueueServer', 'QueueClient']
 
 
-# default connection details
-DEFAULT_BIND = 'localhost'
-DEFAULT_PORT = 50001
-DEFAULT_AUTH = b'--BADKEY--'
-DEFAULT_SIZE = 1  # arbitrary for now
-SENTINEL = None
+@dataclass
+class QueueConfig:
+    """Connection details for queue interface."""
+
+    host: str = 'localhost'
+    port: int = 50_001
+    auth: str = '__HYPERSHELL__BAD__AUTHKEY__'
+    size: int = 8
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Union[str, int]]) -> QueueConfig:
+        """Load config from existing dictionary values."""
+        return cls(**data)
+
+    @classmethod
+    def load(cls) -> QueueConfig:
+        """Initialize from global configuration."""
+        return cls.from_dict({
+            'host': _config.server.host,
+            'port': _config.server.port,
+            'auth': _config.server.auth,
+            'size': _config.server.bundlesize,
+        })
 
 
-class QueueServer(BaseManager):
+class QueueInterface(BaseManager, ABC):
+    """The queue interface provides access to three managed distributed queues."""
+
+    config: QueueConfig
+    scheduled: JoinableQueue[Optional[List[bytes]]]
+    completed: JoinableQueue[Optional[List[bytes]]]
+    connected: JoinableQueue[Optional[List[bytes]]]
+
+    def __init__(self, config: QueueConfig) -> None:
+        """Initialize queue interface."""
+        self.config = config
+        super().__init__(address=(self.config.host, self.config.port), authkey=self.config.auth.encode())
+
+    @classmethod
+    def new(cls) -> QueueInterface:
+        """Create new interface from global configuration."""
+        return cls(config=QueueConfig.load())
+
+    @abstractmethod
+    def __enter__(self) -> QueueInterface:
+        """Start server or connect from client."""
+
+    @abstractmethod
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Stop or disconnect."""
+
+
+class QueueServer(QueueInterface):
     """Server for managing queue."""
 
-    scheduled: JoinableQueue
-    completed: JoinableQueue
-    connected: JoinableQueue
-
-    def __init__(self, address: Tuple[str, int] = (DEFAULT_BIND, DEFAULT_PORT),
-                 authkey: bytes = DEFAULT_AUTH, maxsize: int = DEFAULT_SIZE) -> None:
-        """Initialize queue manager."""
-        super().__init__(address=address, authkey=authkey)
-        self.scheduled = JoinableQueue(maxsize=maxsize)
-        self.completed = JoinableQueue(maxsize=maxsize)
+    def start(self, initializer: Optional[Callable[..., Any]] = ..., initargs: Iterable[Any] = ...) -> None:
+        """Initialize queues and start server."""
+        self.scheduled = JoinableQueue(maxsize=self.config.size)
+        self.completed = JoinableQueue(maxsize=self.config.size)
         self.connected = JoinableQueue(maxsize=0)  # Note: platform specific max (unbounded in practice)
         self.register('_get_scheduled', callable=self._get_scheduled)
         self.register('_get_completed', callable=self._get_completed)
         self.register('_get_connected', callable=self._get_connected)
+        super().start()
 
-    def _get_scheduled(self) -> JoinableQueue:
+    def _get_scheduled(self) -> JoinableQueue[Optional[List[bytes]]]:
         return self.scheduled
 
-    def _get_completed(self) -> JoinableQueue:
+    def _get_completed(self) -> JoinableQueue[Optional[List[bytes]]]:
         return self.completed
 
-    def _get_connected(self) -> JoinableQueue:
+    def _get_connected(self) -> JoinableQueue[Optional[List[bytes]]]:
         return self.connected
 
     def __enter__(self) -> QueueServer:
@@ -60,41 +101,33 @@ class QueueServer(BaseManager):
         self.start()
         return self
 
-    def __exit__(self, *exc) -> None:
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Shutdown the server."""
         self.shutdown()
 
 
-class QueueClient(BaseManager):
+class QueueClient(QueueInterface):
     """Client connection to queue manager."""
 
-    scheduled: JoinableQueue = None
-    completed: JoinableQueue = None
-    connected: JoinableQueue = None
-
-    _get_scheduled: Callable[[], JoinableQueue]
-    _get_completed: Callable[[], JoinableQueue]
-    _get_connected: Callable[[], JoinableQueue]
-
-    def __init__(self, address: Tuple[str, int] = (DEFAULT_BIND, DEFAULT_PORT),
-                 authkey: bytes = DEFAULT_AUTH) -> None:
-        """Initialize queue manager."""
-        super().__init__(address=address, authkey=authkey)
-        self.register('_get_scheduled')
-        self.register('_get_completed')
-        self.register('_get_connected')
+    _get_scheduled: Callable[[], JoinableQueue[Optional[List[bytes]]]]
+    _get_completed: Callable[[], JoinableQueue[Optional[List[bytes]]]]
+    _get_connected: Callable[[], JoinableQueue[Optional[List[bytes]]]]
 
     def connect(self) -> None:
         """Connect to server."""
+        self.register('_get_scheduled')
+        self.register('_get_completed')
+        self.register('_get_connected')
         super().connect()
         self.scheduled = self._get_scheduled()
         self.completed = self._get_completed()
         self.connected = self._get_connected()
+        self.connected.put(HOSTNAME)
 
     def __enter__(self) -> QueueClient:
         """Connect to server."""
         self.connect()
         return self
 
-    def __exit__(self, *exc) -> None:
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Disconnect from server."""

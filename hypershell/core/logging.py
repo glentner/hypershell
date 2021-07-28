@@ -1,61 +1,85 @@
-# This program is free software: you can redistribute it and/or modify it under the
-# terms of the Apache License (v2.0) as published by the Apache Software Foundation.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-# PARTICULAR PURPOSE. See the Apache License for more details.
-#
-# You should have received a copy of the Apache License along with this program.
-# If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
+# SPDX-FileCopyrightText: 2021 Geoffrey Lentner
+# SPDX-License-Identifier: Apache-2.0
 
 """Logging configuration for HyperShell."""
 
 
-# standard libraries
-import socket
-import logging as _logging
+# type annotations
+from typing import Dict
 
-# external libs
-from cmdkit.config import ConfigurationError
+# standard libraries
+import sys
+import socket
+import logging
+from enum import Enum
 
 # internal libs
 from hypershell.core.config import config
 
+# public interface
+__all__ = ['HOSTNAME', 'LogRecord', 'level', 'initialize_logging', ]
+
 
 # cached for frequent use
-hostname = socket.gethostname()
+HOSTNAME = socket.gethostname()
+NO_TTY = not sys.stderr.isatty()
 
 
-# escape sequences
-ANSI_RESET = '\033[0m'
-ANSI_CODES = {
-    prefix: {color: '\033[{prefix}{num}m'.format(prefix=i + 3, num=j)
-             for j, color in enumerate(['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'])}
-    for i, prefix in enumerate(['foreground', 'background'])}
-LEVEL_COLORS = {'debug': 'blue', 'info': 'green', 'warning': 'yellow',
-                'error': 'red', 'critical': 'magenta'}
+class Ansi(Enum):
+    """ANSI escape sequences for colors."""
+    RESET = '\033[0m'
+    BLACK = '\033[30m'
+    RED = '\033[31m'
+    GREEN = '\033[32m'
+    YELLOW = '\033[33m'
+    BLUE = '\033[34m'
+    MAGENTA = '\033[35m'
+    CYAN = '\033[36m'
+    WHITE = '\033[37m'
 
 
-class LogRecord(_logging.LogRecord):
-    """Extends :class:`logging.LogRecord` to include a hostname and ANSI color codes."""
+level_color: Dict[str, Ansi] = {
+    'DEBUG': Ansi.BLUE,
+    'INFO': Ansi.GREEN,
+    'WARNING': Ansi.YELLOW,
+    'ERROR': Ansi.RED,
+    'CRITICAL': Ansi.MAGENTA
+}
+
+
+class LogRecord(logging.LogRecord):
+    """Extends LogRecord to include the hostname and ANSI color codes."""
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.hostname = hostname
-        self.ansi_color = ANSI_CODES['foreground'][LEVEL_COLORS[self.levelname.lower()]]
-        self.ansi_reset = ANSI_RESET
+        self.hostname = HOSTNAME
+        self.ansi_color = '' if NO_TTY else level_color[self.levelname].value
+        self.ansi_reset = '' if NO_TTY else Ansi.RESET.value
 
 
 # inject factory back into logging library
-_logging.setLogRecordFactory(LogRecord)
+logging.setLogRecordFactory(LogRecord)
+
+
+# log to stderr with user-configurable formatting
+handler = logging.StreamHandler(stream=sys.stderr)
+handler.setFormatter(
+    logging.Formatter(config.logging.format, datefmt=config.logging.datefmt)
+)
+
+
+# level handled at logger level (not handler)
+level = getattr(logging, config.logging.level.upper())
+
+
+# null handler for library use
+logger = logging.getLogger('hypershell')
+logger.setLevel(level)
+logger.addHandler(logging.NullHandler())
 
 
 # called by entry-point to configure console handler
 def initialize_logging() -> None:
-    """Configure with func:`logging.basicConfig` for command-line interface."""
-    try:
-        _logging.basicConfig(level=getattr(_logging, config.logging.level.upper()),
-                             format=config.logging.format,
-                             datefmt=config.logging.datefmt)
-    except Exception as error:
-        raise ConfigurationError('Failed logging configuration') from error
+    """Enable logging output to the console."""
+    if handler not in logger.handlers:
+        logger.addHandler(handler)

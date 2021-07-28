@@ -15,7 +15,6 @@
 import os
 import ctypes
 import logging
-import functools
 
 # external libs
 from cmdkit.config import Namespace, Configuration
@@ -84,7 +83,6 @@ else:
     })
 
 
-@functools.cache
 def get_site() -> Namespace:
     """Retrieve path namespace for either 'system' (if admin) or 'user'."""
     return path.system if is_admin else path.user

@@ -1,12 +1,5 @@
-# This program is free software: you can redistribute it and/or modify it under the
-# terms of the Apache License (v2.0) as published by the Apache Software Foundation.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-# PARTICULAR PURPOSE. See the Apache License for more details.
-#
-# You should have received a copy of the Apache License along with this program.
-# If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
+# SPDX-FileCopyrightText: 2021 Geoffrey Lentner
+# SPDX-License-Identifier: Apache-2.0
 
 """
 Submit tasks to the database.
@@ -41,26 +34,30 @@ Warning:
 
 # type annotations
 from __future__ import annotations
-from typing import List, Iterable, Iterator, IO, Optional
+
+import functools
+from typing import List, Iterable, Iterator, IO, Optional, Dict, Callable
 
 # standard libs
 import sys
 import logging
 from datetime import datetime
-from queue import Queue, Empty
+from queue import Queue, Empty as QueueEmpty, Full as QueueFull
+from enum import Enum
 
 # external libs
 from cmdkit.app import Application
-from cmdkit.cli import Interface
+from cmdkit.cli import Interface, ArgumentError
 
 # internal libs
 from hypershell.core.config import config
-from hypershell.core.fsm import State, StateMachine, HALT
+from hypershell.core.fsm import State, StateMachine
+from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.database.model import Task
 
 # public interface
-__all__ = ['submit_from', 'submit_file', 'SubmitThread',
+__all__ = ['submit_from', 'submit_file', 'SubmitThread', 'LiveSubmitThread',
            'SubmitApp', 'DEFAULT_BUFFERSIZE', 'DEFAULT_BUFFERTIME']
 
 
@@ -68,119 +65,93 @@ __all__ = ['submit_from', 'submit_file', 'SubmitThread',
 log = logging.getLogger(__name__)
 
 
-class __LoaderStart(State):
-    def run(self, machine: LoaderImpl) -> State:
-        """Initial state for loader."""
-        return LOADER_GET
+class LoaderState(State, Enum):
+    """Finite states of submit machine."""
+    START = 0
+    GET = 1
+    PUT = 2
+    HALT = 3
 
 
-class __LoaderGet(State):
-    def run(self, machine: LoaderImpl) -> State:
-        """Get the next task from the source."""
-        try:
-            machine.task = Task.new(args=str(next(machine.source)).strip())
-            log.debug(f'Loaded task ({machine.task.args})')
-            return LOADER_PUT
-        except StopIteration:
-            return HALT
-
-
-class __LoaderPut(State):
-    def run(self, machine: LoaderImpl) -> State:
-        """Enqueue loaded task."""
-        machine.queue.put(machine.task)
-        return LOADER_GET
-
-
-LOADER_START = __LoaderStart()
-LOADER_GET = __LoaderGet()
-LOADER_PUT = __LoaderPut()
-
-
-class LoaderImpl(StateMachine):
+class Loader(StateMachine):
     """Enqueue tasks from source."""
 
     task: Task
     source: Iterator[str]
     queue: Queue[Optional[Task]]
 
+    state = LoaderState.START
+    states = LoaderState
+
     def __init__(self, source: Iterable[str], queue: Queue[Optional[Task]]) -> None:
-        """Initialize IO `stream` to read tasks and submit to database."""
+        """Initialize source to read tasks and submit to database."""
         self.source = iter(source)
         self.queue = queue
-        super().__init__(start=LOADER_START)
+
+    @functools.cached_property
+    def actions(self) -> Dict[LoaderState, Callable[[], LoaderState]]:
+        return {
+            LoaderState.START: self.start,
+            LoaderState.GET: self.get_task,
+            LoaderState.PUT: self.put_task,
+        }
+
+    @staticmethod
+    def start() -> LoaderState:
+        """Jump to GET state."""
+        return LoaderState.GET
+
+    def get_task(self) -> LoaderState:
+        """Get the next task from the source."""
+        try:
+            self.task = Task.new(args=str(next(self.source)).strip())
+            log.debug(f'Loaded task ({self.task.args})')
+            return LoaderState.PUT
+        except StopIteration:
+            return LoaderState.HALT
+
+    def put_task(self) -> LoaderState:
+        """Enqueue loaded task."""
+        try:
+            self.queue.put(self.task, timeout=2)
+            return LoaderState.GET
+        except QueueFull:
+            return LoaderState.PUT
 
 
 class LoaderThread(Thread):
     """Run loader within dedicated thread."""
 
     def __init__(self, source: Iterable[str], queue: Queue[Optional[Task]]) -> None:
+        """Initialize machine."""
         super().__init__(name='hypershell-submit')
-        self.machine = LoaderImpl(source=source, queue=queue)
+        self.machine = Loader(source=source, queue=queue)
 
     def run(self) -> None:
+        """Run machine."""
         self.machine.run()
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
+        """Stop machine."""
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
 
-class __QueueStart(State):
-    def run(self, machine: QueueImpl) -> State:
-        """Initial state for queue."""
-        machine.previous_submit = datetime.now()
-        return QUEUE_GET
-
-
-class __QueueGet(State):
-    def run(self, machine: QueueImpl) -> State:
-        """Pull tasks from queue and check buffer."""
-        try:
-            task = machine.queue.get(timeout=1)
-        except Empty:
-            return QUEUE_GET
-        if task is not None:
-            machine.tasks.append(task)
-            since_last = (datetime.now() - machine.previous_submit).total_seconds()
-            if len(machine.tasks) >= machine.buffersize or since_last >= machine.buffertime:
-                return QUEUE_SUBMIT
-            else:
-                return QUEUE_GET
-        else:
-            return QUEUE_FINALIZE
-
-
-class __QueueSubmit(State):
-    def run(self, machine: QueueImpl) -> State:
-        """Commit tasks to database."""
-        if machine.tasks:
-            Task.add_all(machine.tasks)
-            log.debug(f'Submitted {len(machine.tasks)} tasks')
-            machine.tasks.clear()
-            machine.previous_submit = datetime.now()
-        return QUEUE_GET
-
-
-class __QueueFinalize(State):
-    def run(self, machine: QueueImpl) -> State:
-        """Force final commit of tasks and halt."""
-        QUEUE_SUBMIT.run(machine)
-        return HALT
-
-
-QUEUE_START = __QueueStart()
-QUEUE_GET = __QueueGet()
-QUEUE_SUBMIT = __QueueSubmit()
-QUEUE_FINALIZE = __QueueFinalize()
+class DatabaseCommitterState(State, Enum):
+    """Finite states for database submitter."""
+    START = 0
+    GET = 1
+    COMMIT = 2
+    FINAL = 3
+    HALT = 4
 
 
 DEFAULT_BUFFERSIZE: int = 10
 DEFAULT_BUFFERTIME: int = 1
 
 
-class QueueImpl(StateMachine):
-    """Submit tasks from queue to database."""
+class DatabaseCommitter(StateMachine):
+    """Commit tasks from local queue to database."""
 
     queue: Queue[Optional[Task]]
     tasks: List[Task]
@@ -188,28 +159,77 @@ class QueueImpl(StateMachine):
     buffertime: int
     previous_submit: datetime
 
+    state = DatabaseCommitterState.START
+    states = DatabaseCommitterState
+
     def __init__(self, queue: Queue[Optional[Task]], buffersize: int = DEFAULT_BUFFERSIZE,
                  buffertime: int = DEFAULT_BUFFERTIME) -> None:
-        """Assign member."""
+        """Initialize with task queue and buffering parameters."""
         self.queue = queue
         self.tasks = []
         self.buffersize = buffersize
         self.buffertime = buffertime
-        super().__init__(start=QUEUE_START)
+
+    @functools.cached_property
+    def actions(self) -> Dict[DatabaseCommitterState, Callable[[], DatabaseCommitterState]]:
+        return {
+            DatabaseCommitterState.START: self.start,
+            DatabaseCommitterState.GET: self.get_task,
+            DatabaseCommitterState.COMMIT: self.commit,
+            DatabaseCommitterState.FINAL: self.finalize,
+        }
+
+    def start(self) -> DatabaseCommitterState:
+        """Jump to GET state."""
+        self.previous_submit = datetime.now()
+        return DatabaseCommitterState.GET
+
+    def get_task(self) -> DatabaseCommitterState:
+        """Get tasks from local queue and check buffer."""
+        try:
+            task = self.queue.get(timeout=2)
+        except QueueEmpty:
+            return DatabaseCommitterState.GET
+        if task is not None:
+            self.tasks.append(task)
+            since_last = (datetime.now() - self.previous_submit).total_seconds()
+            if len(self.tasks) >= self.buffersize or since_last >= self.buffertime:
+                return DatabaseCommitterState.COMMIT
+            else:
+                return DatabaseCommitterState.GET
+        else:
+            return DatabaseCommitterState.FINAL
+
+    def commit(self) -> DatabaseCommitterState:
+        """Commit tasks to database."""
+        if self.tasks:
+            Task.add_all(self.tasks)
+            log.debug(f'Submitted {len(self.tasks)} tasks')
+            self.tasks.clear()
+            self.previous_submit = datetime.now()
+        return DatabaseCommitterState.GET
+
+    def finalize(self) -> DatabaseCommitterState:
+        """Force final commit of tasks and halt."""
+        self.commit()
+        return DatabaseCommitterState.HALT
 
 
-class QueueThread(Thread):
-    """Run queue submitter within dedicated thread."""
+class DatabaseCommitterThread(Thread):
+    """Run committer within dedicated thread."""
 
     def __init__(self, queue: Queue[Optional[Task]], buffersize: int = DEFAULT_BUFFERSIZE,
                  buffertime: int = DEFAULT_BUFFERTIME) -> None:
+        """Initialize machine."""
         super().__init__(name='hypershell-submit')
-        self.machine = QueueImpl(queue=queue, buffersize=buffersize, buffertime=buffertime)
+        self.machine = DatabaseCommitter(queue=queue, buffersize=buffersize, buffertime=buffertime)
 
     def run(self) -> None:
+        """Run machine."""
         self.machine.run()
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
+        """Stop machine."""
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
@@ -218,37 +238,187 @@ class SubmitThread(Thread):
     """Manage asynchronous task queueing and submission workload."""
 
     queue: Queue[Optional[Task]]
-    loader_thread: LoaderThread
-    queue_thread: QueueThread
+    loader: LoaderThread
+    committer: DatabaseCommitterThread
 
     def __init__(self, source: Iterable[str], buffersize: int = DEFAULT_BUFFERSIZE,
                  buffertime: int = DEFAULT_BUFFERTIME) -> None:
         """Initialize queue and child threads."""
         self.queue = Queue(maxsize=buffersize)
-        self.loader_thread = LoaderThread(source=source, queue=self.queue)
-        self.queue_thread = QueueThread(queue=self.queue, buffersize=buffersize, buffertime=buffertime)
+        self.loader = LoaderThread(source=source, queue=self.queue)
+        self.committer = DatabaseCommitterThread(queue=self.queue, buffersize=buffersize, buffertime=buffertime)
         super().__init__(name='hypershell-submit')
 
     def run(self) -> None:
         """Start child threads, wait."""
-        self.loader_thread.start()
-        self.queue_thread.start()
-        self.loader_thread.join()
+        self.loader.start()
+        self.committer.start()
+        self.loader.join()
         self.queue.put(None)
-        self.queue_thread.join()
+        self.committer.join()
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
-        self.loader_thread.stop(wait=wait, timeout=timeout)
+        self.loader.stop(wait=wait, timeout=timeout)
         self.queue.put(None)
-        self.queue_thread.stop(wait=wait, timeout=timeout)
+        self.committer.stop(wait=wait, timeout=timeout)
         super().stop(wait=wait, timeout=timeout)
 
 
-def submit_from(source: Iterable[str], buffersize: int = DEFAULT_BUFFERSIZE,
-                buffertime: int = DEFAULT_BUFFERTIME) -> None:
+class QueueCommitterState(State, Enum):
+    """Finite states for queue submitter."""
+    START = 0
+    GET = 1
+    PACK = 2
+    COMMIT = 3
+    FINAL = 4
+    HALT = 5
+
+
+class QueueCommitter(StateMachine):
+    """Commit tasks from local queue to database."""
+
+    local: Queue[Optional[Task]]
+    client: QueueClient
+
+    tasks: List[Task]
+    bundle: List[bytes]
+
+    buffersize: int
+    buffertime: int
+    previous_submit: datetime
+
+    state = QueueCommitterState.START
+    states = QueueCommitterState
+
+    def __init__(self, local: Queue[Optional[Task]], client: QueueClient,
+                 buffersize: int = DEFAULT_BUFFERSIZE, buffertime: int = DEFAULT_BUFFERTIME) -> None:
+        """Initialize with task local and buffering parameters."""
+        self.local = local
+        self.client = client
+        self.tasks = []
+        self.bundle = []
+        self.buffersize = buffersize
+        self.buffertime = buffertime
+
+    @functools.cached_property
+    def actions(self) -> Dict[QueueCommitterState, Callable[[], QueueCommitterState]]:
+        return {
+            QueueCommitterState.START: self.start,
+            QueueCommitterState.GET: self.get_task,
+            QueueCommitterState.PACK: self.pack_bundle,
+            QueueCommitterState.COMMIT: self.commit,
+            QueueCommitterState.FINAL: self.finalize,
+        }
+
+    def start(self) -> QueueCommitterState:
+        """Jump to GET state."""
+        self.previous_submit = datetime.now()
+        return QueueCommitterState.GET
+
+    def get_task(self) -> QueueCommitterState:
+        """Get tasks from local queue and check buffer."""
+        try:
+            task = self.local.get(timeout=2)
+        except QueueEmpty:
+            return QueueCommitterState.GET
+        if task is not None:
+            self.tasks.append(task)
+            since_last = (datetime.now() - self.previous_submit).total_seconds()
+            if len(self.tasks) >= self.buffersize or since_last >= self.buffertime:
+                return QueueCommitterState.PACK
+            else:
+                return QueueCommitterState.GET
+        else:
+            return QueueCommitterState.FINAL
+
+    def pack_bundle(self) -> QueueCommitterState:
+        """Pack tasks into bundle for remote queue."""
+        self.bundle = [task.pack() for task in self.tasks]
+        return QueueCommitterState.COMMIT
+
+    def commit(self) -> QueueCommitterState:
+        """Commit tasks to server scheduling queue."""
+        try:
+            if self.tasks:
+                self.client.scheduled.put(self.bundle, timeout=2)
+                for task in self.tasks:
+                    log.debug(f'Scheduled task ({task.id})')
+                self.tasks = []
+                self.bundle = []
+                self.previous_submit = datetime.now()
+            return QueueCommitterState.GET
+        except QueueFull:
+            return QueueCommitterState.COMMIT
+
+    def finalize(self) -> QueueCommitterState:
+        """Force final commit of tasks and halt."""
+        self.commit()
+        return QueueCommitterState.HALT
+
+
+class QueueCommitterThread(Thread):
+    """Run queue committer within dedicated thread."""
+
+    def __init__(self, local: Queue[Optional[Task]], client: QueueClient,
+                 buffersize: int = DEFAULT_BUFFERSIZE, buffertime: int = DEFAULT_BUFFERTIME) -> None:
+        """Initialize machine."""
+        super().__init__(name='hypershell-submit')
+        self.machine = QueueCommitter(local=local, client=client, buffersize=buffersize, buffertime=buffertime)
+
+    def run(self) -> None:
+        """Run machine."""
+        self.machine.run()
+
+    def stop(self, wait: bool = False, timeout: int = None) -> None:
+        """Stop machine."""
+        self.machine.halt()
+        super().stop(wait=wait, timeout=timeout)
+
+
+class LiveSubmitThread(Thread):
+    """Manage asynchronous task queueing and submission workload."""
+
+    local: Queue[Optional[Task]]
+    client: QueueClient
+    loader: LoaderThread
+    committer: QueueCommitterThread
+
+    def __init__(self, source: Iterable[str], queue_config: QueueConfig,
+                 buffersize: int = DEFAULT_BUFFERSIZE, buffertime: int = DEFAULT_BUFFERTIME) -> None:
+        """Initialize queue and child threads."""
+        self.local = Queue(maxsize=buffersize)
+        self.loader = LoaderThread(source=source, queue=self.local)
+        self.client = QueueClient(config=queue_config)
+        self.committer = QueueCommitterThread(local=self.local, client=self.client,
+                                              buffersize=buffersize, buffertime=buffertime)
+        super().__init__(name='hypershell-submit')
+
+    def run(self) -> None:
+        """Start child threads, wait."""
+        with self.client:
+            self.loader.start()
+            self.committer.start()
+            self.loader.join()
+            self.local.put(None)
+            self.committer.join()
+
+    def stop(self, wait: bool = False, timeout: int = None) -> None:
+        """Stop child threads before main thread."""
+        self.loader.stop(wait=wait, timeout=timeout)
+        self.local.put(None)
+        self.committer.stop(wait=wait, timeout=timeout)
+        super().stop(wait=wait, timeout=timeout)
+
+
+def submit_from(source: Iterable[str], queue_config: QueueConfig = None,
+                buffersize: int = DEFAULT_BUFFERSIZE, buffertime: int = DEFAULT_BUFFERTIME) -> None:
     """Submit all task arguments from `source`."""
-    thread = SubmitThread.new(source=source, buffersize=buffersize, buffertime=buffertime)
+    if queue_config:
+        thread = LiveSubmitThread.new(source=source, queue_config=queue_config,
+                                      buffersize=buffersize, buffertime=buffertime)
+    else:
+        thread = SubmitThread.new(source=source, buffersize=buffersize, buffertime=buffertime)
     try:
         thread.join()
     except Exception:
@@ -256,11 +426,11 @@ def submit_from(source: Iterable[str], buffersize: int = DEFAULT_BUFFERSIZE,
         raise
 
 
-def submit_file(path: str, buffersize: int = DEFAULT_BUFFERSIZE,
-                buffertime: int = DEFAULT_BUFFERTIME, **options) -> None:
+def submit_file(path: str, queue_config: QueueConfig = None,
+                buffersize: int = DEFAULT_BUFFERSIZE, buffertime: int = DEFAULT_BUFFERTIME, **options) -> None:
     """Submit tasks by reading argument lines from local file `path`."""
     with open(path, mode='r', **options) as stream:
-        submit_from(stream, buffersize=buffersize, buffertime=buffertime)
+        submit_from(stream, queue_config=queue_config, buffersize=buffersize, buffertime=buffertime)
 
 
 APP_NAME = 'hypershell submit'
@@ -298,6 +468,18 @@ class SubmitApp(Application):
     buffertime: int = DEFAULT_BUFFERTIME
     interface.add_argument('-t', '--buffertime', type=int, default=buffertime)
 
+    live_mode: bool = False
+    interface.add_argument('--live', action='store_true', dest='live_mode')
+
+    host: str = None
+    interface.add_argument('-H', '--host', default=None)
+
+    port: int = None
+    interface.add_argument('-p', '--port', type=int, default=None)
+
+    auth: str = None
+    interface.add_argument('--auth', default=None)
+
     count: int
 
     def run(self) -> None:
@@ -307,8 +489,19 @@ class SubmitApp(Application):
 
     def submit_all(self) -> None:
         """Submit all tasks from source."""
-        submit_from(self.enumerated(self.source), buffersize=self.buffersize, buffertime=self.buffertime)
+        submit_from(self.enumerated(self.source), queue_config=self.queue_config,
+                    buffersize=self.buffersize, buffertime=self.buffertime)
         log.info(f'Submitted {self.count} tasks from {self.filepath}')
+
+    @functools.cached_property
+    def queue_config(self) -> Optional[QueueConfig]:
+        """If in live mode, the config for the remote server."""
+        if not self.live_mode:
+            return None
+        else:
+            return QueueConfig(host=self.host or QueueConfig.host,
+                               port=self.port or QueueConfig.port,
+                               auth=self.auth or QueueConfig.auth)
 
     def enumerated(self, source: IO) -> Iterable[str]:
         """Yield lines from `source` and update counter."""
@@ -316,12 +509,17 @@ class SubmitApp(Application):
             self.count = count + 1
             yield line
 
-    @staticmethod
-    def check_config():
+    def check_config(self):
         """Emit warning for particular configuration."""
         db = config.database.get('file', None) or config.database.get('database', None)
-        if config.database.provider == 'sqlite' and db in ('', ':memory:', None):
+        if config.database.provider == 'sqlite' and db in ('', ':memory:', None) and not self.live_mode:
             log.warning('Submitting tasks to in-memory database has no effect')
+        if self.host and not self.live_mode:
+            raise ArgumentError(f'Must specify --live to connect with running server (given --host)')
+        if self.port and not self.live_mode:
+            raise ArgumentError(f'Must specify --live to connect with running server (given --port)')
+        if self.auth and not self.live_mode:
+            raise ArgumentError(f'Must specify --live to connect with running server (given --auth)')
 
     def __enter__(self) -> SubmitApp:
         """Open file if not stdin."""
