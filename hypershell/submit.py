@@ -66,7 +66,7 @@ log = logging.getLogger(__name__)
 
 
 class LoaderState(State, Enum):
-    """Finite states of submit machine."""
+    """Finite states of loader machine."""
     START = 0
     GET = 1
     PUT = 2
