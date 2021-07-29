@@ -128,7 +128,7 @@ class Task(Model):
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert record to dictionary."""
-        return {name: getattr(self, name) for name in self.columns}
+        return dict(zip(self.columns, self.to_tuple()))
 
     def to_json(self) -> Dict[str, RT]:
         """Convert record to JSON-serializable dictionary."""
