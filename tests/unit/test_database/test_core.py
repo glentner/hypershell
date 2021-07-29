@@ -1,12 +1,5 @@
-# This program is free software: you can redistribute it and/or modify it under the
-# terms of the Apache License (v2.0) as published by the Apache Software Foundation.
-#
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-# PARTICULAR PURPOSE. See the Apache License for more details.
-#
-# You should have received a copy of the Apache License along with this program.
-# If not, see <https://www.apache.org/licenses/LICENSE-2.0>.
+# SPDX-FileCopyrightText: 2021 Geoffrey Lentner
+# SPDX-License-Identifier: Apache-2.0
 
 """Unit tests for database core module."""
 
@@ -59,7 +52,7 @@ class TestDatabaseURL:
                 message, = error.args
                 assert message == f'Cannot provide \'{field}\' for SQLite'
             else:
-                assert False, 'Did not raise AttributeError'
+                raise AssertionError('Did not raise AttributeError')
 
     def test_no_allow_file(self) -> None:
         try:
