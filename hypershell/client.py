@@ -488,8 +488,8 @@ def run_client(num_tasks: int = 1, bundlesize: int = DEFAULT_BUNDLESIZE, bundlew
 
 APP_NAME = 'hyper-shell client'
 APP_USAGE = f"""\
-usage: {APP_NAME} [-h] [-N NUM] [-H ADDR] [-p PORT] [-t TEMPLATE]
-Run client.\
+usage: {APP_NAME} [-h] [-N NUM] [-H ADDR] [-p PORT] [-k KEY] [-t TEMPLATE]
+Launch client directly, run tasks in parallel.\
 """
 
 APP_HELP = f"""\
@@ -498,10 +498,11 @@ APP_HELP = f"""\
 options:
 -N, --num-tasks   NUM   Number of tasks to run in parallel.
 -t, --template    CMD   Command-line template pattern.
--b, --bundlesize  SIZE  Number of lines to buffer (default: {DEFAULT_BUNDLESIZE}).
+-b, --bundlesize  SIZE  Bundle size for finished tasks (default: {DEFAULT_BUNDLESIZE}).
 -w, --bundlewait  SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
 -H, --host        ADDR  Hostname for server.
 -p, --port        NUM   Port number for server.
+-k, --auth        KEY   Cryptography key to connect to server.   
 -h, --help              Show this message and exit.\
 """
 
@@ -521,8 +522,8 @@ class ClientApp(Application):
     port: int = QueueConfig.port
     interface.add_argument('-p', '--port', type=int, default=port)
 
-    authkey: str = QueueConfig.auth
-    interface.add_argument('--auth', default=authkey)
+    auth: str = QueueConfig.auth
+    interface.add_argument('-k', '--auth', default=auth)
 
     template: str = DEFAULT_TEMPLATE
     interface.add_argument('-t', '--template', default=template)
@@ -541,4 +542,4 @@ class ClientApp(Application):
     def run(self) -> None:
         """Run client."""
         run_client(num_tasks=self.num_tasks, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
-                   address=(self.host, self.port), auth=self.authkey, template=self.template)
+                   address=(self.host, self.port), auth=self.auth, template=self.template)

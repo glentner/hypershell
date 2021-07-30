@@ -500,10 +500,12 @@ def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, prin
 
 
 APP_NAME = 'hyper-shell server'
+_PADDING = ' ' * len(APP_NAME)
+
 APP_USAGE = f"""\
 usage: {APP_NAME} [-h] [FILE | --server-forever] [-b NUM] [-w SEC] [--max-retries NUM [--eager]]
-                       [-H ADDR] [-p NUM] [--auth KEY] [--live] [--print]
-Run hypershell server.\
+       {_PADDING} [-H ADDR] [-p NUM] [--auth KEY] [--live] [--print]
+Launch server, schedule directly or asynchronously from database.\
 """
 
 APP_HELP = f"""\
@@ -527,7 +529,7 @@ FILE                        Path to task file ("-" for <stdin>).
 options:
 -H, --bind            ADDR  Bind address (default: localhost)
 -p, --port            NUM   Port number.
-    --auth            KEY   Cryptography key to secure server.
+-k, --auth            KEY   Cryptography key to secure server.
     --serve-forever         Do not halt even if all tasks finished.
 -b, --bundlesize      NUM   Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
 -t, --bundlewait      SEC   Seconds to wait before flushing tasks (with FILE, default: {DEFAULT_BUNDLEWAIT}).
@@ -570,7 +572,7 @@ class ServerApp(Application):
     interface.add_argument('-p', '--port', type=int, default=port)
 
     auth: str = QueueConfig.auth
-    interface.add_argument('--auth', default=auth)
+    interface.add_argument('-k', '--auth', default=auth)
 
     live_mode: bool = False
     interface.add_argument('--live', action='store_true', dest='live_mode')

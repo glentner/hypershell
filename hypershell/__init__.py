@@ -50,10 +50,10 @@ APP_HELP = f"""\
 {APP_USAGE}
 
 commands:
-submit                 {SubmitApp.__doc__}
-server                 {ServerApp.__doc__}
-client                 {ClientApp.__doc__}
-cluster                {ClusterApp.__doc__}
+submit                 Submit tasks manually.
+server                 Run server directly.
+client                 Run client directly.
+cluster                Launch cluster (recommended).
 
 options:
 -h, --help             Show this message and exit.

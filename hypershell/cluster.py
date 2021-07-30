@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import IO, Optional, Iterable
 
 # standard libs
+import os
 import sys
 import time
 import logging
@@ -83,8 +84,8 @@ def run_cluster(**options) -> None:
 
 APP_NAME = 'hyper-shell cluster'
 APP_USAGE = f"""\
-usage: {APP_NAME} [-h] FILE [-n INT] [-t TEMPLATE]
-Run local cluster.\
+usage: {APP_NAME} [-h] [FILE] [-N NUM] [-t CMD] [-b SIZE] [-w SEC]
+Launch cluster locally, over SSH, or with a custom launcher.\
 """
 
 APP_HELP = f"""\
@@ -131,9 +132,15 @@ class ClusterApp(Application):
 
     def run(self) -> None:
         """Run cluster."""
+        log.info(f'Reading tasks from {self.filename}')
         run_cluster(source=self.source, num_tasks=self.num_tasks, template=self.template,
                     bundlesize=self.bundlesize, bundlewait=self.bundlewait,
                     max_retries=self.max_retries, live=self.live_mode)
+
+    @property
+    def filename(self) -> str:
+        """The basename of the file."""
+        return '<stdin>' if self.filepath == '-' else os.path.basename(self.filepath)
 
     def __enter__(self) -> ClusterApp:
         """Open file if not stdin."""
