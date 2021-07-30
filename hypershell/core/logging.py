@@ -39,12 +39,30 @@ class Ansi(Enum):
 
 
 level_color: Dict[str, Ansi] = {
+    'TRACE': Ansi.CYAN,
     'DEBUG': Ansi.BLUE,
     'INFO': Ansi.GREEN,
     'WARNING': Ansi.YELLOW,
     'ERROR': Ansi.RED,
     'CRITICAL': Ansi.MAGENTA
 }
+
+
+TRACE = logging.DEBUG - 5
+logging.addLevelName(TRACE, 'TRACE')
+
+
+class Logger(logging.Logger):
+    """Extend Logger to implement TRACE level."""
+
+    def trace(self, msg: str, *args, **kwargs):
+        """Log 'msg % args' with severity 'TRACE'."""
+        if self.isEnabledFor(TRACE):
+            self._log(TRACE, msg, args, **kwargs)
+
+
+# inject class back into logging library
+logging.setLoggerClass(Logger)
 
 
 class LogRecord(logging.LogRecord):
@@ -69,7 +87,8 @@ handler.setFormatter(
 
 
 # level handled at logger level (not handler)
-level = getattr(logging, config.logging.level.upper())
+levelname = config.logging.level.upper()
+level = TRACE if levelname == 'TRACE' else getattr(logging, levelname)
 
 
 # null handler for library use
