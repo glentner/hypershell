@@ -57,7 +57,7 @@ setup(
     extra_requires = {
         'postgres': ['psycopg2>=2.8.5', ],
     },
-    entry_points     = {'console_scripts': ['hypershell=hypershell:main', ]},
+    entry_points     = {'console_scripts': ['hyper-shell=hypershell:main', ]},
     data_files = [
         ('share/man/man1', ['man/man1/hypershell.1', ])
     ],
