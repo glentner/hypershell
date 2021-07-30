@@ -45,11 +45,13 @@ from cmdkit.app import Application
 from cmdkit.cli import Interface, ArgumentError
 
 # internal libs
+from hypershell.core.config import config, default
+from hypershell.core.logging import Logger
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueServer, QueueConfig
 from hypershell.database.model import Task
-from hypershell.submit import SubmitThread, DEFAULT_BUFFERTIME, LiveSubmitThread
+from hypershell.submit import SubmitThread, LiveSubmitThread, DEFAULT_BUNDLEWAIT
 
 # public interface
 __all__ = ['serve_from', 'serve_file', 'serve_forever', 'ServerThread', 'ServerApp',
@@ -57,7 +59,7 @@ __all__ = ['serve_from', 'serve_file', 'serve_forever', 'ServerThread', 'ServerA
 
 
 # module level logger
-log = logging.getLogger(__name__)
+log: Logger = logging.getLogger(__name__)
 
 
 class SchedulerState(State, Enum):
@@ -71,10 +73,10 @@ class SchedulerState(State, Enum):
 
 # Note: unless specified otherwise for larger problems, a bundle of size one allows
 # for greater concurrency on smaller workloads.
-DEFAULT_BUNDLESIZE: int = 1
-DEFAULT_ATTEMPTS: int = 1
-DEFAULT_EAGER_MODE: bool = False
-DEFAULT_QUERY_PAUSE = 5
+DEFAULT_BUNDLESIZE: int = default.server.bundlesize
+DEFAULT_ATTEMPTS: int = default.server.attempts
+DEFAULT_EAGER_MODE: bool = default.server.eager
+DEFAULT_QUERY_PAUSE: int = default.server.wait
 
 
 class Scheduler(StateMachine):
@@ -272,7 +274,7 @@ class ServerThread(Thread):
 
     def __init__(self,
                  source: Iterable[str] = None, live: bool = False, forever_mode: bool = False,
-                 bundlesize: int = DEFAULT_BUNDLESIZE, buffertime: int = DEFAULT_BUFFERTIME,
+                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                  max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = False,
                  print_on_failure: bool = False) -> None:
@@ -341,12 +343,12 @@ class ServerThread(Thread):
 
 
 def serve_from(source: Iterable[str], live: bool = False, print_on_failure: bool = False,
-               bundlesize: int = DEFAULT_BUNDLESIZE, buffertime: int = DEFAULT_BUFFERTIME,
+               bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE) -> None:
     """Run server with the given task `source`, run until complete."""
     thread = ServerThread.new(source=source, live=live, print_on_failure=print_on_failure,
-                              buffertime=buffertime, bundlesize=bundlesize,
+                              bundlesize=bundlesize, bundlewait=bundlewait,
                               address=address, auth=auth, max_retries=max_retries, eager=eager)
     try:
         thread.join()
@@ -356,13 +358,13 @@ def serve_from(source: Iterable[str], live: bool = False, print_on_failure: bool
 
 
 def serve_file(path: str, live: bool = False, print_on_failure: bool = False,
-               bundlesize: int = DEFAULT_BUNDLESIZE, buffertime: int = DEFAULT_BUFFERTIME,
+               bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE, **file_options) -> None:
     """Run server with tasks from a local file `path`, run until complete."""
     with open(path, mode='r', **file_options) as stream:
         serve_from(stream, live=live, print_on_failure=print_on_failure,
-                   bundlesize=bundlesize, buffertime=buffertime, address=address, auth=auth,
+                   bundlesize=bundlesize, bundlewait=bundlewait, address=address, auth=auth,
                    max_retries=max_retries, eager=eager)
 
 
@@ -382,9 +384,9 @@ def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, prin
 
 APP_NAME = 'hypershell server'
 APP_USAGE = f"""\
-usage: {APP_NAME} [-h] [FILE | --server-forever] [--bundle-size NUM] [--max-retries NUM [--eager]]
-                       [--live] [--print-on-failure]
-Run server.\
+usage: {APP_NAME} [-h] [FILE | --server-forever] [-b NUM] [-w SEC] [--max-retries NUM [--eager]]
+                       [-H ADDR] [-p NUM] [--auth KEY] [--live] [--print]
+Run hypershell server.\
 """
 
 APP_HELP = f"""\
@@ -393,8 +395,8 @@ APP_HELP = f"""\
 The server includes a scheduler component that pulls tasks from the database and offers
 them up on a distributed queue to clients. It also has a receiver that collects the results
 of finished tasks. Optionally, the server can submit tasks (FILE). When submitting tasks,
-the -t/--buffertime options are the same as for 'hypershell submit' and the -b/--bundlesize
-are used for -b/--buffersize.
+the -w/--bundlewait options are the same as for 'hypershell submit' and the -b/--bundlesize
+are used for -b/--bundlesize.
 
 With --max-retries greater than zero, the scheduler will check for a non-zero exit status
 for tasks and re-submit them if their previous number of attempts is less.
@@ -406,11 +408,16 @@ arguments:
 FILE                        Path to task file ("-" for <stdin>).
 
 options:
-    --serve-forever         Do no halt even if all tasks finished.
--b, --bundlesize      NUM   Number of lines to buffer (default: {DEFAULT_BUNDLESIZE}).
--t, --buffertime      SEC   Seconds to wait before flushing tasks (with FILE, default: {DEFAULT_BUFFERTIME}).
--r, --max-retries     NUM   Resubmit failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
+-H, --bind            ADDR  Bind address (default: localhost)
+-p, --port            NUM   Port number.
+    --auth            KEY   Cryptography key to secure server.
+    --serve-forever         Do not halt even if all tasks finished.
+-b, --bundlesize      NUM   Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
+-t, --bundlewait      SEC   Seconds to wait before flushing tasks (with FILE, default: {DEFAULT_BUNDLEWAIT}).
+-r, --max-retries     NUM   Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
     --eager                 Schedule failed tasks before new tasks.
+    --live                  Run server without database.
+    --print                 Print failed command args to STDOUT.
 -h, --help                  Show this message and exit.\
 """
 
@@ -425,11 +432,11 @@ class ServerApp(Application):
     source: Optional[IO] = None
     interface.add_argument('filepath', nargs='?', default=None)
 
-    bundlesize: int = DEFAULT_BUNDLESIZE
+    bundlesize: int = config.server.bundlesize
     interface.add_argument('-b', '--bundlesize', type=int, default=bundlesize)
 
-    buffertime: int = DEFAULT_BUFFERTIME
-    interface.add_argument('-t', '--buffertime', type=int, default=buffertime)
+    bundlewait: int = config.submit.bundlewait
+    interface.add_argument('-w', '--bundlewait', type=int, default=bundlewait)
 
     eager_mode: bool = False
     max_retries: int = DEFAULT_ATTEMPTS - 1
@@ -452,7 +459,7 @@ class ServerApp(Application):
     interface.add_argument('--live', action='store_true', dest='live_mode')
 
     print_on_failure: bool = False
-    interface.add_argument('--print-on-failure', action='store_true')
+    interface.add_argument('--print', action='store_true')
 
     def run(self) -> None:
         """Run server."""
@@ -460,7 +467,7 @@ class ServerApp(Application):
             serve_forever(bundlesize=self.bundlesize, address=(self.host, self.port), auth=self.auth,
                           live=self.live_mode, print_on_failure=self.print_on_failure, max_retries=self.max_retries)
         else:
-            serve_from(source=self.source, bundlesize=self.bundlesize, buffertime=self.buffertime,
+            serve_from(source=self.source, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
                        address=(self.host, self.port), auth=self.auth, max_retries=self.max_retries,
                        live=self.live_mode, print_on_failure=self.print_on_failure)
 

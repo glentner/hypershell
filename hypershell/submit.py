@@ -7,7 +7,7 @@ Submit tasks to the database.
 Example:
     >>> from hypershell.submit import submit_from
     >>> with open('some-file', mode='r') as source:
-    ...     submit_from(source, buffersize=10)
+    ...     submit_from(source, bundlesize=10)
 
 
 
@@ -17,7 +17,7 @@ Call `stop()` to stop early.
 Example:
     >>> import sys
     >>> from hypershell.submit import SubmitThread
-    >>> thread = SubmitThread.new(sys.stdin, buffersize=10)
+    >>> thread = SubmitThread.new(sys.stdin, bundlesize=10)
 
 Note:
     In order for the `SubmitThread` to actively monitor the state set by `stop` and
@@ -59,7 +59,7 @@ from hypershell.database.model import Task
 
 # public interface
 __all__ = ['submit_from', 'submit_file', 'SubmitThread', 'LiveSubmitThread',
-           'SubmitApp', 'DEFAULT_BUFFERSIZE', 'DEFAULT_BUFFERTIME']
+           'SubmitApp', 'DEFAULT_BUNDLESIZE', 'DEFAULT_BUNDLEWAIT']
 
 
 # module level logger
@@ -148,8 +148,8 @@ class DatabaseCommitterState(State, Enum):
     HALT = 4
 
 
-DEFAULT_BUFFERSIZE: int = 10
-DEFAULT_BUFFERTIME: int = 1
+DEFAULT_BUNDLESIZE: int = default.submit.bundlesize
+DEFAULT_BUNDLEWAIT: int = default.submit.bundlewait
 
 
 class DatabaseCommitter(StateMachine):
@@ -157,20 +157,21 @@ class DatabaseCommitter(StateMachine):
 
     queue: Queue[Optional[Task]]
     tasks: List[Task]
-    buffersize: int
-    buffertime: int
+    bundlesize: int
+    bundlewait: int
     previous_submit: datetime
 
     state = DatabaseCommitterState.START
     states = DatabaseCommitterState
 
-    def __init__(self, queue: Queue[Optional[Task]], buffersize: int = DEFAULT_BUFFERSIZE,
-                 buffertime: int = DEFAULT_BUFFERTIME) -> None:
+    def __init__(self,
+                 queue: Queue[Optional[Task]],
+                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize with task queue and buffering parameters."""
         self.queue = queue
         self.tasks = []
-        self.buffersize = buffersize
-        self.buffertime = buffertime
+        self.bundlesize = bundlesize
+        self.bundlewait = bundlewait
 
     @functools.cached_property
     def actions(self) -> Dict[DatabaseCommitterState, Callable[[], DatabaseCommitterState]]:
@@ -196,7 +197,7 @@ class DatabaseCommitter(StateMachine):
         if task is not None:
             self.tasks.append(task)
             since_last = (datetime.now() - self.previous_submit).total_seconds()
-            if len(self.tasks) >= self.buffersize or since_last >= self.buffertime:
+            if len(self.tasks) >= self.bundlesize or since_last >= self.bundlewait:
                 return DatabaseCommitterState.COMMIT
             else:
                 return DatabaseCommitterState.GET
@@ -221,11 +222,11 @@ class DatabaseCommitter(StateMachine):
 class DatabaseCommitterThread(Thread):
     """Run committer within dedicated thread."""
 
-    def __init__(self, queue: Queue[Optional[Task]], buffersize: int = DEFAULT_BUFFERSIZE,
-                 buffertime: int = DEFAULT_BUFFERTIME) -> None:
+    def __init__(self, queue: Queue[Optional[Task]],
+                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize machine."""
-        super().__init__(name='hypershell-submit')
-        self.machine = DatabaseCommitter(queue=queue, buffersize=buffersize, buffertime=buffertime)
+        super().__init__(name='hypershell-submit-committer')
+        self.machine = DatabaseCommitter(queue=queue, bundlesize=bundlesize, bundlewait=bundlewait)
 
     def run(self) -> None:
         """Run machine."""
@@ -244,12 +245,12 @@ class SubmitThread(Thread):
     loader: LoaderThread
     committer: DatabaseCommitterThread
 
-    def __init__(self, source: Iterable[str], buffersize: int = DEFAULT_BUFFERSIZE,
-                 buffertime: int = DEFAULT_BUFFERTIME) -> None:
+    def __init__(self, source: Iterable[str], bundlesize: int = DEFAULT_BUNDLESIZE,
+                 bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize queue and child threads."""
-        self.queue = Queue(maxsize=buffersize)
+        self.queue = Queue(maxsize=bundlesize)
         self.loader = LoaderThread(source=source, queue=self.queue)
-        self.committer = DatabaseCommitterThread(queue=self.queue, buffersize=buffersize, buffertime=buffertime)
+        self.committer = DatabaseCommitterThread(queue=self.queue, bundlesize=bundlesize, bundlewait=bundlewait)
         super().__init__(name='hypershell-submit')
 
     def run(self) -> None:
@@ -280,7 +281,7 @@ class QueueCommitterState(State, Enum):
 
 
 class QueueCommitter(StateMachine):
-    """Commit tasks from local queue to database."""
+    """Commit tasks from local queue directly to remote server queue."""
 
     local: Queue[Optional[Task]]
     client: QueueClient
@@ -288,22 +289,22 @@ class QueueCommitter(StateMachine):
     tasks: List[Task]
     bundle: List[bytes]
 
-    buffersize: int
-    buffertime: int
+    bundlesize: int
+    bundlewait: int
     previous_submit: datetime
 
     state = QueueCommitterState.START
     states = QueueCommitterState
 
     def __init__(self, local: Queue[Optional[Task]], client: QueueClient,
-                 buffersize: int = DEFAULT_BUFFERSIZE, buffertime: int = DEFAULT_BUFFERTIME) -> None:
-        """Initialize with task local and buffering parameters."""
+                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
+        """Initialize with queue handles and buffering parameters."""
         self.local = local
         self.client = client
         self.tasks = []
         self.bundle = []
-        self.buffersize = buffersize
-        self.buffertime = buffertime
+        self.bundlesize = bundlesize
+        self.bundlewait = bundlewait
 
     @functools.cached_property
     def actions(self) -> Dict[QueueCommitterState, Callable[[], QueueCommitterState]]:
@@ -330,7 +331,7 @@ class QueueCommitter(StateMachine):
         if task is not None:
             self.tasks.append(task)
             since_last = (datetime.now() - self.previous_submit).total_seconds()
-            if len(self.tasks) >= self.buffersize or since_last >= self.buffertime:
+            if len(self.tasks) >= self.bundlesize or since_last >= self.bundlewait:
                 return QueueCommitterState.PACK
             else:
                 return QueueCommitterState.GET
@@ -366,7 +367,7 @@ class QueueCommitterThread(Thread):
     """Run queue committer within dedicated thread."""
 
     def __init__(self, local: Queue[Optional[Task]], client: QueueClient,
-                 buffersize: int = DEFAULT_BUFFERSIZE, buffertime: int = DEFAULT_BUFFERTIME) -> None:
+                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-submit')
         self.machine = QueueCommitter(local=local, client=client, buffersize=buffersize, buffertime=buffertime)
@@ -390,13 +391,13 @@ class LiveSubmitThread(Thread):
     committer: QueueCommitterThread
 
     def __init__(self, source: Iterable[str], queue_config: QueueConfig,
-                 buffersize: int = DEFAULT_BUFFERSIZE, buffertime: int = DEFAULT_BUFFERTIME) -> None:
+                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize queue and child threads."""
-        self.local = Queue(maxsize=buffersize)
+        self.local = Queue(maxsize=bundlesize)
         self.loader = LoaderThread(source=source, queue=self.local)
         self.client = QueueClient(config=queue_config)
         self.committer = QueueCommitterThread(local=self.local, client=self.client,
-                                              buffersize=buffersize, buffertime=buffertime)
+                                              bundlesize=bundlesize, bundlewait=bundlewait)
         super().__init__(name='hypershell-submit')
 
     def run(self) -> None:
@@ -420,13 +421,13 @@ class LiveSubmitThread(Thread):
 
 
 def submit_from(source: Iterable[str], queue_config: QueueConfig = None,
-                buffersize: int = DEFAULT_BUFFERSIZE, buffertime: int = DEFAULT_BUFFERTIME) -> None:
+                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
     """Submit all task arguments from `source`."""
     if queue_config:
         thread = LiveSubmitThread.new(source=source, queue_config=queue_config,
-                                      buffersize=buffersize, buffertime=buffertime)
+                                      bundlesize=bundlesize, bundlewait=bundlewait)
     else:
-        thread = SubmitThread.new(source=source, buffersize=buffersize, buffertime=buffertime)
+        thread = SubmitThread.new(source=source, bundlesize=bundlesize, bundlewait=bundlewait)
     try:
         thread.join()
     except Exception:
@@ -435,15 +436,15 @@ def submit_from(source: Iterable[str], queue_config: QueueConfig = None,
 
 
 def submit_file(path: str, queue_config: QueueConfig = None,
-                buffersize: int = DEFAULT_BUFFERSIZE, buffertime: int = DEFAULT_BUFFERTIME, **options) -> None:
+                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT, **options) -> None:
     """Submit tasks by reading argument lines from local file `path`."""
     with open(path, mode='r', **options) as stream:
-        submit_from(stream, queue_config=queue_config, buffersize=buffersize, buffertime=buffertime)
+        submit_from(stream, queue_config=queue_config, bundlesize=bundlesize, bundlewait=bundlewait)
 
 
 APP_NAME = 'hypershell submit'
 APP_USAGE = f"""\
-usage: {APP_NAME} [-h] FILE [--buffersize NUM] [--buffertime SEC]
+usage: {APP_NAME} [-h] [FILE] [-b NUM] [-w SEC]
 Submit command lines to the database.\
 """
 
@@ -454,8 +455,8 @@ arguments:
 FILE                   Path to task file ("-" for <stdin>).
 
 options:
--b, --buffersize  NUM  Number of lines to buffer.
--t, --buffertime  SEC  Seconds to wait before flushing tasks.
+-b, --bundlesize  NUM  Number of lines to buffer (default: {DEFAULT_BUNDLESIZE}).
+-w, --bundlewait  SEC  Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
 -h, --help             Show this message and exit.\
 """
 
@@ -468,25 +469,13 @@ class SubmitApp(Application):
 
     source: IO
     filepath: str
-    interface.add_argument('filepath')
+    interface.add_argument('filepath', nargs='?', default='-')
 
-    buffersize: int = DEFAULT_BUFFERSIZE
-    interface.add_argument('-b', '--buffersize', type=int, default=buffersize)
+    bundlesize: int = config.submit.bundlesize
+    interface.add_argument('-b', '--bundlesize', type=int, default=bundlesize)
 
-    buffertime: int = DEFAULT_BUFFERTIME
-    interface.add_argument('-t', '--buffertime', type=int, default=buffertime)
-
-    live_mode: bool = False
-    interface.add_argument('--live', action='store_true', dest='live_mode')
-
-    host: str = None
-    interface.add_argument('-H', '--host', default=None)
-
-    port: int = None
-    interface.add_argument('-p', '--port', type=int, default=None)
-
-    auth: str = None
-    interface.add_argument('--auth', default=None)
+    bundlewait: int = config.submit.bundlewait
+    interface.add_argument('-w', '--bundlewait', type=int, default=bundlewait)
 
     count: int
 
@@ -497,19 +486,9 @@ class SubmitApp(Application):
 
     def submit_all(self) -> None:
         """Submit all tasks from source."""
-        submit_from(self.enumerated(self.source), queue_config=self.queue_config,
-                    buffersize=self.buffersize, buffertime=self.buffertime)
-        log.info(f'Submitted {self.count} tasks from {self.filepath}')
-
-    @functools.cached_property
-    def queue_config(self) -> Optional[QueueConfig]:
-        """If in live mode, the config for the remote server."""
-        if not self.live_mode:
-            return None
-        else:
-            return QueueConfig(host=self.host or QueueConfig.host,
-                               port=self.port or QueueConfig.port,
-                               auth=self.auth or QueueConfig.auth)
+        submit_from(self.enumerated(self.source),
+                    bundlesize=self.bundlesize, bundlewait=self.bundlewait)
+        log.info(f'Submitted {self.count} tasks from {self.filename}')
 
     def enumerated(self, source: IO) -> Iterable[str]:
         """Yield lines from `source` and update counter."""
@@ -517,17 +496,17 @@ class SubmitApp(Application):
             self.count = count + 1
             yield line
 
-    def check_config(self):
+    @staticmethod
+    def check_config():
         """Emit warning for particular configuration."""
         db = config.database.get('file', None) or config.database.get('database', None)
-        if config.database.provider == 'sqlite' and db in ('', ':memory:', None) and not self.live_mode:
+        if config.database.provider == 'sqlite' and db in ('', ':memory:', None):
             log.warning('Submitting tasks to in-memory database has no effect')
-        if self.host and not self.live_mode:
-            raise ArgumentError(f'Must specify --live to connect with running server (given --host)')
-        if self.port and not self.live_mode:
-            raise ArgumentError(f'Must specify --live to connect with running server (given --port)')
-        if self.auth and not self.live_mode:
-            raise ArgumentError(f'Must specify --live to connect with running server (given --auth)')
+
+    @property
+    def filename(self) -> str:
+        """The basename of the file."""
+        return '<stdin>' if self.filepath == '-' else os.path.basename(self.filepath)
 
     def __enter__(self) -> SubmitApp:
         """Open file if not stdin."""

@@ -22,10 +22,11 @@ from cmdkit.app import Application
 from cmdkit.cli import Interface
 
 # internal libs
+from hypershell import config
 from hypershell.core.thread import Thread
 from hypershell.client import ClientThread, DEFAULT_TEMPLATE
 from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
-from hypershell.submit import DEFAULT_BUFFERTIME
+from hypershell.submit import DEFAULT_BUNDLEWAIT
 
 # public interface
 __all__ = ['LocalCluster', 'run_cluster', 'ClusterApp', ]
@@ -42,14 +43,14 @@ class LocalCluster(Thread):
     client: ClientThread
 
     def __init__(self, source: Iterable[str] = None, template: str = DEFAULT_TEMPLATE,
-                 bundlesize: int = DEFAULT_BUNDLESIZE, buffertime: int = DEFAULT_BUFFERTIME,
+                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, live: bool = False,
-                 ntasks: int = 1) -> None:
+                 num_tasks: int = 1) -> None:
         """Initialize server and client threads."""
         self.server = ServerThread(source=source, auth='...', live=live,
-                                   bundlesize=bundlesize, buffertime=buffertime,
+                                   bundlesize=bundlesize, bundlewait=bundlewait,
                                    max_retries=max_retries, eager=eager)
-        self.client = ClientThread(ntasks=ntasks, template=template, auth='...')
+        self.client = ClientThread(num_tasks=num_tasks, template=template, auth='...')
         super().__init__(name='hypershell-cluster')
 
     def run(self) -> None:
@@ -87,9 +88,11 @@ APP_HELP = f"""\
 {APP_USAGE}
 
 options:
--n, --ntasks         NUM        Number of tasks to run in parallel.
--t, --template       TEMPLATE   Command line template pattern.
--h, --help                      Show this message and exit.\
+-N, --num-tasks      NUM   Number of tasks to run in parallel.
+-b, --bundlesize     SIZE  Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
+-w, --bundlewait     SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
+-t, --template       CMD   Command-line template pattern.
+-h, --help                 Show this message and exit.\
 """
 
 
@@ -103,14 +106,17 @@ class ClusterApp(Application):
     source: Optional[IO] = None
     interface.add_argument('filepath', nargs='?', default=None)
 
-    ntasks: int = 1
-    interface.add_argument('-N', '--num-tasks', type=int, default=ntasks, dest='ntasks')
+    num_tasks: int = 1
+    interface.add_argument('-N', '--num-tasks', type=int, default=num_tasks)
 
     template: str = DEFAULT_TEMPLATE
     interface.add_argument('-t', '--template', default=template)
 
-    bundlesize: int = DEFAULT_BUNDLESIZE
+    bundlesize: int = config.server.bundlesize
     interface.add_argument('-b', '--bundlesize', type=int, default=bundlesize)
+
+    bundlewait: int = config.submit.bundlewait
+    interface.add_argument('-w', '--bundlewait', type=int, default=bundlewait)
 
     eager_mode: bool = False
     max_retries: int = DEFAULT_ATTEMPTS - 1
@@ -122,8 +128,9 @@ class ClusterApp(Application):
 
     def run(self) -> None:
         """Run cluster."""
-        run_cluster(source=self.source, ntasks=self.ntasks, template=self.template,
-                    bundlesize=self.bundlesize, max_retries=self.max_retries, live=self.live_mode)
+        run_cluster(source=self.source, num_tasks=self.num_tasks, template=self.template,
+                    bundlesize=self.bundlesize, bundlewait=self.bundlewait,
+                    max_retries=self.max_retries, live=self.live_mode)
 
     def __enter__(self) -> ClusterApp:
         """Open file if not stdin."""
