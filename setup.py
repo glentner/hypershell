@@ -19,8 +19,8 @@ with open('README.rst', mode='r') as readme:
 with open('hypershell/__meta__.py', mode='r') as source:
     content = source.read().strip()
     metadata = {key: re.search(key + r'\s*=\s*[\'"]([^\'"]*)[\'"]', content).group(1)
-                for key in ['__version__', '__authors__', '__contact__', '__description__',
-                            '__license__', '__keywords__', '__website__']}
+                for key in ['__pkgname__', '__version__', '__authors__', '__contact__',
+                            '__description__', '__license__', '__keywords__', '__website__']}
 
 
 # core dependencies
@@ -33,7 +33,7 @@ if os.environ.get('READTHEDOCS') == 'True':
 
 
 setup(
-    name             = 'hypershell',
+    name             = metadata['__pkgname__'],
     version          = metadata['__version__'],
     author           = metadata['__authors__'],
     author_email     = metadata['__contact__'],
@@ -59,6 +59,6 @@ setup(
     },
     entry_points     = {'console_scripts': ['hyper-shell=hypershell:main', ]},
     data_files = [
-        ('share/man/man1', ['man/man1/hypershell.1', ])
+        ('share/man/man1', ['man/man1/hyper-shell.1', ])
     ],
 )

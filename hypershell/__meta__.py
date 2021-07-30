@@ -4,7 +4,7 @@
 """Metadata for the hyper-shell package."""
 
 
-__appname__     = 'hypershell'
+__pkgname__     = 'hypershell'
 __version__     = '2.0.0-b0'
 __authors__     = 'Geoffrey Lentner'
 __contact__     = 'glentner@purdue.edu'
