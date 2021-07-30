@@ -17,7 +17,7 @@ from enum import Enum
 from hypershell.core.config import config
 
 # public interface
-__all__ = ['HOSTNAME', 'LogRecord', 'level', 'initialize_logging', ]
+__all__ = ['Logger', 'LogRecord', 'HOSTNAME', 'level', 'initialize_logging', ]
 
 
 # cached for frequent use
