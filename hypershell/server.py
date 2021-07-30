@@ -164,6 +164,7 @@ class SchedulerThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
+        log.debug('Stopping scheduler')
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
@@ -324,7 +325,7 @@ class ServerThread(Thread):
             for hostname in iter(functools.partial(self.queue.connected.get, timeout=2), None):
                 self.queue.scheduled.put(None)  # NOTE: one for each
                 self.queue.connected.task_done()
-                log.debug(f'Disconnect request sent ({hostname})')
+                log.trace(f'Disconnect request sent ({hostname.decode()})')
         except QueueEmpty:
             pass
 

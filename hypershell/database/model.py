@@ -23,12 +23,12 @@ from sqlalchemy.types import Integer, DateTime, Text, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 
 # internal libs
-from hypershell.core.logging import HOSTNAME
+from hypershell.core.logging import HOSTNAME, Logger
 from hypershell.database.core import schema, Session
 
 
 # initialize module level logger
-log = logging.getLogger(__name__)
+log: Logger = logging.getLogger(__name__)
 
 
 class DatabaseError(Exception):
@@ -187,7 +187,7 @@ class Task(Model):
             raise
         else:
             for task_id in task_ids:
-                log.debug(f'Added task ({task_id})')
+                log.trace(f'Added task ({task_id})')
             return tasks
 
     @classmethod
@@ -234,14 +234,14 @@ class Task(Model):
         if len(tasks) < limit:
             new_tasks = cls.select_new(limit=limit - len(tasks))
             tasks.extend(new_tasks)
-            log.debug(f'Selected {len(new_tasks)} new tasks')
+            log.trace(f'Selected {len(new_tasks)} new tasks')
         return tasks
 
     @classmethod
     def __next_not_eager(cls, attempts: int, limit: int) -> List[Task]:
         """Select next batch of tasks for database preferring novel tasks to old failed ones."""
         tasks = cls.select_new(limit=limit)
-        log.debug(f'Selected {len(tasks)} new tasks')
+        log.trace(f'Selected {len(tasks)} new tasks')
         if len(tasks) < limit and attempts > 1:
             failed_tasks = cls.__schedule_next_failed_tasks(attempts=attempts, limit=limit - len(tasks))
             tasks.extend(failed_tasks)
@@ -253,7 +253,7 @@ class Task(Model):
         tasks = []
         failed_tasks = cls.select_failed(attempts=attempts, limit=limit)
         if failed_tasks:
-            log.debug(f'Selected {len(failed_tasks)} previously failed tasks')
+            log.trace(f'Selected {len(failed_tasks)} previously failed tasks')
             tasks.extend([cls.new(args=task.args, attempt=task.attempt + 1, previous_id=task.id)
                           for task in failed_tasks])
             cls.add_all(tasks)
@@ -282,6 +282,7 @@ class Task(Model):
         if changes:
             Session.bulk_update_mappings(cls, changes)
             Session.commit()  # NOTE: why is this necessary?
+            log.trace(f'Updated {len(changes)} task(s)')
 
     @classmethod
     def update(cls, id: str, **changes) -> None:

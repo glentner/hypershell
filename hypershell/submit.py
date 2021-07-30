@@ -50,7 +50,8 @@ from cmdkit.app import Application
 from cmdkit.cli import Interface, ArgumentError
 
 # internal libs
-from hypershell.core.config import config
+from hypershell.core.logging import Logger
+from hypershell.core.config import config, default
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.thread import Thread
@@ -62,7 +63,7 @@ __all__ = ['submit_from', 'submit_file', 'SubmitThread', 'LiveSubmitThread',
 
 
 # module level logger
-log = logging.getLogger(__name__)
+log: Logger = logging.getLogger(__name__)
 
 
 class LoaderState(State, Enum):
@@ -99,13 +100,14 @@ class Loader(StateMachine):
     @staticmethod
     def start() -> LoaderState:
         """Jump to GET state."""
+        log.debug('Starting loader')
         return LoaderState.GET
 
     def get_task(self) -> LoaderState:
         """Get the next task from the source."""
         try:
             self.task = Task.new(args=str(next(self.source)).strip())
-            log.debug(f'Loaded task ({self.task.args})')
+            log.trace(f'Loaded task ({self.task.args})')
             return LoaderState.PUT
         except StopIteration:
             return LoaderState.HALT
@@ -181,6 +183,7 @@ class DatabaseCommitter(StateMachine):
 
     def start(self) -> DatabaseCommitterState:
         """Jump to GET state."""
+        log.debug('Starting committer (database)')
         self.previous_submit = datetime.now()
         return DatabaseCommitterState.GET
 
@@ -251,6 +254,7 @@ class SubmitThread(Thread):
 
     def run(self) -> None:
         """Start child threads, wait."""
+        log.debug('Starting submitter')
         self.loader.start()
         self.committer.start()
         self.loader.join()
@@ -313,6 +317,7 @@ class QueueCommitter(StateMachine):
 
     def start(self) -> QueueCommitterState:
         """Jump to GET state."""
+        log.debug('Starting committer (no database, direct to server)')
         self.previous_submit = datetime.now()
         return QueueCommitterState.GET
 
@@ -343,7 +348,7 @@ class QueueCommitter(StateMachine):
             if self.tasks:
                 self.client.scheduled.put(self.bundle, timeout=2)
                 for task in self.tasks:
-                    log.debug(f'Scheduled task ({task.id})')
+                    log.trace(f'Scheduled task ({task.id})')
                 self.tasks = []
                 self.bundle = []
                 self.previous_submit = datetime.now()
@@ -396,12 +401,15 @@ class LiveSubmitThread(Thread):
 
     def run(self) -> None:
         """Start child threads, wait."""
+        log.debug('Starting submitter (live)')
         with self.client:
             self.loader.start()
             self.committer.start()
             self.loader.join()
             self.local.put(None)
             self.committer.join()
+            log.trace(f'Registering final task ({self.committer.final_task_id})')
+            self.client.terminator.put(self.committer.final_task_id.encode())
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
