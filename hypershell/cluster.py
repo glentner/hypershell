@@ -16,6 +16,7 @@ from typing import IO, Optional, Iterable
 import sys
 import time
 import logging
+import secrets
 
 # external libs
 from cmdkit.app import Application
@@ -47,10 +48,11 @@ class LocalCluster(Thread):
                  max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, live: bool = False,
                  num_tasks: int = 1) -> None:
         """Initialize server and client threads."""
-        self.server = ServerThread(source=source, auth='...', live=live,
+        auth = secrets.token_hex(64)
+        self.server = ServerThread(source=source, auth=auth, live=live,
                                    bundlesize=bundlesize, bundlewait=bundlewait,
                                    max_retries=max_retries, eager=eager)
-        self.client = ClientThread(num_tasks=num_tasks, template=template, auth='...')
+        self.client = ClientThread(num_tasks=num_tasks, template=template, auth=auth)
         super().__init__(name='hypershell-cluster')
 
     def run(self) -> None:
