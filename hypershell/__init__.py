@@ -20,8 +20,8 @@ from hypershell.submit import submit_from, submit_file, SubmitThread, SubmitApp
 from hypershell.server import serve_from, serve_file, serve_forever, ServerThread, ServerApp
 from hypershell.client import run_client, ClientThread, ClientApp
 from hypershell.cluster import ClusterApp
-from hypershell.__meta__ import (__appname__, __version__, __authors__, __description__,
-                                 __contact__, __license__, __copyright__, __keywords__, __website__)
+from hypershell.__meta__ import (__version__, __authors__, __description__, __contact__,
+                                 __license__, __copyright__, __keywords__, __website__)
 
 # public interface
 __all__ = ['config',
