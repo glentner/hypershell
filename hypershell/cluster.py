@@ -81,7 +81,7 @@ def run_cluster(**options) -> None:
         raise
 
 
-APP_NAME = 'hypershell cluster'
+APP_NAME = 'hyper-shell cluster'
 APP_USAGE = f"""\
 usage: {APP_NAME} [-h] FILE [-n INT] [-t TEMPLATE]
 Run local cluster.\

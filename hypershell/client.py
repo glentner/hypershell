@@ -486,7 +486,7 @@ def run_client(num_tasks: int = 1, bundlesize: int = DEFAULT_BUNDLESIZE, bundlew
         raise
 
 
-APP_NAME = 'hypershell client'
+APP_NAME = 'hyper-shell client'
 APP_USAGE = f"""\
 usage: {APP_NAME} [-h] [-N NUM] [-H ADDR] [-p PORT] [-t TEMPLATE]
 Run client.\

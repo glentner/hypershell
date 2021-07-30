@@ -455,7 +455,7 @@ def submit_file(path: str, queue_config: QueueConfig = None,
         submit_from(stream, queue_config=queue_config, bundlesize=bundlesize, bundlewait=bundlewait)
 
 
-APP_NAME = 'hypershell submit'
+APP_NAME = 'hyper-shell submit'
 APP_USAGE = f"""\
 usage: {APP_NAME} [-h] [FILE] [-b NUM] [-w SEC]
 Submit command lines to the database.\

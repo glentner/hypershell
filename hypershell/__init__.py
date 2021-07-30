@@ -40,7 +40,7 @@ Application.log_critical = log.critical
 Application.log_exception = log.exception
 
 
-APP_NAME = 'hypershell'
+APP_NAME = 'hyper-shell'
 APP_USAGE = f"""\
 usage: {APP_NAME} [-h] [-v] <command> [<args>...]
 {__description__}\

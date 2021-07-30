@@ -499,7 +499,7 @@ def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, prin
         raise
 
 
-APP_NAME = 'hypershell server'
+APP_NAME = 'hyper-shell server'
 APP_USAGE = f"""\
 usage: {APP_NAME} [-h] [FILE | --server-forever] [-b NUM] [-w SEC] [--max-retries NUM [--eager]]
                        [-H ADDR] [-p NUM] [--auth KEY] [--live] [--print]
