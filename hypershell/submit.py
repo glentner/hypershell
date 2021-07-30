@@ -34,12 +34,12 @@ Warning:
 
 # type annotations
 from __future__ import annotations
-
-import functools
 from typing import List, Iterable, Iterator, IO, Optional, Dict, Callable
 
 # standard libs
+import os
 import sys
+import functools
 import logging
 from datetime import datetime
 from queue import Queue, Empty as QueueEmpty, Full as QueueFull
@@ -75,7 +75,7 @@ class LoaderState(State, Enum):
 
 
 class Loader(StateMachine):
-    """Enqueue tasks from source."""
+    """Enqueue tasks from iterable source."""
 
     task: Task
     source: Iterator[str]
@@ -126,7 +126,7 @@ class LoaderThread(Thread):
 
     def __init__(self, source: Iterable[str], queue: Queue[Optional[Task]]) -> None:
         """Initialize machine."""
-        super().__init__(name='hypershell-submit')
+        super().__init__(name='hypershell-submit-loader')
         self.machine = Loader(source=source, queue=queue)
 
     def run(self) -> None:
@@ -292,6 +292,7 @@ class QueueCommitter(StateMachine):
     bundlesize: int
     bundlewait: int
     previous_submit: datetime
+    final_task_id: str = None
 
     state = QueueCommitterState.START
     states = QueueCommitterState
@@ -340,8 +341,14 @@ class QueueCommitter(StateMachine):
 
     def pack_bundle(self) -> QueueCommitterState:
         """Pack tasks into bundle for remote queue."""
-        self.bundle = [task.pack() for task in self.tasks]
-        return QueueCommitterState.COMMIT
+        if self.tasks:
+            self.final_task_id = self.tasks[-1].id
+            self.bundle = [task.pack() for task in self.tasks]
+            return QueueCommitterState.COMMIT
+        else:
+            # NOTE: we shouldn't get here - but rarely we do?
+            # We somehow get a wait time overflow and proceed here without any tasks
+            return QueueCommitterState.GET
 
     def commit(self) -> QueueCommitterState:
         """Commit tasks to server scheduling queue."""
@@ -359,6 +366,7 @@ class QueueCommitter(StateMachine):
 
     def finalize(self) -> QueueCommitterState:
         """Force final commit of tasks and halt."""
+        self.pack_bundle()
         self.commit()
         return QueueCommitterState.HALT
 
@@ -369,8 +377,8 @@ class QueueCommitterThread(Thread):
     def __init__(self, local: Queue[Optional[Task]], client: QueueClient,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize machine."""
-        super().__init__(name='hypershell-submit')
-        self.machine = QueueCommitter(local=local, client=client, buffersize=buffersize, buffertime=buffertime)
+        super().__init__(name='hypershell-submit-committer')
+        self.machine = QueueCommitter(local=local, client=client, bundlesize=bundlesize, bundlewait=bundlewait)
 
     def run(self) -> None:
         """Run machine."""
@@ -380,6 +388,11 @@ class QueueCommitterThread(Thread):
         """Stop machine."""
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
+
+    @property
+    def final_task_id(self) -> Optional[str]:
+        """The task id of the last task of the last bundle committed."""
+        return self.machine.final_task_id
 
 
 class LiveSubmitThread(Thread):
