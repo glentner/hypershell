@@ -12,18 +12,13 @@ import logging
 # external libs
 from cmdkit.config import Namespace, Configuration
 
-
 # public interface
-__all__ = ['config', 'get_site', 'init_paths', 'load', 'update', ]
-
-
-# initialize module level logger
-log = logging.getLogger(__name__)
+__all__ = ['default', 'config', 'get_site', 'init_paths', 'load', 'update', ]
 
 
 # environment variables and configuration files are automatically
 # depth-first merged with defaults
-DEFAULT: Namespace = Namespace({
+default = Namespace({
     'database': {
         'provider': 'sqlite',
     },
@@ -31,6 +26,24 @@ DEFAULT: Namespace = Namespace({
         'level': 'warning',
         'format': '%(ansi_color)s%(levelname)-7s%(ansi_reset)s [%(name)s] %(msg)s',
         'datefmt': '%Y-%m-%d %H:%M:%S'
+    },
+    'submit': {
+        'bundlesize': 1,
+        'bundlewait': 5  # Seconds
+    },
+    'server': {
+        'bind': 'localhost',
+        'port': 50_001,
+        'auth': '__HYPERSHELL__BAD__AUTHKEY__',
+        'queuesize': 2,
+        'bundlesize': 1,
+        'attempts': 1,
+        'eager': False,  # prefer failed tasks to new tasks
+        'wait': 5  # Seconds to wait between database queries
+    },
+    'client': {
+        'bundlesize': 1,
+        'bundlewait': 5  # Seconds
     }
 })
 

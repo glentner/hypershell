@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 # internal libs
 from .logging import HOSTNAME
-from .config import config as _config
+from .config import default, config as _config
 
 # public interface
 __all__ = ['QueueConfig', 'QueueInterface', 'QueueServer', 'QueueClient']
@@ -26,10 +26,10 @@ __all__ = ['QueueConfig', 'QueueInterface', 'QueueServer', 'QueueClient']
 class QueueConfig:
     """Connection details for queue interface."""
 
-    host: str = 'localhost'
-    port: int = 50_001
-    auth: str = '__HYPERSHELL__BAD__AUTHKEY__'
-    size: int = 8
+    host: str = default.server.bind
+    port: int = default.server.port
+    auth: str = default.server.auth
+    size: int = default.server.queuesize
 
     @classmethod
     def from_dict(cls, data: Dict[str, Union[str, int]]) -> QueueConfig:
@@ -43,7 +43,7 @@ class QueueConfig:
             'host': _config.server.host,
             'port': _config.server.port,
             'auth': _config.server.auth,
-            'size': _config.server.bundlesize,
+            'size': _config.server.queuesize,
         })
 
 

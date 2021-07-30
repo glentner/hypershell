@@ -27,54 +27,59 @@ from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
 
 # internal libs
+from hypershell.core.config import default, config
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueClient, QueueConfig
-from hypershell.core.logging import HOSTNAME
+from hypershell.core.logging import HOSTNAME, Logger
 from hypershell.core.exceptions import handle_exception
 from hypershell.database.model import Task
-from hypershell.server import DEFAULT_BUNDLESIZE
 
 # public interface
 __all__ = ['run_client', 'ClientThread', 'ClientApp', 'DEFAULT_TEMPLATE', ]
 
 
 # module level logger
-log = logging.getLogger(__name__)
+log: Logger = logging.getLogger(__name__)
 
 
 class SchedulerState(State, Enum):
     """Finite states for scheduler."""
     START = 0
     GET_REMOTE = 1
-    POP_TASK = 2
-    PUT_LOCAL = 3
-    HALT = 4
+    UNPACK = 2
+    POP_TASK = 3
+    PUT_LOCAL = 4
+    HALT = 5
 
 
 class ClientScheduler(StateMachine):
     """Receive task bundles from server and schedule locally."""
 
     queue: QueueClient
-    local: Queue[Optional[bytes]]
+    local: Queue[Optional[Task]]
     bundle: List[bytes]
-    task_data: bytes
+
+    task: Task
+    tasks: List[Task]
+    final_task_id: str = None
 
     state = SchedulerState.START
     states = SchedulerState
 
-    def __init__(self, queue: QueueClient, local: Queue[Optional[bytes]]) -> None:
+    def __init__(self, queue: QueueClient, local: Queue[Optional[Task]]) -> None:
         """Initialize IO `stream` to read tasks and submit to database."""
         self.queue = queue
         self.local = local
         self.bundle = []
-        self.task_data = b''
+        self.tasks = []
 
     @functools.cached_property
     def actions(self) -> Dict[SchedulerState, Callable[[], SchedulerState]]:
         return {
             SchedulerState.START: self.start,
             SchedulerState.GET_REMOTE: self.get_remote,
+            SchedulerState.UNPACK: self.unpack_bundle,
             SchedulerState.POP_TASK: self.pop_task,
             SchedulerState.PUT_LOCAL: self.put_local,
         }
@@ -89,27 +94,34 @@ class ClientScheduler(StateMachine):
         """Get the next task bundle from the server."""
         try:
             self.bundle = self.queue.scheduled.get(timeout=2)
+            self.queue.scheduled.task_done()
             if self.bundle is not None:
-                log.debug(f'Received {len(self.bundle)} tasks from server')
-                return SchedulerState.POP_TASK
+                log.debug(f'Received {len(self.bundle)} task(s) from server')
+                return SchedulerState.UNPACK
             else:
                 log.debug('Received disconnect')
                 return SchedulerState.HALT
         except QueueEmpty:
             return SchedulerState.GET_REMOTE
 
+    def unpack_bundle(self) -> SchedulerState:
+        """Unpack latest bundle of tasks."""
+        self.tasks = [Task.unpack(data) for data in self.bundle]
+        self.final_task_id = self.tasks[-1].id
+        return SchedulerState.POP_TASK
+
     def pop_task(self) -> SchedulerState:
-        """Pop next task off current bundle."""
+        """Pop next task off current task list."""
         try:
-            self.task_data = self.bundle.pop(0)
+            self.task = self.tasks.pop(0)
             return SchedulerState.PUT_LOCAL
         except IndexError:
             return SchedulerState.GET_REMOTE
 
     def put_local(self) -> SchedulerState:
-        """Pop task data and put on local queue."""
+        """Put latest task on the local task queue."""
         try:
-            self.local.put(self.task_data, timeout=2)
+            self.local.put(self.task, timeout=2)
             return SchedulerState.POP_TASK
         except QueueFull:
             return SchedulerState.PUT_LOCAL
@@ -134,67 +146,111 @@ class ClientSchedulerThread(Thread):
         log.debug('Stopping scheduler')
         super().stop(wait=wait, timeout=timeout)
 
+    @property
+    def final_task_id(self) -> Optional[str]:
+        """Task id of the last task from the last bundle."""
+        return self.machine.final_task_id
+
+
+DEFAULT_BUNDLESIZE: int = default.client.bundlesize
+DEFAULT_BUNDLEWAIT: int = default.client.bundlewait
+
 
 class CollectorState(State, Enum):
     """Finite states of collector."""
     START = 0
     GET_LOCAL = 1
-    PUT_REMOTE = 2
-    FINALIZE = 3
-    HALT = 4
+    CHECK_BUNDLE = 2
+    PACK_BUNDLE = 3
+    PUT_REMOTE = 4
+    FINALIZE = 5
+    HALT = 6
 
 
 class ClientCollector(StateMachine):
     """Collect finished tasks and bundle for outgoing queue."""
 
-    tasks: List[bytes]
+    tasks: List[Task]
+    bundle: List[bytes]
+
     queue: QueueClient
-    local: Queue[Optional[bytes]]
+    local: Queue[Optional[Task]]
+
+    bundlesize: int
+    bundlewait: int
+    previous_send: datetime
 
     state = CollectorState.START
     states = CollectorState
 
-    def __init__(self, queue: QueueClient, local: Queue[Optional[bytes]]) -> None:
-        """Initialize IO `stream` to read tasks and submit to database."""
+    def __init__(self, queue: QueueClient, local: Queue[Optional[Task]],
+                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
+        """Collect tasks from local queue of finished tasks and push them to the server."""
         self.tasks = []
+        self.bundle = []
         self.local = local
         self.queue = queue
+        self.bundlesize = bundlesize
+        self.bundlewait = bundlewait
 
     @functools.cached_property
     def actions(self) -> Dict[CollectorState, Callable[[], CollectorState]]:
         return {
             CollectorState.START: self.start,
             CollectorState.GET_LOCAL: self.get_local,
+            CollectorState.CHECK_BUNDLE: self.check_bundle,
+            CollectorState.PACK_BUNDLE: self.pack_bundle,
             CollectorState.PUT_REMOTE: self.put_remote,
             CollectorState.FINALIZE: self.finalize,
         }
 
-    @staticmethod
-    def start() -> CollectorState:
+    def start(self) -> CollectorState:
         """Jump to GET_LOCAL state."""
         log.debug('Started collector')
+        self.previous_send = datetime.now()
         return CollectorState.GET_LOCAL
 
     def get_local(self) -> CollectorState:
         """Get the next task from the local completed task queue."""
         try:
             task = self.local.get(timeout=1)
+            self.local.task_done()
             if task is not None:
                 self.tasks.append(task)
-                if len(self.tasks) >= DEFAULT_BUNDLESIZE:
-                    return CollectorState.PUT_REMOTE
-                else:
-                    return CollectorState.GET_LOCAL
+                return CollectorState.CHECK_BUNDLE
             else:
                 return CollectorState.FINALIZE
         except QueueEmpty:
+            return CollectorState.CHECK_BUNDLE
+
+    def check_bundle(self) -> CollectorState:
+        """Check state of task bundle and proceed with return if necessary."""
+        wait_time = (datetime.now() - self.previous_send)
+        since_last = wait_time.total_seconds()
+        if len(self.tasks) >= self.bundlesize:
+            log.trace(f'Bundle size ({len(self.tasks)}) reached')
+            return CollectorState.PACK_BUNDLE
+        elif since_last >= self.bundlewait:
+            log.trace(f'Wait time exceeded ({wait_time})')
+            return CollectorState.PACK_BUNDLE
+        else:
             return CollectorState.GET_LOCAL
+
+    def pack_bundle(self) -> CollectorState:
+        """Pack tasks into bundle before pushing back to server."""
+        self.bundle = [task.pack() for task in self.tasks]
+        return CollectorState.PUT_REMOTE
 
     def put_remote(self) -> CollectorState:
         """Push out bundle of completed tasks."""
-        if self.tasks:
-            self.queue.completed.put(self.tasks)
+        if self.bundle:
+            self.queue.completed.put(self.bundle)
+            log.trace(f'Returned bundle of {len(self.bundle)} task(s)')
             self.tasks.clear()
+            self.bundle.clear()
+            self.previous_send = datetime.now()
+        else:
+            log.trace('No local tasks to return')
         return CollectorState.GET_LOCAL
 
     def finalize(self) -> CollectorState:
@@ -207,10 +263,11 @@ class ClientCollector(StateMachine):
 class ClientCollectorThread(Thread):
     """Run client collector within dedicated thread."""
 
-    def __init__(self, queue: QueueClient, local: Queue[Optional[bytes]]) -> None:
+    def __init__(self, queue: QueueClient, local: Queue[Optional[bytes]],
+                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-client-collector')
-        self.machine = ClientCollector(queue=queue, local=local)
+        self.machine = ClientCollector(queue=queue, local=local, bundlesize=bundlesize, bundlewait=bundlewait)
 
     def run(self) -> None:
         """Run machine."""
@@ -244,14 +301,14 @@ class TaskExecutor(StateMachine):
     task: Task
     process: Popen
     template: str
-    inbound: Queue[Optional[bytes]]
-    outbound: Queue[Optional[bytes]]
-    task_data: bytes
+
+    inbound: Queue[Optional[Task]]
+    outbound: Queue[Optional[Task]]
 
     state = TaskState.START
     states = TaskState
 
-    def __init__(self, id: int, inbound: Queue[Optional[bytes]], outbound: Queue[Optional[bytes]],
+    def __init__(self, id: int, inbound: Queue[Optional[Task]], outbound: Queue[Optional[Task]],
                  template: str = DEFAULT_TEMPLATE) -> None:
         """Initialize task executor."""
         self.id = id
@@ -276,14 +333,10 @@ class TaskExecutor(StateMachine):
         return TaskState.GET_LOCAL
 
     def get_local(self) -> TaskState:
-        """Get the next task from the local inbound queue."""
+        """Get the next task from the local queue of new tasks."""
         try:
-            data = self.inbound.get(timeout=1)
-            if data is not None:
-                self.task = Task.unpack(data)
-                return TaskState.START_TASK
-            else:
-                return TaskState.FINALIZE
+            self.task = self.inbound.get(timeout=1)
+            return TaskState.START_TASK if self.task else TaskState.FINALIZE
         except QueueEmpty:
             return TaskState.GET_LOCAL
 
@@ -292,7 +345,7 @@ class TaskExecutor(StateMachine):
         self.task.command = self.template.replace('{}', self.task.args)
         self.task.start_time = datetime.now().astimezone()
         self.task.client_host = HOSTNAME
-        log.debug(f'Running task ({self.task.id})')
+        log.trace(f'Running task ({self.task.id})')
         self.process = Popen(self.task.command, shell=True, stdout=sys.stdout, stderr=sys.stderr,
                              env={**os.environ, 'TASK_ID': self.task.id, 'TASK_ARGS': self.task.args})
         return TaskState.WAIT_TASK
@@ -302,8 +355,7 @@ class TaskExecutor(StateMachine):
         try:
             self.task.exit_status = self.process.wait(timeout=2)
             self.task.completion_time = datetime.now().astimezone()
-            log.debug(f'Completed task ({self.task.id})')
-            self.task_data = self.task.pack()
+            log.trace(f'Completed task ({self.task.id})')
             return TaskState.PUT_LOCAL
         except TimeoutExpired:
             return TaskState.WAIT_TASK
@@ -311,7 +363,7 @@ class TaskExecutor(StateMachine):
     def put_local(self) -> TaskState:
         """Put completed task on outbound queue."""
         try:
-            self.outbound.put(self.task_data, timeout=2)
+            self.outbound.put(self.task, timeout=2)
             return TaskState.GET_LOCAL
         except QueueFull:
             return TaskState.PUT_LOCAL
@@ -347,46 +399,57 @@ class ClientThread(Thread):
     """Manage asynchronous task bundle scheduling and receiving."""
 
     client: QueueClient
-    inbound: Queue[Optional[bytes]]
-    outbound: Queue[Optional[bytes]]
+    num_tasks: int
+
+    inbound: Queue[Optional[Task]]
+    outbound: Queue[Optional[Task]]
+
     scheduler: ClientSchedulerThread
     collector: ClientCollectorThread
+
     executors: List[TaskThread]
 
-    def __init__(self, ntasks: int = 1, address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port),
+    def __init__(self,
+                 num_tasks: int = 1,
+                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
+                 address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port),
                  auth: str = QueueConfig.auth, template: str = DEFAULT_TEMPLATE) -> None:
         """Initialize queue manager and child threads."""
         super().__init__(name='hypershell-client')
+        self.num_tasks = num_tasks
         self.client = QueueClient(config=QueueConfig(host=address[0], port=address[1], auth=auth))
         self.inbound = Queue(maxsize=DEFAULT_BUNDLESIZE)
         self.outbound = Queue(maxsize=DEFAULT_BUNDLESIZE)
         self.scheduler = ClientSchedulerThread(queue=self.client, local=self.inbound)
-        self.collector = ClientCollectorThread(queue=self.client, local=self.outbound)
+        self.collector = ClientCollectorThread(queue=self.client, local=self.outbound,
+                                               bundlesize=bundlesize, bundlewait=bundlewait)
         self.executors = [TaskThread(id=count+1, inbound=self.inbound, outbound=self.outbound, template=template)
-                          for count in range(ntasks)]
+                          for count in range(num_tasks)]
 
     def run(self) -> None:
         """Start child threads, wait."""
-        log.debug('Starting client')
+        log.info(f'Starting client with {self.num_tasks} task executor(s)')
         with self.client:
             self.start_threads()
             self.wait_scheduler()
-            self.wait_tasks()
+            self.wait_executors()
             self.wait_collector()
+            self.register_final_task()
+        log.info('Stopped')
 
     def start_threads(self) -> None:
         """Start child threads."""
         self.scheduler.start()
         self.collector.start()
-        for task_thread in self.executors:
-            task_thread.start()
+        for executor in self.executors:
+            executor.start()
 
     def wait_scheduler(self) -> None:
         """Wait for all tasks to be completed."""
         self.scheduler.join()
 
-    def wait_tasks(self) -> None:
-        """Send disconnect signal to each clients."""
+    def wait_executors(self) -> None:
+        """Send disconnect signal to each task executor thread."""
         for _ in self.executors:
             self.inbound.put(None)  # signal executors to shutdown
         for thread in self.executors:
@@ -397,6 +460,11 @@ class ClientThread(Thread):
         self.outbound.put(None)
         self.collector.join()
 
+    def register_final_task(self) -> None:
+        """Send final task ID to server."""
+        log.trace(f'Registering final task ({self.scheduler.final_task_id})')
+        self.client.terminator.put(self.scheduler.final_task_id.encode())
+
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
         log.debug('Stopping client')
@@ -405,10 +473,12 @@ class ClientThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
-def run_client(address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
-               template: str = DEFAULT_TEMPLATE, ntasks: int = 1) -> None:
+def run_client(num_tasks: int = 1, bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
+               address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
+               template: str = DEFAULT_TEMPLATE) -> None:
     """Run client until disconnect signal received."""
-    thread = ClientThread.new(ntasks=ntasks, address=address, auth=auth, template=template)
+    thread = ClientThread.new(num_tasks=num_tasks, bundlesize=bundlesize, bundlewait=bundlewait,
+                              address=address, auth=auth, template=template)
     try:
         thread.join()
     except Exception:
@@ -418,7 +488,7 @@ def run_client(address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), 
 
 APP_NAME = 'hypershell client'
 APP_USAGE = f"""\
-usage: {APP_NAME} [-h] [-n INT] [-H HOST] [-p PORT] [-t TEMPLATE]
+usage: {APP_NAME} [-h] [-N NUM] [-H ADDR] [-p PORT] [-t TEMPLATE]
 Run client.\
 """
 
@@ -426,11 +496,13 @@ APP_HELP = f"""\
 {APP_USAGE}
 
 options:
--n, --ntasks         NUM        Number of tasks to run in parallel.
--t, --template       TEMPLATE   Command line template pattern.
--H, --host           ADDRESS    Hostname for server.
--p, --port           NUM        Port number for server.
--h, --help                      Show this message and exit.\
+-N, --num-tasks   NUM   Number of tasks to run in parallel.
+-t, --template    CMD   Command-line template pattern.
+-b, --bundlesize  SIZE  Number of lines to buffer (default: {DEFAULT_BUNDLESIZE}).
+-w, --bundlewait  SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
+-H, --host        ADDR  Hostname for server.
+-p, --port        NUM   Port number for server.
+-h, --help              Show this message and exit.\
 """
 
 
@@ -440,8 +512,8 @@ class ClientApp(Application):
     name = APP_NAME
     interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
 
-    ntasks: int = 1
-    interface.add_argument('-n', '--ntasks', type=int, default=ntasks)
+    num_tasks: int = 1
+    interface.add_argument('-N', '--num_tasks', type=int, default=num_tasks)
 
     host: str = QueueConfig.host
     interface.add_argument('-H', '--host', default=host)
@@ -455,6 +527,12 @@ class ClientApp(Application):
     template: str = DEFAULT_TEMPLATE
     interface.add_argument('-t', '--template', default=template)
 
+    bundlesize: int = config.submit.bundlesize
+    interface.add_argument('-b', '--bundlesize', type=int, default=bundlesize)
+
+    bundlewait: int = config.submit.bundlewait
+    interface.add_argument('-w', '--bundlewait', type=int, default=bundlewait)
+
     exceptions = {
         ConnectionRefusedError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         **Application.exceptions,
@@ -462,5 +540,5 @@ class ClientApp(Application):
 
     def run(self) -> None:
         """Run client."""
-        run_client(ntasks=self.ntasks, address=(self.host, self.port),
-                   auth=self.authkey, template=self.template)
+        run_client(num_tasks=self.num_tasks, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
+                   address=(self.host, self.port), auth=self.authkey, template=self.template)
