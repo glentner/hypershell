@@ -54,20 +54,20 @@ if os.name == 'nt':
     is_admin = ctypes.windll.shell32.IsUserAnAdmin() == 1
     site = Namespace(system=os.path.join(os.getenv('ProgramData'), 'HyperShell'),
                      user=os.path.join(os.getenv('AppData'), 'HyperShell'),
-                     local=cwd)
+                     local=os.path.join(cwd, '.hypershell'))
     path = Namespace({
         'system': {
             'lib': os.path.join(site.system, 'Library'),
-            'config': os.path.join(site.system, 'Config.toml'),
-            'log': os.path.join(site.system, 'Logs')},
+            'log': os.path.join(site.system, 'Logs'),
+            'config': os.path.join(site.system, 'Config.toml')},
         'user': {
             'lib': os.path.join(site.user, 'Library'),
-            'config': os.path.join(site.user, 'Config.toml'),
-            'log': os.path.join(site.user, 'Logs')},
+            'log': os.path.join(site.user, 'Logs'),
+            'config': os.path.join(site.user, 'Config.toml')},
         'local': {
-            'lib': os.path.join(site.local, 'lib'),
-            'config': os.path.join(site.local, 'config.toml'),
-            'log': os.path.join(site.local, 'log')},
+            'lib': os.path.join(site.local, 'Library'),
+            'log': os.path.join(site.local, 'Logs'),
+            'config': os.path.join(site.local, 'Config.toml')}
     })
 else:
     is_admin = os.getuid() == 0
@@ -76,16 +76,16 @@ else:
     path = Namespace({
         'system': {
             'lib': os.path.join(site.system, 'var', 'lib', 'hypershell'),
-            'config': os.path.join(site.system, 'etc', 'hypershell.toml'),
-            'log': os.path.join(site.system, 'var', 'log', 'hypershell')},
+            'log': os.path.join(site.system, 'var', 'log', 'hypershell'),
+            'config': os.path.join(site.system, 'etc', 'hypershell.toml')},
         'user': {
             'lib': os.path.join(site.user, 'lib'),
-            'config': os.path.join(site.user, 'config.toml'),
-            'log': os.path.join(site.user, 'log')},
+            'log': os.path.join(site.user, 'log'),
+            'config': os.path.join(site.user, 'config.toml')},
         'local': {
             'lib': os.path.join(site.local, 'lib'),
-            'config': os.path.join(site.local, 'config.toml'),
-            'log': os.path.join(site.local, 'log')},
+            'log': os.path.join(site.local, 'log'),
+            'config': os.path.join(site.local, 'config.toml')}
     })
 
 
@@ -102,7 +102,7 @@ def init_paths() -> None:
 
 def load() -> Configuration:
     """Load configuration."""
-    return Configuration.from_local(env=True, prefix='HYPERSHELL', default=DEFAULT,
+    return Configuration.from_local(env=True, prefix='HYPERSHELL', default=default,
                                     system=path.system.config, user=path.user.config, local=path.local.config)
 
 
@@ -111,22 +111,7 @@ config: Configuration = load()
 
 
 def update(scope: str, data: dict) -> None:
-    """
-    Extend the current configuration and commit it to disk.
-
-    Args:
-        scope (str):
-            Either "local", "user", or "system"
-        data (dict):
-            Sectioned mappable to update configuration file.
-
-    Example:
-        >>> update('user', {
-        ...    'logging': {
-        ...        'level': 'debug'
-        ...    }
-        ... })
-    """
+    """Extend the current configuration and commit it to disk."""
     config_path = path[scope].config
     os.makedirs(os.path.dirname(config_path), exist_ok=True)
     new_config = Namespace.from_local(config_path)
