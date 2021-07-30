@@ -52,7 +52,8 @@ class LocalCluster(Thread):
         self.server = ServerThread(source=source, auth=auth, live=live,
                                    bundlesize=bundlesize, bundlewait=bundlewait,
                                    max_retries=max_retries, eager=eager)
-        self.client = ClientThread(num_tasks=num_tasks, template=template, auth=auth)
+        self.client = ClientThread(num_tasks=num_tasks, template=template, auth=auth,
+                                   bundlesize=bundlesize, bundlewait=bundlewait)
         super().__init__(name='hypershell-cluster')
 
     def run(self) -> None:
