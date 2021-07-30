@@ -328,9 +328,8 @@ class Terminator(StateMachine):
                     # there can be a timing issue where the server gets the final task id but
                     # the other clients are timing out on a 1-second delay checking their local queues.
                     # So we need to give them time to disconnect when they get the signal
-                    wait_time = 2  # seconds
-                    log.trace(f'Received final task ({self.final_task_id}) - waiting ({wait_time}s)')
-                    time.sleep(wait_time)
+                    log.trace(f'Received final task ({self.final_task_id})')
+                    time.sleep(2)
                     return TerminatorState.HALT
                 else:
                     return TerminatorState.WAIT_FINAL
