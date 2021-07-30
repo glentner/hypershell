@@ -24,12 +24,12 @@ with open('hypershell/__meta__.py', mode='r') as source:
 
 
 # core dependencies
-DEPS = ['cmdkit>=2.3.0', 'toml>=0.10.2', 'sqlalchemy>=1.3.19', ]
+DEPS = [ 'toml>=0.10.2', 'cmdkit>=2.6.0', 'sqlalchemy>=1.4.22', ]
 
 
 # add dependencies for readthedocs.io
 if os.environ.get('READTHEDOCS') == 'True':
-    DEPS.extend(['pydata-sphinx-theme'])
+    DEPS.extend(['pydata-sphinx-theme>=0.6.3'])
 
 
 setup(
@@ -55,7 +55,7 @@ setup(
                         'License :: OSI Approved :: Apache Software License', ],
     install_requires = DEPS,
     extra_requires = {
-        'postgres': ['psycopg2>=2.8.5', ],
+        'postgres': ['psycopg2>=2.9.1', ],
     },
     entry_points     = {'console_scripts': ['hyper-shell=hypershell:main', ]},
     data_files = [

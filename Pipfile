@@ -4,17 +4,18 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
-pytest = ">=6.1.2"
-pytest-cov = ">=2.10.1"
-hypothesis = ">=5.41.4"
-ipython = ">=7.19.0"
-twine = ">=3.2.0"
-sphinx = ">=3.3.1"
-pydata-sphinx-theme = ">=0.4.1"
-psycopg2 = ">=2.8.5"
+pytest = ">=6.2.4"
+hypothesis = ">=6.14.4"
+ipython = ">=7.25.0"
+twine = ">=3.4.2"
+sphinx = ">=4.1.2"
+pydata-sphinx-theme = ">=0.6.3"
+psycopg2 = ">=2.9.1"
 
 [packages]
-sqlalchemy = "*"
+toml = ">=0.10.2"
+cmdkit = ">=2.6.0"
+sqlalchemy = ">=1.4.22"
 hypershell = {editable = true, path = "."}
 
 [requires]
