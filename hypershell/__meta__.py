@@ -5,7 +5,7 @@
 
 
 __appname__     = 'hypershell'
-__version__     = '2.0.0'
+__version__     = '2.0.0-b0'
 __authors__     = 'Geoffrey Lentner'
 __contact__     = 'glentner@purdue.edu'
 __license__     = 'Apache Software License'
