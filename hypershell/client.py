@@ -514,7 +514,7 @@ class ClientApp(Application):
     interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
 
     num_tasks: int = 1
-    interface.add_argument('-N', '--num_tasks', type=int, default=num_tasks)
+    interface.add_argument('-N', '--num-tasks', type=int, default=num_tasks)
 
     host: str = QueueConfig.host
     interface.add_argument('-H', '--host', default=host)
