@@ -27,7 +27,7 @@ from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
 
 # internal libs
-from hypershell.core.config import default, config
+from hypershell.core.config import default, config, load_task_env
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueClient, QueueConfig
@@ -347,7 +347,8 @@ class TaskExecutor(StateMachine):
         self.task.client_host = HOSTNAME
         log.trace(f'Running task ({self.task.id})')
         self.process = Popen(self.task.command, shell=True, stdout=sys.stdout, stderr=sys.stderr,
-                             env={**os.environ, 'TASK_ID': self.task.id, 'TASK_ARGS': self.task.args})
+                             env={**os.environ, **load_task_env(),
+                                  'TASK_ID': self.task.id, 'TASK_ARGS': self.task.args})
         return TaskState.WAIT_TASK
 
     def wait_task(self) -> TaskState:

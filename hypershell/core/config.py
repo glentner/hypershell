@@ -4,16 +4,19 @@
 """Runtime configuration for HyperShell."""
 
 
+# type annotations
+from typing import TypeVar, Union, List
+
 # standard libs
 import os
 import ctypes
-import logging
+import functools
 
 # external libs
-from cmdkit.config import Namespace, Configuration
+from cmdkit.config import Namespace, Configuration, Environ
 
 # public interface
-__all__ = ['default', 'config', 'get_site', 'init_paths', 'load', 'update', ]
+__all__ = ['default', 'config', 'get_site', 'init_paths', 'load', 'update', 'load_task_env', ]
 
 
 # environment variables and configuration files are automatically
@@ -44,6 +47,9 @@ default = Namespace({
     'client': {
         'bundlesize': 1,
         'bundlewait': 5  # Seconds
+    },
+    'export': {
+        # NOTE: defining HYPERSHELL_EXPORT_XXX defines XXX within task env
     }
 })
 
@@ -117,3 +123,26 @@ def update(scope: str, data: dict) -> None:
     new_config = Namespace.from_local(config_path)
     new_config.update(data)
     new_config.to_local(config_path)
+
+
+T = TypeVar('T')
+def __collapse_if_list_impl(value: Union[T, List[str]]) -> Union[T, str]:
+    """If `value` is a list, collapse it to a path-like :-delimited list."""
+    return value if not isinstance(value, list) else ':'.join([str(member) for member in value])
+
+
+def __collapse_lists(ns: Namespace) -> Namespace:
+    """Collapse member values if they are a list, recursively."""
+    result = Namespace()
+    for key, value in ns.items():
+        if isinstance(value, Namespace):
+            result[key] = __collapse_lists(value)
+        else:
+            result[key] = __collapse_if_list_impl(value)
+    return result
+
+
+@functools.cache
+def load_task_env() -> Environ:
+    """Export environment defined in `config.export`."""
+    return __collapse_lists(config.export).to_env().flatten()
