@@ -129,7 +129,7 @@ class LoaderThread(Thread):
         super().__init__(name='hypershell-submit-loader')
         self.machine = Loader(source=source, queue=queue)
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
 
@@ -228,7 +228,7 @@ class DatabaseCommitterThread(Thread):
         super().__init__(name='hypershell-submit-committer')
         self.machine = DatabaseCommitter(queue=queue, bundlesize=bundlesize, bundlewait=bundlewait)
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
 
@@ -253,7 +253,7 @@ class SubmitThread(Thread):
         self.committer = DatabaseCommitterThread(queue=self.queue, bundlesize=bundlesize, bundlewait=bundlewait)
         super().__init__(name='hypershell-submit')
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
         log.debug('Starting submitter')
         self.loader.start()
@@ -380,7 +380,7 @@ class QueueCommitterThread(Thread):
         super().__init__(name='hypershell-submit-committer')
         self.machine = QueueCommitter(local=local, client=client, bundlesize=bundlesize, bundlewait=bundlewait)
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
 
@@ -413,7 +413,7 @@ class LiveSubmitThread(Thread):
                                               bundlesize=bundlesize, bundlewait=bundlewait)
         super().__init__(name='hypershell-submit')
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
         log.debug('Starting submitter (live)')
         with self.client:

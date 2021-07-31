@@ -20,6 +20,12 @@ from .config import get_site
 __all__ = ['handle_exception', 'handle_uncaught_exception', ]
 
 
+def handle_disconnect(exc: Exception, logger: Logger) -> int:
+    """An EOFError results from the server hanging up the client."""
+    logger.critical(f'{exc.__class__.__name__}: server disconnected')
+    return exit_status.runtime_error
+
+
 def handle_exception(exc: Exception, logger: Logger, status: int) -> int:
     """Log the exception argument and exit with `status`."""
     msg = str(exc).replace('\n', ' - ')

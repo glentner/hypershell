@@ -161,7 +161,7 @@ class SchedulerThread(Thread):
         self.machine = Scheduler(queue=queue, bundlesize=bundlesize, attempts=attempts, eager=eager,
                                  forever_mode=forever_mode)
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
         self.stop()
@@ -258,7 +258,7 @@ class ReceiverThread(Thread):
         super().__init__(name='hypershell-receiver')
         self.machine = Receiver(queue=queue, live=live, print_on_failure=print_on_failure)
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
         self.stop()
@@ -347,7 +347,7 @@ class TerminatorThread(Thread):
         super().__init__(name='hypershell-terminator')
         self.machine = Terminator(queue=queue)
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
         self.stop()
@@ -391,7 +391,7 @@ class ServerThread(Thread):
         self.terminator = TerminatorThread(queue=self.queue)
         super().__init__(name='hypershell-server')
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
         log.info('Starting server')
         with self.queue:

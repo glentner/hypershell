@@ -32,7 +32,7 @@ from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.logging import HOSTNAME, Logger
-from hypershell.core.exceptions import handle_exception
+from hypershell.core.exceptions import handle_exception, handle_disconnect
 from hypershell.database.model import Task
 
 # public interface
@@ -135,7 +135,7 @@ class ClientSchedulerThread(Thread):
         super().__init__(name='hypershell-client-scheduler')
         self.machine = ClientScheduler(queue=queue, local=local)
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
         self.stop()
@@ -269,7 +269,7 @@ class ClientCollectorThread(Thread):
         super().__init__(name='hypershell-client-collector')
         self.machine = ClientCollector(queue=queue, local=local, bundlesize=bundlesize, bundlewait=bundlewait)
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
         self.stop()
@@ -384,7 +384,7 @@ class TaskThread(Thread):
         super().__init__(name=f'hypershell-executor-{id}')
         self.machine = TaskExecutor(id=id, inbound=inbound, outbound=outbound, template=template)
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
         self.stop()
@@ -426,7 +426,7 @@ class ClientThread(Thread):
         self.executors = [TaskThread(id=count+1, inbound=self.inbound, outbound=self.outbound, template=template)
                           for count in range(num_tasks)]
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
         log.info(f'Starting client with {self.num_tasks} task executor(s)')
         with self.client:
@@ -535,6 +535,8 @@ class ClientApp(Application):
     interface.add_argument('-w', '--bundlewait', type=int, default=bundlewait)
 
     exceptions = {
+        EOFError: functools.partial(handle_disconnect, logger=log),
+        ConnectionResetError: functools.partial(handle_disconnect, logger=log),
         ConnectionRefusedError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         **Application.exceptions,
     }

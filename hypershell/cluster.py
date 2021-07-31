@@ -57,7 +57,7 @@ class LocalCluster(Thread):
                                    bundlesize=bundlesize, bundlewait=bundlewait)
         super().__init__(name='hypershell-cluster')
 
-    def run(self) -> None:
+    def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
         self.server.start()
         time.sleep(2)  # NOTE: give the server a chance to start
