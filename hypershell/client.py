@@ -345,7 +345,7 @@ class TaskExecutor(StateMachine):
         self.task.command = self.template.replace('{}', self.task.args)
         self.task.start_time = datetime.now().astimezone()
         self.task.client_host = HOSTNAME
-        log.trace(f'Running task ({self.task.id})')
+        log.debug(f'Running task ({self.task.id})')
         self.process = Popen(self.task.command, shell=True, stdout=sys.stdout, stderr=sys.stderr,
                              env={**os.environ, **load_task_env(),
                                   'TASK_ID': self.task.id, 'TASK_ARGS': self.task.args})
@@ -356,7 +356,7 @@ class TaskExecutor(StateMachine):
         try:
             self.task.exit_status = self.process.wait(timeout=2)
             self.task.completion_time = datetime.now().astimezone()
-            log.trace(f'Completed task ({self.task.id})')
+            log.debug(f'Completed task ({self.task.id})')
             return TaskState.PUT_LOCAL
         except TimeoutExpired:
             return TaskState.WAIT_TASK

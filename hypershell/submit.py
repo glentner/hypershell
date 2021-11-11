@@ -9,8 +9,6 @@ Example:
     >>> with open('some-file', mode='r') as source:
     ...     submit_from(source, bundlesize=10)
 
-
-
 Embed a `SubmitThread` in your application directly as the `ServerThread` does.
 Call `stop()` to stop early.
 
@@ -47,7 +45,7 @@ from enum import Enum
 
 # external libs
 from cmdkit.app import Application
-from cmdkit.cli import Interface, ArgumentError
+from cmdkit.cli import Interface
 
 # internal libs
 from hypershell.core.logging import Logger
@@ -499,8 +497,7 @@ class SubmitApp(Application):
 
     def submit_all(self) -> None:
         """Submit all tasks from source."""
-        submit_from(self.enumerated(self.source),
-                    bundlesize=self.bundlesize, bundlewait=self.bundlewait)
+        submit_from(self.enumerated(self.source), bundlesize=self.bundlesize, bundlewait=self.bundlewait)
         log.info(f'Submitted {self.count} tasks from {self.filename}')
 
     def enumerated(self, source: IO) -> Iterable[str]:
@@ -514,7 +511,7 @@ class SubmitApp(Application):
         """Emit warning for particular configuration."""
         db = config.database.get('file', None) or config.database.get('database', None)
         if config.database.provider == 'sqlite' and db in ('', ':memory:', None):
-            log.warning('Submitting tasks to in-memory database has no effect')
+            log.error('Submitting tasks to in-memory database has no effect')
 
     @property
     def filename(self) -> str:
