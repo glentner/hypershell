@@ -327,7 +327,7 @@ class Terminator(StateMachine):
             task_id = self.queue.terminator.get(timeout=2)
             if task_id is not None:
                 self.final_task_id = task_id.decode()
-                log.trace(f'Awaiting final task from clients')
+                log.trace(f'Awaiting final task from clients ({self.final_task_id})')
                 return TerminatorState.WAIT_FINAL
             else:
                 return TerminatorState.HALT
