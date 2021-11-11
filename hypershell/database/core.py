@@ -21,6 +21,7 @@ from sqlalchemy.exc import ArgumentError
 
 # internal libs
 from hypershell.core.config import config
+from hypershell.core.logging import handler
 
 # initialize module level logger
 log = logging.getLogger(__name__)
@@ -201,7 +202,8 @@ url = DatabaseURL.from_namespace(params)
 try:
     engine = create_engine(url.encode(), connect_args=connect_args, **engine_config)
     if engine_echo:
-        engine.echo = True
+        logging.getLogger('sqlalchemy.engine').addHandler(handler)
+        logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 except ArgumentError as error:
     raise ConfigurationError(f'Database URL: {repr(url)}') from error
 
