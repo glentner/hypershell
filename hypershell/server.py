@@ -95,6 +95,8 @@ class Scheduler(StateMachine):
     state = SchedulerState.START
     states = SchedulerState
 
+    startup_phase: bool = True
+
     def __init__(self, queue: QueueServer, bundlesize: int = DEFAULT_BUNDLESIZE,
                  attempts: int = DEFAULT_ATTEMPTS, eager: bool = DEFAULT_EAGER_MODE,
                  forever_mode: bool = False) -> None:
@@ -119,15 +121,28 @@ class Scheduler(StateMachine):
     def start() -> SchedulerState:
         """Jump to LOAD state."""
         log.debug('Starting scheduler')
+        task_count = Task.count()
+        tasks_remaining = Task.count_remaining()
+        if task_count > 0:
+            log.warning(f'Database exists ({task_count} tasks)')
+            if tasks_remaining == 0:
+                log.warning(f'All tasks completed - did you mean to use the same database?')
+            else:
+                tasks_interrupted = Task.count_interrupted()
+                log.info(f'Found {tasks_remaining} unfinished task(s)')
+                Task.revert_interrupted()
+                log.info(f'Reverted {tasks_interrupted} previously interrupted task(s)')
         return SchedulerState.LOAD
 
     def load_bundle(self) -> SchedulerState:
         """Load the next task bundle from the database."""
         self.tasks = Task.next(limit=self.bundlesize, attempts=self.attempts, eager=self.eager)
         if self.tasks:
+            self.startup_phase = False
             return SchedulerState.PACK
-        # NOTE: an empty database must wait for at least one task
-        elif not self.forever_mode and Task.count() > 0 and Task.count_remaining() == 0:
+        # NOTE: An empty database must wait for at least one task
+        # Note: Do not allow HALT before at least one bundle is scheduled
+        elif not self.forever_mode and Task.count() > 0 and Task.count_remaining() == 0 and not self.startup_phase:
             return SchedulerState.HALT
         else:
             time.sleep(DEFAULT_QUERY_PAUSE)
@@ -401,6 +416,7 @@ class ServerThread(Thread):
             self.signal_clients()
             self.wait_terminator()
             self.wait_receiver()
+        log.info('Stopped')
 
     def start_threads(self) -> None:
         """Start child threads."""

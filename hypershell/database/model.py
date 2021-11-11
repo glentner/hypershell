@@ -298,3 +298,38 @@ class Task(Model):
     def count_remaining(cls) -> int:
         """Count of remaining unfinished tasks."""
         return cls.query().filter(cls.completion_time.is_(None)).count()
+
+
+    @classmethod
+    def count_interrupted(cls) -> int:
+        """Count tasks that were scheduled but not completed."""
+        return (
+            cls.query()
+            .filter(cls.schedule_time.isnot(None))
+            .filter(cls.completion_time.is_(None))
+            .count()
+        )
+
+    @classmethod
+    def select_interrupted(cls, limit: int) -> List[Task]:
+        """Select tasks that were scheduled but not completed."""
+        return (
+            cls.query()
+            .order_by(cls.schedule_time)
+            .filter(cls.schedule_time.isnot(None))
+            .filter(cls.completion_time.is_(None))
+            .limit(limit)
+            .all()
+        )
+
+    @classmethod
+    def revert_interrupted(cls) -> None:
+        """Revert scheduled but incomplete tasks to un-scheduled state."""
+
+        while tasks := cls.select_interrupted(100):
+            for task in tasks:
+                task.schedule_time = None
+                task.server_host = None
+            Session.commit()
+            for task in tasks:
+                log.trace(f'Reverted previous task ({task.id})')
