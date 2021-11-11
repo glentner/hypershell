@@ -5,7 +5,7 @@
 Schedule and collect bundles tasks from the database.
 
 Example:
-    >>> from hypershell.server import serve_forever
+    >>> from hypershell.server import serve_from
     >>> serve_from(source=['echo a', 'echo b'])
 
 Embed a `ServerThread` in your application directly. Call `stop()` to stop early.
