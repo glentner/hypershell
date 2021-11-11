@@ -519,7 +519,7 @@ APP_NAME = 'hyper-shell server'
 _PADDING = ' ' * len(APP_NAME)
 
 APP_USAGE = f"""\
-usage: {APP_NAME} [-h] [FILE | --server-forever] [-b NUM] [-w SEC] [--max-retries NUM [--eager]]
+usage: {APP_NAME} [-h] [FILE | --serve-forever] [-b NUM] [-w SEC] [--max-retries NUM [--eager]]
        {_PADDING} [-H ADDR] [-p NUM] [--auth KEY] [--live] [--print]
 Launch server, schedule directly or asynchronously from database.\
 """
@@ -594,7 +594,7 @@ class ServerApp(Application):
     interface.add_argument('--live', action='store_true', dest='live_mode')
 
     print_on_failure: bool = False
-    interface.add_argument('--print', action='store_true')
+    interface.add_argument('--print', action='store_true', dest='print_on_failure')
 
     def run(self) -> None:
         """Run server."""
