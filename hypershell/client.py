@@ -346,6 +346,7 @@ class TaskExecutor(StateMachine):
         self.task.start_time = datetime.now().astimezone()
         self.task.client_host = HOSTNAME
         log.debug(f'Running task ({self.task.id})')
+        log.trace(f'Running task ({self.task.id}: {self.task.command})')
         self.process = Popen(self.task.command, shell=True, stdout=sys.stdout, stderr=sys.stderr,
                              env={**os.environ, **load_task_env(),
                                   'TASK_ID': self.task.id, 'TASK_ARGS': self.task.args})
