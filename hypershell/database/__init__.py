@@ -9,7 +9,10 @@ import logging
 
 # internal libs
 from hypershell.database.core import engine, Session, config
-from hypershell.database.model import Model
+from hypershell.database.model import Model, Task
+
+# public interface
+__all__ = ['Task', 'DATABASE_ENABLED', ]
 
 
 # initialize module level logger
