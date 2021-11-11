@@ -17,7 +17,7 @@ from cmdkit.app import exit_status
 from .config import get_site
 
 # public interface
-__all__ = ['handle_exception', 'handle_uncaught_exception', ]
+__all__ = ['handle_disconnect', 'handle_exception', 'handle_uncaught_exception', ]
 
 
 def handle_disconnect(exc: Exception, logger: Logger) -> int:
@@ -33,7 +33,7 @@ def handle_exception(exc: Exception, logger: Logger, status: int) -> int:
     return status
 
 
-def handle_uncaught_exception(logger: Logger, exc: Exception) -> int:
+def handle_uncaught_exception(exc: Exception, logger: Logger) -> int:
     """Write exception to file and return exit code."""
     time = datetime.now().strftime('%Y%m%d-%H%M%S')
     path = os.path.join(get_site()['log'], f'exception-{time}.log')

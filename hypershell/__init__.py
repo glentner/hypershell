@@ -67,7 +67,7 @@ Documentation and issue tracking at:
 """
 
 Application.exceptions = {
-    Exception: handle_uncaught_exception,
+    Exception: functools.partial(handle_uncaught_exception, logger=log),
 }
 
 
