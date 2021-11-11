@@ -7,6 +7,7 @@
 # standard libs
 import sys
 import logging
+import functools
 
 # external libs
 from cmdkit.app import Application, ApplicationGroup
@@ -59,11 +60,11 @@ options:
 -h, --help             Show this message and exit.
 -v, --version          Show the version and exit.
 
-Use the -h/--help flag with the above commands to
-learn more about their usage.
-
 Documentation and issue tracking at:
-{__website__}\
+{__website__}
+
+Copyright {__copyright__}
+{__authors__} <{__contact__}>.\
 """
 
 Application.exceptions = {
