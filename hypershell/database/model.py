@@ -325,7 +325,6 @@ class Task(Model):
     @classmethod
     def revert_interrupted(cls) -> None:
         """Revert scheduled but incomplete tasks to un-scheduled state."""
-
         while tasks := cls.select_interrupted(100):
             for task in tasks:
                 task.schedule_time = None
