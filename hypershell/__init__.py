@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
-"""Package initialization and entry-point for console application."""
+"""Initialization and entry-point for console application."""
 
 
 # standard libs
