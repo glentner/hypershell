@@ -526,7 +526,7 @@ _PADDING = ' ' * len(APP_NAME)
 
 APP_USAGE = f"""\
 usage: {APP_NAME} [-h] [FILE | --serve-forever] [-b NUM] [-w SEC] [--max-retries NUM [--eager]]
-       {_PADDING} [-H ADDR] [-p NUM] [--auth KEY] [--live] [--print]
+       {_PADDING} [-H ADDR] [-p NUM] [--auth KEY] [--no-db] [--print]
 Launch server, schedule directly or asynchronously from database.\
 """
 
@@ -557,7 +557,7 @@ options:
 -t, --bundlewait      SEC   Seconds to wait before flushing tasks (with FILE, default: {DEFAULT_BUNDLEWAIT}).
 -r, --max-retries     NUM   Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
     --eager                 Schedule failed tasks before new tasks.
-    --live                  Run server without database.
+    --no-db                 Run server without database.
     --print                 Print failed command args to STDOUT.
 -h, --help                  Show this message and exit.\
 """
@@ -597,7 +597,7 @@ class ServerApp(Application):
     interface.add_argument('-k', '--auth', default=auth)
 
     live_mode: bool = False
-    interface.add_argument('--live', action='store_true', dest='live_mode')
+    interface.add_argument('--no-db', action='store_true', dest='live_mode')
 
     print_on_failure: bool = False
     interface.add_argument('--print', action='store_true', dest='print_on_failure')

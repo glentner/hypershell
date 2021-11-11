@@ -128,7 +128,7 @@ class ClusterApp(Application):
     interface.add_argument('--eager', action='store_true')
 
     live_mode: bool = False
-    interface.add_argument('--live', action='store_true', dest='live_mode')
+    interface.add_argument('--no-db', action='store_true', dest='live_mode')
 
     def run(self) -> None:
         """Run cluster."""
