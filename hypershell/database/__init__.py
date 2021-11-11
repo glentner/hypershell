@@ -8,7 +8,7 @@
 import logging
 
 # internal libs
-from hypershell.database.core import engine, Session, config
+from hypershell.database.core import engine, Session, config, in_memory
 from hypershell.database.model import Model, Task
 
 # public interface
@@ -19,9 +19,8 @@ __all__ = ['Task', 'DATABASE_ENABLED', ]
 log = logging.getLogger(__name__)
 
 
-if hasattr(config, 'file') and config.file:
+if not in_memory:
     DATABASE_ENABLED = True
-    log.debug('Initializing database objects')
     Model.metadata.create_all(engine)
 else:
     DATABASE_ENABLED = False

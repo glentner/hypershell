@@ -182,6 +182,7 @@ engine_config = {}
 
 
 # sqlite specific configuration
+in_memory = False
 if config.provider == 'sqlite':
     in_memory = (config.get('file', None) or config.get('database', None)) in ('', ':memory:', None)
     if in_memory:

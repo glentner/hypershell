@@ -392,9 +392,14 @@ class ServerThread(Thread):
                  print_on_failure: bool = False) -> None:
         """Initialize queue manager and child threads."""
         self.live_mode = live
+        if not self.live_mode and not DATABASE_ENABLED:
+            log.warning('No database configured - automatically disabled')
+            self.live_mode = True
+        if self.live_mode and max_retries > 0:
+            log.warning('Retries disabled in live mode')
         queue_config = QueueConfig(host=address[0], port=address[1], auth=auth)
         self.queue = QueueServer(config=queue_config)
-        if live:
+        if self.live_mode:
             self.scheduler = None
             self.submitter = None if not source else LiveSubmitThread(
                 source, queue_config=queue_config, bundlesize=bundlesize, bundlewait=bundlewait)
@@ -402,7 +407,7 @@ class ServerThread(Thread):
             self.submitter = None if not source else SubmitThread(source, bundlesize=bundlesize, bundlewait=bundlewait)
             self.scheduler = SchedulerThread(queue=self.queue, bundlesize=bundlesize, attempts=max_retries + 1,
                                              eager=eager, forever_mode=forever_mode)
-        self.receiver = ReceiverThread(queue=self.queue, live=live, print_on_failure=print_on_failure)
+        self.receiver = ReceiverThread(queue=self.queue, live=self.live_mode, print_on_failure=print_on_failure)
         self.terminator = TerminatorThread(queue=self.queue)
         super().__init__(name='hypershell-server')
 
