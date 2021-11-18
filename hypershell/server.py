@@ -252,6 +252,7 @@ class Receiver(StateMachine):
         """Get the next bundle from the completed task queue."""
         try:
             self.bundle = self.queue.completed.get(timeout=2)
+            self.queue.completed.task_done()
             return ReceiverState.UNPACK if self.bundle else ReceiverState.HALT
         except QueueEmpty:
             return ReceiverState.UNLOAD
@@ -333,6 +334,7 @@ class Terminator(StateMachine):
         """Wait for first task id from scheduler/submitter."""
         try:
             task_id = self.queue.terminator.get(timeout=2)
+            self.queue.terminator.task_done()
             if task_id is not None:
                 self.final_task_id = task_id.decode()
                 log.trace(f'Awaiting final task from clients ({self.final_task_id})')
@@ -346,6 +348,7 @@ class Terminator(StateMachine):
         """Wait for client given task IDs and HALT if matching."""
         try:
             task_id = self.queue.terminator.get(timeout=2)
+            self.queue.terminator.task_done()
             if task_id is not None:
                 if task_id.decode() == self.final_task_id:
                     # NOTE: if the final task is long lived and the other clients are in a holding pattern

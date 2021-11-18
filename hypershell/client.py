@@ -343,6 +343,7 @@ class TaskExecutor(StateMachine):
         """Get the next task from the local queue of new tasks."""
         try:
             self.task = self.inbound.get(timeout=1)
+            self.inbound.task_done()
             return TaskState.START_TASK if self.task else TaskState.FINALIZE
         except QueueEmpty:
             return TaskState.GET_LOCAL
