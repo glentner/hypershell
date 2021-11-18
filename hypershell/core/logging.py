@@ -8,6 +8,7 @@
 from typing import Dict
 
 # standard libraries
+import os
 import sys
 import socket
 import logging
@@ -22,7 +23,7 @@ __all__ = ['Logger', 'LogRecord', 'HOSTNAME', 'handler', 'level', 'initialize_lo
 
 # cached for frequent use
 HOSTNAME = socket.gethostname()
-NO_TTY = not sys.stderr.isatty()
+NO_TTY = False if 'HYPERSHELL_FORCE_COLOR' in os.environ else not sys.stderr.isatty()
 
 
 class Ansi(Enum):
