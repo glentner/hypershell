@@ -38,6 +38,7 @@ import time
 import logging
 import functools
 from enum import Enum
+from functools import cached_property, partial
 from queue import Empty as QueueEmpty, Full as QueueFull
 
 # external libs
@@ -225,7 +226,7 @@ class Receiver(StateMachine):
         self.live = live
         self.print_on_failure = print_on_failure
 
-    @functools.cached_property
+    @cached_property
     def actions(self) -> Dict[ReceiverState, Callable[[], ReceiverState]]:
         return {
             ReceiverState.START: self.start,
@@ -307,7 +308,7 @@ class Terminator(StateMachine):
         """Initialize with queue server."""
         self.queue = queue
 
-    @functools.cached_property
+    @cached_property
     def actions(self) -> Dict[TerminatorState, Callable[[], TerminatorState]]:
         return {
             TerminatorState.START: self.start,
