@@ -21,6 +21,7 @@ from enum import Enum
 from datetime import datetime
 from queue import Queue, Empty as QueueEmpty, Full as QueueFull
 from subprocess import Popen, TimeoutExpired
+from functools import cached_property
 
 # external libs
 from cmdkit.app import Application, exit_status
@@ -50,7 +51,8 @@ class SchedulerState(State, Enum):
     UNPACK = 2
     POP_TASK = 3
     PUT_LOCAL = 4
-    HALT = 5
+    FINALIZE = 5
+    HALT = 6
 
 
 class ClientScheduler(StateMachine):
@@ -82,6 +84,7 @@ class ClientScheduler(StateMachine):
             SchedulerState.UNPACK: self.unpack_bundle,
             SchedulerState.POP_TASK: self.pop_task,
             SchedulerState.PUT_LOCAL: self.put_local,
+            SchedulerState.FINALIZE: self.finalize,
         }
 
     @staticmethod
@@ -126,6 +129,12 @@ class ClientScheduler(StateMachine):
         except QueueFull:
             return SchedulerState.PUT_LOCAL
 
+    @staticmethod
+    def finalize() -> SchedulerState:
+        """Stop scheduler."""
+        log.debug('Done (scheduler)')
+        return SchedulerState.HALT
+
 
 class ClientSchedulerThread(Thread):
     """Run client scheduler in dedicated thread."""
@@ -138,7 +147,6 @@ class ClientSchedulerThread(Thread):
     def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
-        self.stop()
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
@@ -256,7 +264,7 @@ class ClientCollector(StateMachine):
     def finalize(self) -> CollectorState:
         """Push out any remaining tasks and halt."""
         self.put_remote()
-        log.debug('Stopping collector')
+        log.debug('Done (collector)')
         return CollectorState.HALT
 
 
@@ -272,7 +280,6 @@ class ClientCollectorThread(Thread):
     def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
-        self.stop()
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
@@ -372,7 +379,7 @@ class TaskExecutor(StateMachine):
 
     def finalize(self) -> TaskState:
         """Push out any remaining tasks and halt."""
-        log.debug(f'Stopping executor ({self.id})')
+        log.debug(f'Done (executor - {self.id})')
         return TaskState.HALT
 
 
@@ -389,7 +396,6 @@ class TaskThread(Thread):
     def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
-        self.stop()
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
@@ -437,7 +443,7 @@ class ClientThread(Thread):
             self.wait_executors()
             self.wait_collector()
             self.register_final_task()
-        log.info('Stopped')
+        log.info('Done')
 
     def start_threads(self) -> None:
         """Start child threads."""

@@ -36,7 +36,6 @@ from typing import List, Dict, Tuple, Iterable, IO, Optional, Callable
 import sys
 import time
 import logging
-import functools
 from enum import Enum
 from functools import cached_property, partial
 from queue import Empty as QueueEmpty, Full as QueueFull
@@ -70,7 +69,8 @@ class SchedulerState(State, Enum):
     LOAD = 1
     PACK = 2
     POST = 3
-    HALT = 4
+    FINALIZE = 4
+    HALT = 5
 
 
 # Note: unless specified otherwise for larger problems, a bundle of size one allows
@@ -110,13 +110,14 @@ class Scheduler(StateMachine):
         self.eager = eager
         self.forever_mode = forever_mode
 
-    @functools.cached_property
+    @cached_property
     def actions(self) -> Dict[SchedulerState, Callable[[], SchedulerState]]:
         return {
             SchedulerState.START: self.start,
             SchedulerState.LOAD: self.load_bundle,
             SchedulerState.PACK: self.pack_bundle,
             SchedulerState.POST: self.post_bundle,
+            SchedulerState.FINALIZE: self.finalize,
         }
 
     @staticmethod
@@ -145,7 +146,7 @@ class Scheduler(StateMachine):
         # NOTE: An empty database must wait for at least one task
         # Note: Do not allow HALT before at least one bundle is scheduled
         elif not self.forever_mode and Task.count() > 0 and Task.count_remaining() == 0 and not self.startup_phase:
-            return SchedulerState.HALT
+            return SchedulerState.FINALIZE
         else:
             time.sleep(DEFAULT_QUERY_PAUSE)
             return SchedulerState.LOAD
@@ -166,6 +167,12 @@ class Scheduler(StateMachine):
         except QueueFull:
             return SchedulerState.POST
 
+    @staticmethod
+    def finalize() -> SchedulerState:
+        """Stop scheduler."""
+        log.debug('Done (scheduler)')
+        return SchedulerState.HALT
+
 
 class SchedulerThread(Thread):
     """Run scheduler within dedicated thread."""
@@ -181,7 +188,7 @@ class SchedulerThread(Thread):
     def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
-        self.stop()
+        log.debug('Done (scheduler)')
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
@@ -278,7 +285,7 @@ class ReceiverThread(Thread):
     def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
-        self.stop()
+        log.debug('Done (receiver)')
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
@@ -367,7 +374,7 @@ class TerminatorThread(Thread):
     def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
-        self.stop()
+        log.debug('Done (terminator)')
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
@@ -423,7 +430,7 @@ class ServerThread(Thread):
             self.signal_clients()
             self.wait_terminator()
             self.wait_receiver()
-        log.info('Stopped')
+        log.info('Done')
 
     def start_threads(self) -> None:
         """Start child threads."""
@@ -449,7 +456,7 @@ class ServerThread(Thread):
         """Send disconnect signal for each client."""
         try:
             log.info('Sending all-done to clients')
-            for hostname in iter(functools.partial(self.queue.connected.get, timeout=2), None):
+            for hostname in iter(partial(self.queue.connected.get, timeout=2), None):
                 self.queue.scheduled.put(None)  # NOTE: one for each client
                 self.queue.connected.task_done()
                 log.trace(f'Disconnect request sent ({hostname.decode()})')
