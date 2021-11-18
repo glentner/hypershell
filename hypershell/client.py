@@ -471,8 +471,11 @@ class ClientThread(Thread):
 
     def register_final_task(self) -> None:
         """Send final task ID to server."""
-        log.trace(f'Registering final task ({self.scheduler.final_task_id})')
-        self.client.terminator.put(self.scheduler.final_task_id.encode())
+        if self.scheduler.final_task_id:
+            log.trace(f'Registering final task ({self.scheduler.final_task_id})')
+            self.client.terminator.put(self.scheduler.final_task_id.encode())
+        else:
+            log.warning('No tasks received')
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
