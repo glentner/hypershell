@@ -32,17 +32,17 @@ default = Namespace({
     },
     'submit': {
         'bundlesize': 1,
-        'bundlewait': 5  # Seconds
+        'bundlewait': 5  # seconds
     },
     'server': {
         'bind': 'localhost',
         'port': 50_001,
         'auth': '__HYPERSHELL__BAD__AUTHKEY__',
-        'queuesize': 2,
+        'queuesize': 1,  # only allow a single bundle (scheduler must wait)
         'bundlesize': 1,
         'attempts': 1,
         'eager': False,  # prefer failed tasks to new tasks
-        'wait': 5  # Seconds to wait between database queries
+        'wait': 5  # seconds to wait between database queries
     },
     'client': {
         'bundlesize': 1,
