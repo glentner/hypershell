@@ -127,7 +127,7 @@ class Scheduler(StateMachine):
         task_count = Task.count()
         tasks_remaining = Task.count_remaining()
         if task_count > 0:
-            log.warning(f'Database exists ({task_count} tasks)')
+            log.warning(f'Database exists ({task_count} previous tasks)')
             if tasks_remaining == 0:
                 log.warning(f'All tasks completed - did you mean to use the same database?')
             else:
@@ -221,17 +221,17 @@ class Receiver(StateMachine):
     final_task_id: str
 
     live: bool
-    print_on_failure: bool
+    redirect_failures: IO
 
     state = ReceiverState.START
     states = ReceiverState
 
-    def __init__(self, queue: QueueServer, live: bool = False, print_on_failure: bool = False) -> None:
+    def __init__(self, queue: QueueServer, live: bool = False, redirect_failures: IO = None) -> None:
         """Initialize receiver."""
         self.queue = queue
         self.bundle = []
         self.live = live
-        self.print_on_failure = print_on_failure
+        self.redirect_failures = redirect_failures
 
     @cached_property
     def actions(self) -> Dict[ReceiverState, Callable[[], ReceiverState]]:
@@ -270,18 +270,18 @@ class Receiver(StateMachine):
             log.debug(f'Completed task ({task.id})')
             if task.exit_status != 0:
                 log.warning(f'Non-zero exit status ({task.exit_status}) for task ({task.id})')
-                if self.print_on_failure:
-                    print(task.args)
+                if self.redirect_failures:
+                    print(task.args, file=self.redirect_failures)
         return ReceiverState.UNLOAD
 
 
 class ReceiverThread(Thread):
     """Run receiver within dedicated thread."""
 
-    def __init__(self, queue: QueueServer, live: bool = False, print_on_failure: bool = False) -> None:
+    def __init__(self, queue: QueueServer, live: bool = False, redirect_failures: IO = None) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-receiver')
-        self.machine = Receiver(queue=queue, live=live, print_on_failure=print_on_failure)
+        self.machine = Receiver(queue=queue, live=live, redirect_failures=redirect_failures)
 
     def run_with_exceptions(self) -> None:
         """Run machine."""
@@ -401,7 +401,7 @@ class ServerThread(Thread):
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                  max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = False,
-                 print_on_failure: bool = False) -> None:
+                 redirect_failures: IO = None) -> None:
         """Initialize queue manager and child threads."""
         self.live_mode = live
         if not self.live_mode and not DATABASE_ENABLED:
@@ -419,7 +419,7 @@ class ServerThread(Thread):
             self.submitter = None if not source else SubmitThread(source, bundlesize=bundlesize, bundlewait=bundlewait)
             self.scheduler = SchedulerThread(queue=self.queue, bundlesize=bundlesize, attempts=max_retries + 1,
                                              eager=eager, forever_mode=forever_mode)
-        self.receiver = ReceiverThread(queue=self.queue, live=self.live_mode, print_on_failure=print_on_failure)
+        self.receiver = ReceiverThread(queue=self.queue, live=self.live_mode, redirect_failures=redirect_failures)
         self.terminator = TerminatorThread(queue=self.queue)
         super().__init__(name='hypershell-server')
 
@@ -492,12 +492,12 @@ class ServerThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
-def serve_from(source: Iterable[str], live: bool = False, print_on_failure: bool = False,
+def serve_from(source: Iterable[str], live: bool = False, redirect_failures: IO = None,
                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE) -> None:
     """Run server with the given task `source`, run until complete."""
-    thread = ServerThread.new(source=source, live=live, print_on_failure=print_on_failure,
+    thread = ServerThread.new(source=source, live=live, redirect_failures=redirect_failures,
                               bundlesize=bundlesize, bundlewait=bundlewait,
                               address=address, auth=auth, max_retries=max_retries, eager=eager)
     try:
@@ -507,22 +507,22 @@ def serve_from(source: Iterable[str], live: bool = False, print_on_failure: bool
         raise
 
 
-def serve_file(path: str, live: bool = False, print_on_failure: bool = False,
+def serve_file(path: str, live: bool = False, redirect_failures: IO = None,
                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE, **file_options) -> None:
     """Run server with tasks from a local file `path`, run until complete."""
     with open(path, mode='r', **file_options) as stream:
-        serve_from(stream, live=live, print_on_failure=print_on_failure,
+        serve_from(stream, live=live, redirect_failures=redirect_failures,
                    bundlesize=bundlesize, bundlewait=bundlewait, address=address, auth=auth,
                    max_retries=max_retries, eager=eager)
 
 
-def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, print_on_failure: bool = False,
+def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, redirect_failures: IO = None,
                   address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                   max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE) -> None:
     """Run server forever."""
-    thread = ServerThread.new(source=None, live=live, print_on_failure=print_on_failure,
+    thread = ServerThread.new(source=None, live=live, redirect_failures=redirect_failures,
                               bundlesize=bundlesize, address=address, auth=auth,
                               forever_mode=True, max_retries=max_retries, eager=eager)
     try:
@@ -533,11 +533,9 @@ def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, prin
 
 
 APP_NAME = 'hyper-shell server'
-_PADDING = ' ' * len(APP_NAME)
-
 APP_USAGE = f"""\
-usage: {APP_NAME} [-h] [FILE | --serve-forever] [-b NUM] [-w SEC] [--max-retries NUM [--eager]]
-       {_PADDING} [-H ADDR] [-p NUM] [--auth KEY] [--no-db] [--print]
+usage: hyper-shell server [-h] [FILE | --serve-forever] [-b NUM] [-w SEC] [-r NUM [--eager]]
+       hyper-shell server [-H ADDR] [-p NUM] [-k KEY] [--no-db] [--print | -f PATH]
 Launch server, schedule directly or asynchronously from database.\
 """
 
@@ -547,8 +545,7 @@ APP_HELP = f"""\
 The server includes a scheduler component that pulls tasks from the database and offers
 them up on a distributed queue to clients. It also has a receiver that collects the results
 of finished tasks. Optionally, the server can submit tasks (FILE). When submitting tasks,
-the -w/--bundlewait options are the same as for 'hypershell submit' and the -b/--bundlesize
-are used for -b/--bundlesize.
+the -w/--bundlewait and -b/bundlesize options are the same as for 'hypershell submit'.
 
 With --max-retries greater than zero, the scheduler will check for a non-zero exit status
 for tasks and re-submit them if their previous number of attempts is less.
@@ -560,8 +557,8 @@ arguments:
 FILE                        Path to task file ("-" for <stdin>).
 
 options:
--H, --bind            ADDR  Bind address (default: localhost)
--p, --port            NUM   Port number.
+-H, --bind            ADDR  Bind address (default: {QueueConfig.host}).
+-p, --port            NUM   Port number (default: {QueueConfig.port}).
 -k, --auth            KEY   Cryptography key to secure server.
     --serve-forever         Do not halt even if all tasks finished.
 -b, --bundlesize      NUM   Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
@@ -569,7 +566,9 @@ options:
 -r, --max-retries     NUM   Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
     --eager                 Schedule failed tasks before new tasks.
     --no-db                 Run server without database.
-    --print                 Print failed command args to STDOUT.
+    --restart               Include previously failed or interrupted tasks.
+    --print                 Print failed task args to <stdout>.
+-f, --failures        PATH  File path to redirect failed task args.
 -h, --help                  Show this message and exit.\
 """
 
@@ -581,7 +580,6 @@ class ServerApp(Application):
     interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
 
     filepath: str
-    source: Optional[IO] = None
     interface.add_argument('filepath', nargs='?', default=None)
 
     bundlesize: int = config.server.bundlesize
@@ -610,18 +608,24 @@ class ServerApp(Application):
     live_mode: bool = False
     interface.add_argument('--no-db', action='store_true', dest='live_mode')
 
-    print_on_failure: bool = False
-    interface.add_argument('--print', action='store_true', dest='print_on_failure')
+    print_mode: bool = False
+    failure_path: str = None
+    output_interface = interface.add_mutually_exclusive_group()
+    output_interface.add_argument('--print', action='store_true', dest='print_mode')
+    output_interface.add_argument('-f', '--failures', default=None, dest='failure_path')
+
+    restart_mode: bool = False
+    interface.add_argument('--restart', action='store_true', dest='restart_mode')
 
     def run(self) -> None:
         """Run server."""
         if self.serve_forever_mode:
             serve_forever(bundlesize=self.bundlesize, address=(self.host, self.port), auth=self.auth,
-                          live=self.live_mode, print_on_failure=self.print_on_failure, max_retries=self.max_retries)
+                          live=self.live_mode, redirect_failures=self.failure_stream, max_retries=self.max_retries)
         else:
-            serve_from(source=self.source, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
+            serve_from(source=self.input_stream, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
                        address=(self.host, self.port), auth=self.auth, max_retries=self.max_retries,
-                       live=self.live_mode, print_on_failure=self.print_on_failure)
+                       live=self.live_mode, redirect_failures=self.failure_stream)
 
     def check_args(self):
         """Fail particular argument combinations."""
@@ -629,15 +633,35 @@ class ServerApp(Application):
             raise ArgumentError('Cannot specify both FILE and --serve-forever')
         if self.filepath is None and not self.serve_forever_mode:
             self.filepath = '-'  # NOTE: assume STDIN
+        if self.restart_mode:
+            raise ArgumentError('--restart mode is not yet implemented')
+
+    @cached_property
+    def input_stream(self) -> Optional[IO]:
+        """Input IO stream for task args."""
+        if self.serve_forever_mode or self.restart_mode:
+            return None
+        else:
+            return sys.stdin if self.filepath == '-' else open(self.filepath, mode='r')
+
+    @cached_property
+    def failure_stream(self) -> Optional[IO]:
+        """IO stream for failed task args."""
+        if self.print_mode:
+            return sys.stdout
+        elif self.failure_path:
+            return sys.stdout if self.failure_path == '-' else open(self.failure_path, mode='w')
+        else:
+            return None
 
     def __enter__(self) -> ServerApp:
         """Open file if not stdin."""
         self.check_args()
-        if self.filepath is not None:
-            self.source = sys.stdin if self.filepath == '-' else open(self.filepath, mode='r')
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Close file if not stdin."""
-        if self.source is not None and self.source is not sys.stdin:
-            self.source.close()
+        """Clean up IO if necessary."""
+        if self.input_stream is not None and self.input_stream is not sys.stdin:
+            self.input_stream.close()
+        if self.failure_stream is not None and self.failure_path is not sys.stdout:
+            self.failure_stream.close()

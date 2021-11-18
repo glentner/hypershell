@@ -10,7 +10,7 @@ TODO: examples and notes
 
 # type annotations
 from __future__ import annotations
-from typing import List, Tuple, Optional, Callable, Dict
+from typing import List, Tuple, Optional, Callable, Dict, IO
 
 # standard libs
 import os
@@ -308,6 +308,8 @@ class TaskExecutor(StateMachine):
     task: Task
     process: Popen
     template: str
+    redirect_output: IO
+    redirect_errors: IO
 
     inbound: Queue[Optional[Task]]
     outbound: Queue[Optional[Task]]
@@ -316,12 +318,14 @@ class TaskExecutor(StateMachine):
     states = TaskState
 
     def __init__(self, id: int, inbound: Queue[Optional[Task]], outbound: Queue[Optional[Task]],
-                 template: str = DEFAULT_TEMPLATE) -> None:
+                 template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None) -> None:
         """Initialize task executor."""
         self.id = id
         self.template = template
         self.inbound = inbound
         self.outbound = outbound
+        self.redirect_output = redirect_output or sys.stdout
+        self.redirect_errors = redirect_errors or sys.stderr
 
     @functools.cached_property
     def actions(self) -> Dict[TaskState, Callable[[], TaskState]]:
@@ -355,7 +359,7 @@ class TaskExecutor(StateMachine):
         self.task.client_host = HOSTNAME
         log.debug(f'Running task ({self.task.id})')
         log.trace(f'Running task ({self.task.id}: {self.task.command})')
-        self.process = Popen(self.task.command, shell=True, stdout=sys.stdout, stderr=sys.stderr,
+        self.process = Popen(self.task.command, shell=True, stdout=self.redirect_output, stderr=self.redirect_errors,
                              env={**os.environ, **load_task_env(),
                                   'TASK_ID': self.task.id, 'TASK_ARGS': self.task.args})
         return TaskState.WAIT_TASK
@@ -387,12 +391,13 @@ class TaskExecutor(StateMachine):
 class TaskThread(Thread):
     """Run task executor within dedicated thread."""
 
-    def __init__(self, id: int,
-                 inbound: Queue[Optional[str]], outbound: Queue[Optional[str]],
-                 template: str = DEFAULT_TEMPLATE) -> None:
+    def __init__(self,
+                 id: int, inbound: Queue[Optional[str]], outbound: Queue[Optional[str]],
+                 template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None) -> None:
         """Initialize task executor."""
         super().__init__(name=f'hypershell-executor-{id}')
-        self.machine = TaskExecutor(id=id, inbound=inbound, outbound=outbound, template=template)
+        self.machine = TaskExecutor(id=id, inbound=inbound, outbound=outbound, template=template,
+                                    redirect_output=redirect_output, redirect_errors=redirect_errors)
 
     def run_with_exceptions(self) -> None:
         """Run machine."""
@@ -412,17 +417,16 @@ class ClientThread(Thread):
 
     inbound: Queue[Optional[Task]]
     outbound: Queue[Optional[Task]]
-
     scheduler: ClientSchedulerThread
     collector: ClientCollectorThread
-
     executors: List[TaskThread]
 
     def __init__(self,
                  num_tasks: int = 1,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port),
-                 auth: str = QueueConfig.auth, template: str = DEFAULT_TEMPLATE) -> None:
+                 auth: str = QueueConfig.auth, template: str = DEFAULT_TEMPLATE,
+                 redirect_output: IO = None, redirect_errors: IO = None) -> None:
         """Initialize queue manager and child threads."""
         super().__init__(name='hypershell-client')
         self.num_tasks = num_tasks
@@ -432,7 +436,8 @@ class ClientThread(Thread):
         self.scheduler = ClientSchedulerThread(queue=self.client, local=self.inbound)
         self.collector = ClientCollectorThread(queue=self.client, local=self.outbound,
                                                bundlesize=bundlesize, bundlewait=bundlewait)
-        self.executors = [TaskThread(id=count+1, inbound=self.inbound, outbound=self.outbound, template=template)
+        self.executors = [TaskThread(id=count+1, inbound=self.inbound, outbound=self.outbound, template=template,
+                                     redirect_output=redirect_output, redirect_errors=redirect_errors)
                           for count in range(num_tasks)]
 
     def run_with_exceptions(self) -> None:
@@ -487,10 +492,11 @@ class ClientThread(Thread):
 
 def run_client(num_tasks: int = 1, bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
-               template: str = DEFAULT_TEMPLATE) -> None:
+               template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None) -> None:
     """Run client until disconnect signal received."""
     thread = ClientThread.new(num_tasks=num_tasks, bundlesize=bundlesize, bundlewait=bundlewait,
-                              address=address, auth=auth, template=template)
+                              address=address, auth=auth, template=template,
+                              redirect_output=redirect_output, redirect_errors=redirect_errors)
     try:
         thread.join()
     except Exception:
@@ -500,12 +506,14 @@ def run_client(num_tasks: int = 1, bundlesize: int = DEFAULT_BUNDLESIZE, bundlew
 
 APP_NAME = 'hyper-shell client'
 APP_USAGE = f"""\
-usage: {APP_NAME} [-h] [-N NUM] [-H ADDR] [-p PORT] [-k KEY] [-t TEMPLATE]
-Launch client directly, run tasks in parallel.\
+usage: hyper-shell client [-h] [-N NUM] [-t TEMPLATE] [-b SIZE] [-w SEC]
+                          [-H ADDR] [-p PORT] [-k KEY] [-o PATH] [-e PATH]
 """
 
 APP_HELP = f"""\
 {APP_USAGE}
+
+Launch client directly, run tasks in parallel.
 
 options:
 -N, --num-tasks   NUM   Number of tasks to run in parallel.
@@ -514,7 +522,9 @@ options:
 -w, --bundlewait  SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
 -H, --host        ADDR  Hostname for server.
 -p, --port        NUM   Port number for server.
--k, --auth        KEY   Cryptography key to connect to server.   
+-k, --auth        KEY   Cryptography key to connect to server.
+-o, --output      PATH  Redirect task output (default: <stdout>).
+-e, --errors      PATH  Redirect task errors (default: <stderr>).   
 -h, --help              Show this message and exit.\
 """
 
@@ -546,6 +556,11 @@ class ClientApp(Application):
     bundlewait: int = config.submit.bundlewait
     interface.add_argument('-w', '--bundlewait', type=int, default=bundlewait)
 
+    output_path: str = None
+    errors_path: str = None
+    interface.add_argument('-o', '--output', default=None, dest='output_path')
+    interface.add_argument('-e', '--errors', default=None, dest='errors_path')
+
     exceptions = {
         EOFError: functools.partial(handle_disconnect, logger=log),
         ConnectionResetError: functools.partial(handle_disconnect, logger=log),
@@ -556,4 +571,22 @@ class ClientApp(Application):
     def run(self) -> None:
         """Run client."""
         run_client(num_tasks=self.num_tasks, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
-                   address=(self.host, self.port), auth=self.auth, template=self.template)
+                   address=(self.host, self.port), auth=self.auth, template=self.template,
+                   redirect_output=self.output_stream, redirect_errors=self.errors_stream)
+
+    @cached_property
+    def output_stream(self) -> IO:
+        """IO stream for task outputs."""
+        return sys.stdout if not self.output_path else open(self.output_path, mode='w')
+
+    @cached_property
+    def errors_stream(self) -> IO:
+        """IO stream for task errors."""
+        return sys.stderr if not self.errors_path else open(self.errors_path, mode='w')
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Close IO streams if necessary."""
+        if self.output_stream is not sys.stdout:
+            self.output_stream.close()
+        if self.errors_stream is not sys.stderr:
+            self.errors_stream.close()
