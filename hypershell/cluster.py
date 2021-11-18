@@ -72,9 +72,60 @@ class LocalCluster(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
-def run_cluster(**options) -> None:
-    """Run cluster until completion."""
+class RemoteCluster(Thread):
+    """Run server with single local client."""
+
+    server: ServerThread
+    clients: Popen
+    client_argv: str
+
+    def __init__(self,
+                 source: Iterable[str] = None, template: str = DEFAULT_TEMPLATE,
+                 launcher: str = 'mpirun', launcher_args: List[str] = None,
+                 bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port),
+                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
+                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, live: bool = False,
+                 num_tasks: int = 1, remote_exe: str = 'hyper-shell', redirect_failures: IO = None) -> None:
+        """Initialize server and client threads."""
+        auth = secrets.token_hex(64)
+        self.server = ServerThread(source=source, auth=auth, live=live, bundlesize=bundlesize,
+                                   bundlewait=bundlewait, max_retries=max_retries, eager=eager, address=bind,
+                                   redirect_failures=redirect_failures)
+        launcher_args = '' if launcher_args is None else ' '.join(launcher_args)
+        self.client_argv = (f'{launcher} {launcher_args} {remote_exe} client -H {HOSTNAME} -p {bind[1]} '
+                            f'-N {num_tasks} -b {bundlesize} -w {bundlewait} -t "{template}" -k {auth}')
+        super().__init__(name='hypershell-cluster')
+
+    def run_with_exceptions(self) -> None:
+        """Start child threads, wait."""
+        self.server.start()
+        time.sleep(2)  # NOTE: give the server a chance to start
+        log.trace(f'Launching clients: {self.client_argv}')
+        self.clients = Popen(self.client_argv, shell=True, stdout=sys.stdout, stderr=sys.stderr,
+                             env={**os.environ, **load_task_env()})
+        self.clients.wait()
+        self.server.join()
+
+    def stop(self, wait: bool = False, timeout: int = None) -> None:
+        """Stop child threads before main thread."""
+        self.server.stop(wait=wait, timeout=timeout)
+        self.clients.terminate()
+        super().stop(wait=wait, timeout=timeout)
+
+
+def run_local(**options) -> None:
+    """Run local cluster until completion."""
     thread = LocalCluster.new(**options)
+    try:
+        thread.join()
+    except Exception:
+        thread.stop()
+        raise
+
+
+def run_cluster(**options) -> None:
+    """Run remote cluster until completion."""
+    thread = RemoteCluster.new(**options)
     try:
         thread.join()
     except Exception:
