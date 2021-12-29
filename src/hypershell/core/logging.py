@@ -29,6 +29,10 @@ NO_TTY = False if 'HYPERSHELL_FORCE_COLOR' in os.environ else not sys.stderr.isa
 class Ansi(Enum):
     """ANSI escape sequences for colors."""
     RESET = '\033[0m'
+    BOLD = '\033[1m'
+    FAINT = '\033[2m'
+    ITALIC = '\033[3m'
+    UNDERLINE = '\033[4m'
     BLACK = '\033[30m'
     RED = '\033[31m'
     GREEN = '\033[32m'
@@ -72,8 +76,20 @@ class LogRecord(logging.LogRecord):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hostname = HOSTNAME
-        self.ansi_color = '' if NO_TTY else level_color[self.levelname].value
+        self.ansi_level = '' if NO_TTY else level_color[self.levelname].value
         self.ansi_reset = '' if NO_TTY else Ansi.RESET.value
+        self.ansi_bold = Ansi.BOLD.value
+        self.ansi_faint = Ansi.FAINT.value
+        self.ansi_italic = Ansi.ITALIC.value
+        self.ansi_underline = Ansi.UNDERLINE.value
+        self.ansi_black = Ansi.BLACK.value
+        self.ansi_red = Ansi.RED.value
+        self.ansi_green = Ansi.GREEN.value
+        self.ansi_yellow = Ansi.YELLOW.value
+        self.ansi_blue = Ansi.BLUE.value
+        self.ansi_magenta = Ansi.MAGENTA.value
+        self.ansi_cyan = Ansi.CYAN.value
+        self.ansi_white = Ansi.WHITE.value
 
 
 # inject factory back into logging library
