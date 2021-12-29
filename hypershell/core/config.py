@@ -42,11 +42,13 @@ default = Namespace({
         'bundlesize': 1,
         'attempts': 1,
         'eager': False,  # prefer failed tasks to new tasks
-        'wait': 5  # seconds to wait between database queries
+        'wait': 5,  # seconds to wait between database queries
+        'evict': 600,  # assume client is gone if no heartbeat after this many seconds
     },
     'client': {
         'bundlesize': 1,
-        'bundlewait': 5  # Seconds
+        'bundlewait': 5,  # Seconds
+        'heartrate': 10,  # Seconds, period to wait between heartbeats
     },
     'export': {
         # NOTE: defining HYPERSHELL_EXPORT_XXX defines XXX within task env

@@ -15,10 +15,12 @@ from typing import List, Tuple, Optional, Callable, Dict, IO
 # standard libs
 import os
 import sys
+import time
 import logging
 import functools
+from uuid import uuid4 as gen_uuid
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timedelta
 from queue import Queue, Empty as QueueEmpty, Full as QueueFull
 from subprocess import Popen, TimeoutExpired
 from functools import cached_property
@@ -28,6 +30,7 @@ from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
 
 # internal libs
+from hypershell.core.heartbeat import Heartbeat, ClientState
 from hypershell.core.config import default, config, load_task_env
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
@@ -409,9 +412,115 @@ class TaskThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
+class HeartbeatState(State, Enum):
+    """Finite states for heartbeat machine."""
+    START = 0
+    SUBMIT = 1
+    WAIT = 2
+    FINAL = 3
+    HALT = 4
+
+
+DEFAULT_HEARTRATE: int = default.client.heartrate
+
+
+class ClientHeartbeat(StateMachine):
+    """Register heartbeats with remote server."""
+
+    uuid: str
+    queue: QueueClient
+    heartrate: timedelta
+    previous: datetime = None
+
+    no_wait: bool = False
+    client_state: ClientState = ClientState.RUNNING
+
+    state = HeartbeatState.START
+    states = HeartbeatState
+
+    def __init__(self, uuid: str, queue: QueueClient, heartrate: int = DEFAULT_HEARTRATE) -> None:
+        """Initialize heartbeat machine."""
+        self.uuid = uuid
+        self.queue = queue
+        self.previous = datetime.now()
+        self.heartrate = timedelta(seconds=heartrate)
+
+    @functools.cached_property
+    def actions(self) -> Dict[HeartbeatState, Callable[[], HeartbeatState]]:
+        return {
+            HeartbeatState.START: self.start,
+            HeartbeatState.SUBMIT: self.submit,
+            HeartbeatState.WAIT: self.wait,
+            HeartbeatState.FINAL: self.finalize,
+        }
+
+    @staticmethod
+    def start() -> HeartbeatState:
+        """Jump to SUBMIT state."""
+        log.debug(f'Started heartbeat')
+        return HeartbeatState.SUBMIT
+
+    def submit(self) -> HeartbeatState:
+        """Get the next task from the local queue of new tasks."""
+        try:
+            client_state = self.client_state  # atomic
+            heartbeat = Heartbeat.new(uuid=self.uuid, state=client_state)
+            self.queue.heartbeat.put(heartbeat.pack(), timeout=2)
+            if client_state is ClientState.RUNNING:
+                log.trace(f'Heartbeat - running ({heartbeat.host}: {heartbeat.uuid}')
+                return HeartbeatState.WAIT
+            else:
+                log.trace(f'Heartbeat - final ({heartbeat.host}: {heartbeat.uuid}')
+                return HeartbeatState.FINAL
+        except QueueEmpty:
+            return HeartbeatState.SUBMIT
+
+    def wait(self) -> HeartbeatState:
+        """Wait until next needed heartbeat."""
+        if self.no_wait:
+            return HeartbeatState.SUBMIT
+        now = datetime.now()
+        if (now - self.previous) < self.heartrate:
+            time.sleep(1)
+            return HeartbeatState.WAIT
+        else:
+            self.previous = now
+            return HeartbeatState.SUBMIT
+
+    @staticmethod
+    def finalize() -> HeartbeatState:
+        """Stop heartbeats."""
+        log.debug(f'Done (heartbeat)')
+        return HeartbeatState.HALT
+
+
+class ClientHeartbeatThread(Thread):
+    """Run heartbeat machine within dedicated thread."""
+
+    def __init__(self, uuid: str, queue: QueueClient, heartrate: int = DEFAULT_HEARTRATE) -> None:
+        """Initialize heartrate machine."""
+        super().__init__(name=f'hypershell-client-heartbeat')
+        self.machine = ClientHeartbeat(uuid=uuid, queue=queue, heartrate=heartrate)
+
+    def run_with_exceptions(self) -> None:
+        """Run machine."""
+        self.machine.run()
+
+    def signal_finished(self) -> None:
+        """Set client state to communicate completion."""
+        self.machine.client_state = ClientState.FINISHED
+        self.machine.no_wait = True
+
+    def stop(self, wait: bool = False, timeout: int = None) -> None:
+        """Stop machine."""
+        self.machine.halt()
+        super().stop(wait=wait, timeout=timeout)
+
+
 class ClientThread(Thread):
     """Manage asynchronous task bundle scheduling and receiving."""
 
+    uuid: str
     client: QueueClient
     num_tasks: int
 
@@ -426,14 +535,17 @@ class ClientThread(Thread):
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port),
                  auth: str = QueueConfig.auth, template: str = DEFAULT_TEMPLATE,
-                 redirect_output: IO = None, redirect_errors: IO = None) -> None:
+                 redirect_output: IO = None, redirect_errors: IO = None,
+                 heartrate: int = DEFAULT_HEARTRATE) -> None:
         """Initialize queue manager and child threads."""
         super().__init__(name='hypershell-client')
+        self.uuid = str(gen_uuid())
         self.num_tasks = num_tasks
         self.client = QueueClient(config=QueueConfig(host=address[0], port=address[1], auth=auth))
         self.inbound = Queue(maxsize=DEFAULT_BUNDLESIZE)
         self.outbound = Queue(maxsize=DEFAULT_BUNDLESIZE)
         self.scheduler = ClientSchedulerThread(queue=self.client, local=self.inbound)
+        self.heartbeat = ClientHeartbeatThread(uuid=self.uuid, queue=self.client, heartrate=heartrate)
         self.collector = ClientCollectorThread(queue=self.client, local=self.outbound,
                                                bundlesize=bundlesize, bundlewait=bundlewait)
         self.executors = [TaskThread(id=count+1, inbound=self.inbound, outbound=self.outbound, template=template,
@@ -449,12 +561,14 @@ class ClientThread(Thread):
             self.wait_executors()
             self.wait_collector()
             self.register_final_task()
+            self.wait_heartbeat()
         log.info('Done')
 
     def start_threads(self) -> None:
         """Start child threads."""
         self.scheduler.start()
         self.collector.start()
+        self.heartbeat.start()
         for executor in self.executors:
             executor.start()
 
@@ -462,17 +576,24 @@ class ClientThread(Thread):
         """Wait for all tasks to be completed."""
         self.scheduler.join()
 
+    def wait_collector(self) -> None:
+        """Signal collector to halt."""
+        log.trace('Waiting (collector)')
+        self.outbound.put(None)
+        self.collector.join()
+
     def wait_executors(self) -> None:
         """Send disconnect signal to each task executor thread."""
         for _ in self.executors:
-            self.inbound.put(None)  # signal executors to shutdown
+            self.inbound.put(None)  # signal executors to shut down
         for thread in self.executors:
             thread.join()
 
-    def wait_collector(self) -> None:
-        """Signal collector to halt."""
-        self.outbound.put(None)
-        self.collector.join()
+    def wait_heartbeat(self) -> None:
+        """Signal HALT on heartbeat."""
+        log.trace('Waiting (heartbeat)')
+        self.heartbeat.signal_finished()
+        self.heartbeat.join()
 
     def register_final_task(self) -> None:
         """Send final task ID to server."""
