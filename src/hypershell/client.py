@@ -4,7 +4,27 @@
 """
 Connect to server and run tasks.
 
-TODO: examples and notes
+Example:
+    >>> from hypershell.client import run_client
+    >>> run_client(num_tasks=4, address=('<IP ADDRESS>', 8080), auth='<secret>')
+
+Embed a `ClientThread` in your application directly. Call `stop()` to stop early.
+Clients cannot connect to a remote machine unless you set the server's `bind` address
+to 0.0.0.0 (as opposed to localhost which is the default).
+
+Example:
+    >>> from hypershell.client import ClientThread
+    >>> client_thread = ClientThread.new(num_tasks=4, address=('<IP ADDRESS>', 8080), auth='<secret>')
+
+Note:
+    In order for the `ClientThread` to actively monitor the state set by `stop` and
+    halt execution (a requirement because of how CPython does threading), the implementation
+    uses a finite state machine. *You should not instantiate this machine directly*.
+
+Warning:
+    Because the `ClientThread` checks state actively to decide whether to halt, it may take
+    some few moments before it shutsdown on its own. If your main program exits however,
+    the thread will be stopped regardless because it runs as a `daemon`.
 """
 
 
@@ -43,7 +63,6 @@ from hypershell.database.model import Task
 __all__ = ['run_client', 'ClientThread', 'ClientApp', 'DEFAULT_TEMPLATE', ]
 
 
-# module level logger
 log: Logger = logging.getLogger(__name__)
 
 
@@ -360,8 +379,8 @@ class TaskExecutor(StateMachine):
         self.task.command = self.template.replace('{}', self.task.args)
         self.task.start_time = datetime.now().astimezone()
         self.task.client_host = HOSTNAME
-        log.debug(f'Running task ({self.task.id})')
-        log.trace(f'Running task ({self.task.id}: {self.task.command})')
+        log.info(f'Running task ({self.task.id})')
+        log.debug(f'Running task ({self.task.id}: {self.task.command})')
         self.process = Popen(self.task.command, shell=True, stdout=self.redirect_output, stderr=self.redirect_errors,
                              env={**os.environ, **load_task_env(),
                                   'TASK_ID': self.task.id, 'TASK_ARGS': self.task.args})
@@ -380,14 +399,14 @@ class TaskExecutor(StateMachine):
     def put_local(self) -> TaskState:
         """Put completed task on outbound queue."""
         try:
-            self.outbound.put(self.task, timeout=2)
+            self.outbound.put(self.task, timeout=1)
             return TaskState.GET_LOCAL
         except QueueFull:
             return TaskState.PUT_LOCAL
 
     def finalize(self) -> TaskState:
         """Push out any remaining tasks and halt."""
-        log.debug(f'Done (executor - {self.id})')
+        log.debug(f'Done (executor-{self.id})')
         return TaskState.HALT
 
 
@@ -457,7 +476,7 @@ class ClientHeartbeat(StateMachine):
     @staticmethod
     def start() -> HeartbeatState:
         """Jump to SUBMIT state."""
-        log.debug(f'Started heartbeat')
+        log.debug(f'Started (heartbeat)')
         return HeartbeatState.SUBMIT
 
     def submit(self) -> HeartbeatState:
@@ -499,7 +518,7 @@ class ClientHeartbeatThread(Thread):
 
     def __init__(self, uuid: str, queue: QueueClient, heartrate: int = DEFAULT_HEARTRATE) -> None:
         """Initialize heartrate machine."""
-        super().__init__(name=f'hypershell-client-heartbeat')
+        super().__init__(name=f'hypershell-heartbeat')
         self.machine = ClientHeartbeat(uuid=uuid, queue=queue, heartrate=heartrate)
 
     def run_with_exceptions(self) -> None:
@@ -628,7 +647,7 @@ def run_client(num_tasks: int = 1, bundlesize: int = DEFAULT_BUNDLESIZE, bundlew
 APP_NAME = 'hyper-shell client'
 APP_USAGE = f"""\
 usage: hyper-shell client [-h] [-N NUM] [-t TEMPLATE] [-b SIZE] [-w SEC]
-                          [-H ADDR] [-p PORT] [-k KEY] [-o PATH] [-e PATH]
+                          [-H ADDR] [-p PORT] [-k KEY] [-o PATH] [-e PATH]\
 """
 
 APP_HELP = f"""\

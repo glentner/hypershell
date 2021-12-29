@@ -36,7 +36,7 @@ from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 from hypershell.submit import DEFAULT_BUNDLEWAIT
 
 # public interface
-__all__ = ['LocalCluster', 'run_cluster', 'ClusterApp', ]
+__all__ = ['run_local', 'run_cluster', 'LocalCluster', 'RemoteCluster', 'ClusterApp', ]
 
 
 # module level logger
@@ -108,7 +108,7 @@ class RemoteCluster(Thread):
         """Start child threads, wait."""
         self.server.start()
         time.sleep(2)  # NOTE: give the server a chance to start
-        log.trace(f'Launching clients: {self.client_argv}')
+        log.debug(f'Launching clients: {self.client_argv}')
         self.clients = Popen(self.client_argv, shell=True, stdout=sys.stdout, stderr=sys.stderr,
                              env={**os.environ, **load_task_env()})
         self.clients.wait()
@@ -144,7 +144,7 @@ def run_cluster(**options) -> None:
 APP_NAME = 'hyper-shell cluster'
 APP_USAGE = f"""\
 usage: hyper-shell cluster [-h] [FILE] [-N NUM] [-t CMD] [-b SIZE] [-w SEC] [--no-db | --restart]  
-                           [--max-retries NUM [--eager]]  [-o PATH] [-e PATH] [-f PATH]
+                           [-r NUM [--eager]]  [-o PATH] [-e PATH] [-f PATH]
                            [--ssh HOST... | --mpi | --launcher=ARGS...]\
 """
 APP_HELP = f"""\

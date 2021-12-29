@@ -4,10 +4,17 @@
 """
 Submit tasks to the database.
 
+Any iterable of command lines can be submitted directly.
 Example:
     >>> from hypershell.submit import submit_from
-    >>> with open('some-file', mode='r') as source:
-    ...     submit_from(source, bundlesize=10)
+    >>> submit_from(['echo AA', 'echo BB', 'echo CC'])
+
+A file stream is a valid iterable to pass to `submit_from`.
+Use `submit_file` with the file path as shorthand.
+
+Example:
+    >>> from hypershell.submit import submit_file
+    >>> submit_file('/path/to/commandlines.txt')
 
 Embed a `SubmitThread` in your application directly as the `ServerThread` does.
 Call `stop()` to stop early.
@@ -15,7 +22,7 @@ Call `stop()` to stop early.
 Example:
     >>> import sys
     >>> from hypershell.submit import SubmitThread
-    >>> thread = SubmitThread.new(sys.stdin, bundlesize=10)
+    >>> submit_thread = SubmitThread.new(sys.stdin, bundlesize=10)
 
 Note:
     In order for the `SubmitThread` to actively monitor the state set by `stop` and
@@ -60,7 +67,6 @@ __all__ = ['submit_from', 'submit_file', 'SubmitThread', 'LiveSubmitThread',
            'SubmitApp', 'DEFAULT_BUNDLESIZE', 'DEFAULT_BUNDLEWAIT']
 
 
-# module level logger
 log: Logger = logging.getLogger(__name__)
 
 
@@ -455,12 +461,13 @@ def submit_file(path: str, queue_config: QueueConfig = None,
 
 APP_NAME = 'hyper-shell submit'
 APP_USAGE = f"""\
-usage: {APP_NAME} [-h] [FILE] [-b NUM] [-w SEC]
-Submit command lines to the database.\
+usage: {APP_NAME} [-h] [FILE] [-b NUM] [-w SEC]\
 """
 
 APP_HELP = f"""\
 {APP_USAGE}
+
+Submit command lines to the database.
 
 arguments:
 FILE                   Path to task file ("-" for <stdin>).

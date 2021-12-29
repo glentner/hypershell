@@ -2,18 +2,30 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Schedule and collect bundles tasks from the database.
+Schedule and update bundles of tasks from the database.
+
+The server can submit tasks for you so now need to directly submit before
+invoking the server (see `hypershell.submit`).
 
 Example:
     >>> from hypershell.server import serve_from
-    >>> serve_from(source=['echo a', 'echo b'])
+    >>> serve_from(['echo AA', 'echo BB', 'echo CC'])
+
+To run a server process indefinitely (maybe as a service), invoke `server_forever()`.
+Other programs can submit tasks at a later point.
+
+Example:
+    >>> from hypershell.server import serve_forever
+    >>> serve_forever(bundlesize=10, max_retries=1)
 
 Embed a `ServerThread` in your application directly. Call `stop()` to stop early.
+Clients cannot connect from a remote machine unless you set the `bind` address
+to 0.0.0.0 (as opposed to localhost which is the default).
 
 Example:
     >>> import sys
     >>> from hypershell.server import ServerThread
-    >>> thread = ServerThread.new(source=sys.stdin, bind=('0.0.0.0', 8080), bundlesize=10)
+    >>> server_thread = ServerThread.new(source=sys.stdin, bind=('0.0.0.0', 8080))
 
 Note:
     In order for the `ServerThread` to actively monitor the state set by `stop` and
@@ -451,7 +463,7 @@ class HeartMonitor(StateMachine):
                     log.trace(f'Heartbeat - running ({hb.host}: {hb.uuid})')
                     self.beats[hb.uuid] = hb
                 else:
-                    log.trace(f'Client finished ({hb.host}: {hb.uuid})')
+                    log.trace(f'Client disconnected ({hb.host}: {hb.uuid})')
                     if hb.uuid in self.beats:
                         self.beats.pop(hb.uuid)
                     if not self.beats:
@@ -467,17 +479,18 @@ class HeartMonitor(StateMachine):
 
     def check_all(self) -> HeartbeatState:
         """Check last heartbeat on all clients and evict if necessary."""
-        log.trace(f'Checking clients for missed heartbeats')
+        log.trace(f'Checking missed heartbeats')
         for uuid, hb in self.beats.items():
             age = self.last_check - hb.time
             if age > self.evict_after:
-                log.warning(f'Client missed heartbeat ({hb.host}: {uuid})')
+                log.warning(f'Evicting client ({hb.host}: {uuid})')
+                self.beats.pop(uuid)
         return HeartbeatState.GET
 
     @staticmethod
     def finalize() -> HeartbeatState:
         """Stop heart monitor."""
-        log.debug('Done (heart monitor)')
+        log.debug('Done (heartbeat)')
         return HeartbeatState.HALT
 
 
@@ -495,7 +508,7 @@ class HeartMonitorThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
-        log.debug('Stopping (heart-monitor)')
+        log.debug('Stopping (heartbeat)')
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
@@ -660,12 +673,13 @@ def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, redi
 APP_NAME = 'hyper-shell server'
 APP_USAGE = f"""\
 usage: hyper-shell server [-h] [FILE | --serve-forever] [-b NUM] [-w SEC] [-r NUM [--eager]]
-       hyper-shell server [-H ADDR] [-p NUM] [-k KEY] [--no-db] [--print | -f PATH]
-Launch server, schedule directly or asynchronously from database.\
+                          [-H ADDR] [-p PORT] [-k KEY] [--no-db] [--print | -f PATH]\
 """
 
 APP_HELP = f"""\
 {APP_USAGE}
+
+Launch server, schedule directly or asynchronously from database.
 
 The server includes a scheduler component that pulls tasks from the database and offers
 them up on a distributed queue to clients. It also has a receiver that collects the results
