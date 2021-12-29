@@ -351,7 +351,7 @@ class Terminator(StateMachine):
             self.queue.terminator.task_done()
             if task_id is not None:
                 if task_id.decode() == self.final_task_id:
-                    # NOTE: if the final task is long lived and the other clients are in a holding pattern
+                    # NOTE: if the final task is long-lived and the other clients are in a holding pattern
                     # there can be a timing issue where the server gets the final task id but
                     # the other clients are timing out on a 1-second delay checking their local queues.
                     # So we need to give them time to disconnect when they get the signal

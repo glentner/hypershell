@@ -70,7 +70,7 @@ class ClientScheduler(StateMachine):
     states = SchedulerState
 
     def __init__(self, queue: QueueClient, local: Queue[Optional[Task]]) -> None:
-        """Initialize IO `stream` to read tasks and submit to database."""
+        """Assign remote queue client and local task queue."""
         self.queue = queue
         self.local = local
         self.bundle = []

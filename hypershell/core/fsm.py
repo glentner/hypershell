@@ -17,7 +17,7 @@ __all__ = ['State', 'StateMachine', ]
 
 
 class State(Enum):
-    """Shared base for finite state enums."""
+    """Shared base for finite state enums (must have at least HALT)."""
 
 
 class StateMachine(ABC):
