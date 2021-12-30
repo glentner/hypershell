@@ -105,7 +105,7 @@ class Scheduler(StateMachine):
     attempts: int
     eager: bool
     forever_mode: bool
-    final_task_id: str = None
+    restart_mode: bool
 
     state = SchedulerState.START
     states = SchedulerState
@@ -114,7 +114,7 @@ class Scheduler(StateMachine):
 
     def __init__(self, queue: QueueServer, bundlesize: int = DEFAULT_BUNDLESIZE,
                  attempts: int = DEFAULT_ATTEMPTS, eager: bool = DEFAULT_EAGER_MODE,
-                 forever_mode: bool = False) -> None:
+                 forever_mode: bool = False, restart_mode: bool = False) -> None:
         """Initialize queue and parameters."""
         self.queue = queue
         self.bundle = []
@@ -122,6 +122,10 @@ class Scheduler(StateMachine):
         self.attempts = attempts
         self.eager = eager
         self.forever_mode = forever_mode
+        self.restart_mode = restart_mode
+        if self.restart_mode:
+            # NOTE: Halt if everything in the database is already finished
+            self.startup_phase = False
 
     @cached_property
     def actions(self) -> Dict[SchedulerState, Callable[[], SchedulerState]]:
@@ -133,10 +137,11 @@ class Scheduler(StateMachine):
             SchedulerState.FINALIZE: self.finalize,
         }
 
-    @staticmethod
-    def start() -> SchedulerState:
-        """Jump to LOAD state."""
+    def start(self) -> SchedulerState:
+        """Initial setup then jump to LOAD state."""
         log.debug('Started (scheduler)')
+        if self.forever_mode:
+            log.info('Scheduler will run forever')
         task_count = Task.count()
         tasks_remaining = Task.count_remaining()
         if task_count > 0:
@@ -191,11 +196,11 @@ class SchedulerThread(Thread):
 
     def __init__(self, queue: QueueServer, bundlesize: int = DEFAULT_BUNDLESIZE,
                  attempts: int = DEFAULT_ATTEMPTS, eager: bool = DEFAULT_EAGER_MODE,
-                 forever_mode: bool = False) -> None:
+                 forever_mode: bool = False, restart_mode: bool = False) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-scheduler')
         self.machine = Scheduler(queue=queue, bundlesize=bundlesize, attempts=attempts, eager=eager,
-                                 forever_mode=forever_mode)
+                                 forever_mode=forever_mode, restart_mode=restart_mode)
 
     def run_with_exceptions(self) -> None:
         """Run machine."""
@@ -477,7 +482,8 @@ class ServerThread(Thread):
     live_mode: bool
 
     def __init__(self,
-                 source: Iterable[str] = None, live: bool = False, forever_mode: bool = False,
+                 source: Iterable[str] = None,
+                 live: bool = False, forever_mode: bool = False, restart_mode: bool = False,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                  max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = False,
@@ -498,7 +504,7 @@ class ServerThread(Thread):
         else:
             self.submitter = None if not source else SubmitThread(source, bundlesize=bundlesize, bundlewait=bundlewait)
             self.scheduler = SchedulerThread(queue=self.queue, bundlesize=bundlesize, attempts=max_retries + 1,
-                                             eager=eager, forever_mode=forever_mode)
+                                             eager=eager, forever_mode=forever_mode, restart_mode=restart_mode)
         self.receiver = ReceiverThread(queue=self.queue, live=self.live_mode, redirect_failures=redirect_failures)
         self.heartmonitor = HeartMonitorThread(queue=self.queue, evict_after=evict_after)
         super().__init__(name='hypershell-server')
@@ -564,11 +570,12 @@ class ServerThread(Thread):
 def serve_from(source: Iterable[str], live: bool = False, redirect_failures: IO = None,
                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
-               max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE) -> None:
+               max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE,
+               restart_mode: bool = False) -> None:
     """Run server with the given task `source`, run until complete."""
     thread = ServerThread.new(source=source, live=live, redirect_failures=redirect_failures,
-                              bundlesize=bundlesize, bundlewait=bundlewait,
-                              address=address, auth=auth, max_retries=max_retries, eager=eager)
+                              bundlesize=bundlesize, bundlewait=bundlewait, address=address, auth=auth,
+                              max_retries=max_retries, eager=eager, restart_mode=restart_mode)
     try:
         thread.join()
     except Exception:
@@ -603,7 +610,7 @@ def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, redi
 
 APP_NAME = 'hyper-shell server'
 APP_USAGE = f"""\
-usage: hyper-shell server [-h] [FILE | --serve-forever] [-b NUM] [-w SEC] [-r NUM [--eager]]
+usage: hyper-shell server [-h] [FILE | --forever | --restart] [-b NUM] [-w SEC] [-r NUM [--eager]]
                           [-H ADDR] [-p PORT] [-k KEY] [--no-db] [--print | -f PATH]\
 """
 
@@ -630,7 +637,8 @@ options:
 -H, --bind            ADDR  Bind address (default: {QueueConfig.host}).
 -p, --port            NUM   Port number (default: {QueueConfig.port}).
 -k, --auth            KEY   Cryptography key to secure server.
-    --serve-forever         Do not halt even if all tasks finished.
+    --forever               Do not halt even if all tasks finished.
+    --restart               Restart scheduling from last completed task.
 -b, --bundlesize      NUM   Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
 -t, --bundlewait      SEC   Seconds to wait before flushing tasks (with FILE, default: {DEFAULT_BUNDLEWAIT}).
 -r, --max-retries     NUM   Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
@@ -663,8 +671,11 @@ class ServerApp(Application):
     interface.add_argument('-r', '--max-retries', type=int, default=max_retries)
     interface.add_argument('--eager', action='store_true')
 
-    serve_forever_mode: bool = False
-    interface.add_argument('--serve-forever', action='store_true', dest='serve_forever_mode')
+    forever_mode: bool = False
+    interface.add_argument('--forever', action='store_true', dest='forever_mode')
+
+    restart_mode: bool = False
+    interface.add_argument('--restart', action='store_true', dest='restart_mode')
 
     host: str = QueueConfig.host
     interface.add_argument('-H', '--bind', default=host, dest='host')
@@ -684,32 +695,29 @@ class ServerApp(Application):
     output_interface.add_argument('--print', action='store_true', dest='print_mode')
     output_interface.add_argument('-f', '--failures', default=None, dest='failure_path')
 
-    restart_mode: bool = False
-    interface.add_argument('--restart', action='store_true', dest='restart_mode')
-
     def run(self) -> None:
         """Run server."""
-        if self.serve_forever_mode:
+        if self.forever_mode:
             serve_forever(bundlesize=self.bundlesize, address=(self.host, self.port), auth=self.auth,
                           live=self.live_mode, redirect_failures=self.failure_stream, max_retries=self.max_retries)
         else:
             serve_from(source=self.input_stream, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
                        address=(self.host, self.port), auth=self.auth, max_retries=self.max_retries,
-                       live=self.live_mode, redirect_failures=self.failure_stream)
+                       live=self.live_mode, redirect_failures=self.failure_stream, restart_mode=self.restart_mode)
 
     def check_args(self):
         """Fail particular argument combinations."""
-        if self.filepath and self.serve_forever_mode:
-            raise ArgumentError('Cannot specify both FILE and --serve-forever')
-        if self.filepath is None and not self.serve_forever_mode:
+        if self.filepath and self.forever_mode:
+            raise ArgumentError('Cannot specify both FILE and --forever')
+        if self.filepath is None and not self.forever_mode:
             self.filepath = '-'  # NOTE: assume STDIN
-        if self.restart_mode:
-            raise ArgumentError('--restart mode is not yet implemented')
+        if self.restart_mode and self.forever_mode:
+            raise ArgumentError('Using --forever with --restart is invalid')
 
     @cached_property
     def input_stream(self) -> Optional[IO]:
         """Input IO stream for task args."""
-        if self.serve_forever_mode or self.restart_mode:
+        if self.forever_mode or self.restart_mode:
             return None
         else:
             return sys.stdin if self.filepath == '-' else open(self.filepath, mode='r')

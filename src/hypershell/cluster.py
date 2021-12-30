@@ -48,17 +48,18 @@ class LocalCluster(Thread):
     server: ServerThread
     client: ClientThread
 
-    def __init__(self, source: Iterable[str] = None, template: str = DEFAULT_TEMPLATE,
+    def __init__(self,
+                 source: Iterable[str] = None, template: str = DEFAULT_TEMPLATE,
+                 forever_mode: bool = False, restart_mode: bool = False,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, live: bool = False,
                  num_tasks: int = 1, redirect_failures: IO = None,
                  redirect_output: IO = None, redirect_errors: IO = None) -> None:
         """Initialize server and client threads."""
         auth = secrets.token_hex(64)
-        self.server = ServerThread(source=source, auth=auth, live=live,
-                                   bundlesize=bundlesize, bundlewait=bundlewait,
-                                   max_retries=max_retries, eager=eager,
-                                   redirect_failures=redirect_failures)
+        self.server = ServerThread(source=source, auth=auth, live=live, bundlesize=bundlesize, bundlewait=bundlewait,
+                                   max_retries=max_retries, eager=eager, forever_mode=forever_mode,
+                                   restart_mode=restart_mode, redirect_failures=redirect_failures)
         self.client = ClientThread(num_tasks=num_tasks, template=template, auth=auth,
                                    bundlesize=bundlesize, bundlewait=bundlewait,
                                    redirect_output=redirect_output, redirect_errors=redirect_errors)
@@ -88,6 +89,7 @@ class RemoteCluster(Thread):
 
     def __init__(self,
                  source: Iterable[str] = None, template: str = DEFAULT_TEMPLATE,
+                 forever_mode: bool = False, restart_mode: bool = False,
                  launcher: str = 'mpirun', launcher_args: List[str] = None,
                  bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port),
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
@@ -97,6 +99,7 @@ class RemoteCluster(Thread):
         auth = secrets.token_hex(64)
         self.server = ServerThread(source=source, auth=auth, live=live, bundlesize=bundlesize,
                                    bundlewait=bundlewait, max_retries=max_retries, eager=eager, address=bind,
+                                   forever_mode=forever_mode, restart_mode=restart_mode,
                                    redirect_failures=redirect_failures)
         launcher_args = '' if launcher_args is None else ' '.join(launcher_args)
         self.client_argv = (f'{launcher} {launcher_args} {remote_exe} client -H {HOSTNAME} -p {bind[1]} '
@@ -142,8 +145,8 @@ def run_cluster(**options) -> None:
 
 APP_NAME = 'hyper-shell cluster'
 APP_USAGE = f"""\
-usage: hyper-shell cluster [-h] [FILE] [-N NUM] [-t CMD] [-b SIZE] [-w SEC] [--no-db | --restart]  
-                           [-r NUM [--eager]]  [-o PATH] [-e PATH] [-f PATH]
+usage: hyper-shell cluster [-h] [FILE | --restart | --forever] [--no-db] [-N NUM] [-t CMD] 
+                           [-b SIZE] [-w SEC] [-o PATH] [-e PATH] [-f PATH] [-r NUM [--eager]] 
                            [--ssh HOST... | --mpi | --launcher=ARGS...]\
 """
 APP_HELP = f"""\
@@ -168,7 +171,8 @@ options:
 -r, --max-retries  NUM   Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
     --eager              Schedule failed tasks before new tasks.
     --no-db              Disable database (submit directly to clients).
-    --restart            Include previously failed or interrupted tasks.
+    --forever            Schedule forever.
+    --restart            Start scheduling from last completed task.
 -o, --output       PATH  File path for task outputs (default: <stdout>).
 -e, --errors       PATH  File path for task errors (default: <stderr>).
 -f, --failures     PATH  File path to write failed task args (default: <none>).
@@ -206,6 +210,9 @@ class ClusterApp(Application):
     live_mode: bool = False
     interface.add_argument('--no-db', action='store_true', dest='live_mode')
 
+    forever_mode: bool = False
+    interface.add_argument('--forever', action='store_true', dest='forever_mode')
+
     restart_mode: bool = False
     interface.add_argument('--restart', action='store_true', dest='restart_mode')
 
@@ -234,10 +241,17 @@ class ClusterApp(Application):
     def run(self) -> None:
         """Run cluster."""
         log.info(f'Reading tasks from {self.filename}')
+        if self.live_mode and self.forever_mode:
+            raise ArgumentError('Using --forever with --no-db is invalid')
+        if self.live_mode and self.restart_mode:
+            raise ArgumentError('Using --restart with --no-db is invalid')
+        if self.forever_mode and self.restart_mode:
+            raise ArgumentError('Using --forever with --restart is invalid')
         launcher = self.launchers.get(self.mode)
         launcher(source=self.source, num_tasks=self.num_tasks, template=self.template,
                  bundlesize=self.bundlesize, bundlewait=self.bundlewait,
                  max_retries=self.max_retries, live=self.live_mode,
+                 forever_mode=self.forever_mode, restart_mode=self.restart_mode,
                  redirect_failures=self.failure_stream)
 
     def run_local(self, **options) -> None:
