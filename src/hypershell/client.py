@@ -112,7 +112,7 @@ class ClientScheduler(StateMachine):
     @staticmethod
     def start() -> SchedulerState:
         """Jump to GET_REMOTE state."""
-        log.debug('Started scheduler')
+        log.debug('Started (scheduler)')
         return SchedulerState.GET_REMOTE
 
     def get_remote(self) -> SchedulerState:
@@ -121,10 +121,10 @@ class ClientScheduler(StateMachine):
             self.bundle = self.queue.scheduled.get(timeout=2)
             self.queue.scheduled.task_done()
             if self.bundle is not None:
-                log.debug(f'Received {len(self.bundle)} task(s) from server')
+                log.debug(f'Received {len(self.bundle)} task(s)')
                 return SchedulerState.UNPACK
             else:
-                log.debug('Received disconnect')
+                log.debug('Disconnect received')
                 return SchedulerState.HALT
         except QueueEmpty:
             return SchedulerState.GET_REMOTE
@@ -172,6 +172,7 @@ class ClientSchedulerThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
+        log.warning('Stopping (scheduler)')
         self.machine.halt()
         log.debug('Stopping scheduler')
         super().stop(wait=wait, timeout=timeout)
@@ -236,7 +237,7 @@ class ClientCollector(StateMachine):
 
     def start(self) -> CollectorState:
         """Jump to GET_LOCAL state."""
-        log.debug('Started collector')
+        log.debug('Started (collector)')
         self.previous_send = datetime.now()
         return CollectorState.GET_LOCAL
 
@@ -305,6 +306,7 @@ class ClientCollectorThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
+        log.warning('Stopping (collector)')
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
@@ -362,7 +364,7 @@ class TaskExecutor(StateMachine):
 
     def start(self) -> TaskState:
         """Jump to GET_LOCAL state."""
-        log.debug(f'Started executor ({self.id})')
+        log.debug(f'Started (executor-{self.id})')
         return TaskState.GET_LOCAL
 
     def get_local(self) -> TaskState:
@@ -427,6 +429,7 @@ class TaskThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
+        log.warning(f'Stopping (executor-{self.id})')
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
@@ -532,6 +535,7 @@ class ClientHeartbeatThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
+        log.warning('Stopping (heartbeat)')
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
@@ -573,7 +577,7 @@ class ClientThread(Thread):
 
     def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
-        log.info(f'Starting client with {self.num_tasks} task executor(s)')
+        log.info(f'Started ({self.num_tasks} executors)')
         with self.client:
             self.start_threads()
             self.wait_scheduler()
@@ -593,6 +597,7 @@ class ClientThread(Thread):
 
     def wait_scheduler(self) -> None:
         """Wait for all tasks to be completed."""
+        log.trace('Waiting (scheduler)')
         self.scheduler.join()
 
     def wait_collector(self) -> None:
@@ -606,6 +611,7 @@ class ClientThread(Thread):
         for _ in self.executors:
             self.inbound.put(None)  # signal executors to shut down
         for thread in self.executors:
+            log.trace(f'Waiting (executor-{thread.id})')
             thread.join()
 
     def wait_heartbeat(self) -> None:
@@ -624,7 +630,7 @@ class ClientThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
-        log.debug('Stopping client')
+        log.warning('Stopping')
         self.scheduler.stop(wait=wait, timeout=timeout)
         self.collector.stop(wait=wait, timeout=timeout)
         super().stop(wait=wait, timeout=timeout)

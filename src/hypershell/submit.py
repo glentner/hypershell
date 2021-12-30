@@ -75,7 +75,8 @@ class LoaderState(State, Enum):
     START = 0
     GET = 1
     PUT = 2
-    HALT = 3
+    FINAL = 3
+    HALT = 4
 
 
 class Loader(StateMachine):
@@ -99,12 +100,13 @@ class Loader(StateMachine):
             LoaderState.START: self.start,
             LoaderState.GET: self.get_task,
             LoaderState.PUT: self.put_task,
+            LoaderState.FINAL: self.finalize,
         }
 
     @staticmethod
     def start() -> LoaderState:
         """Jump to GET state."""
-        log.debug('Starting loader')
+        log.debug('Started (loader)')
         return LoaderState.GET
 
     def get_task(self) -> LoaderState:
@@ -114,7 +116,7 @@ class Loader(StateMachine):
             log.trace(f'Loaded task ({self.task.args})')
             return LoaderState.PUT
         except StopIteration:
-            return LoaderState.HALT
+            return LoaderState.FINAL
 
     def put_task(self) -> LoaderState:
         """Enqueue loaded task."""
@@ -123,6 +125,12 @@ class Loader(StateMachine):
             return LoaderState.GET
         except QueueFull:
             return LoaderState.PUT
+
+    @staticmethod
+    def finalize() -> LoaderState:
+        """Return HALT."""
+        log.debug('Done (loader)')
+        return LoaderState.HALT
 
 
 class LoaderThread(Thread):
@@ -139,6 +147,7 @@ class LoaderThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
+        log.warning('Stopping (loader)')
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
@@ -188,7 +197,7 @@ class DatabaseCommitter(StateMachine):
 
     def start(self) -> DatabaseCommitterState:
         """Jump to GET state."""
-        log.debug('Starting committer (database)')
+        log.debug('Started (committer: database)')
         self.previous_submit = datetime.now()
         return DatabaseCommitterState.GET
 
@@ -220,6 +229,7 @@ class DatabaseCommitter(StateMachine):
     def finalize(self) -> DatabaseCommitterState:
         """Force final commit of tasks and halt."""
         self.commit()
+        log.debug('Done (committer: database)')
         return DatabaseCommitterState.HALT
 
 
@@ -238,6 +248,7 @@ class DatabaseCommitterThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
+        log.warning('Stopping (committer: database)')
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
@@ -259,15 +270,17 @@ class SubmitThread(Thread):
 
     def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
-        log.debug('Starting submitter')
+        log.info('Started')
         self.loader.start()
         self.committer.start()
         self.loader.join()
         self.queue.put(None)
         self.committer.join()
+        log.info('Done')
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
+        log.warning('Stopping')
         self.loader.stop(wait=wait, timeout=timeout)
         self.queue.put(None)
         self.committer.stop(wait=wait, timeout=timeout)
@@ -323,7 +336,7 @@ class QueueCommitter(StateMachine):
 
     def start(self) -> QueueCommitterState:
         """Jump to GET state."""
-        log.debug('Starting committer (no database, direct to server)')
+        log.debug('Started (committer: no database)')
         self.previous_submit = datetime.now()
         return QueueCommitterState.GET
 
@@ -372,6 +385,7 @@ class QueueCommitter(StateMachine):
         """Force final commit of tasks and halt."""
         self.pack_bundle()
         self.commit()
+        log.debug('Done (committer: no database)')
         return QueueCommitterState.HALT
 
 
@@ -390,6 +404,7 @@ class QueueCommitterThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
+        log.warning('Stopping (committer: no database)')
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
@@ -419,18 +434,20 @@ class LiveSubmitThread(Thread):
 
     def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
-        log.debug('Starting submitter (live)')
+        log.info('Started')
         with self.client:
             self.loader.start()
             self.committer.start()
+            log.trace('Waiting (loader)')
             self.loader.join()
             self.local.put(None)
+            log.trace('Waiting (committer)')
             self.committer.join()
-            log.trace(f'Registering final task ({self.committer.final_task_id})')
-            self.client.terminator.put(self.committer.final_task_id.encode())
+        log.info('Done')
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
+        log.warning('Stopping')
         self.loader.stop(wait=wait, timeout=timeout)
         self.local.put(None)
         self.committer.stop(wait=wait, timeout=timeout)

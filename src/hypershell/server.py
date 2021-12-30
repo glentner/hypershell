@@ -137,7 +137,7 @@ class Scheduler(StateMachine):
     @staticmethod
     def start() -> SchedulerState:
         """Jump to LOAD state."""
-        log.debug('Starting scheduler')
+        log.debug('Started (scheduler)')
         task_count = Task.count()
         tasks_remaining = Task.count_remaining()
         if task_count > 0:
@@ -205,7 +205,7 @@ class SchedulerThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
-        log.debug('Stopping scheduler')
+        log.warning('Stopping (scheduler)')
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
@@ -221,7 +221,8 @@ class ReceiverState(State, Enum):
     UNLOAD = 1
     UNPACK = 2
     UPDATE = 3
-    HALT = 4
+    FINAL = 4
+    HALT = 5
 
 
 class Receiver(StateMachine):
@@ -253,12 +254,13 @@ class Receiver(StateMachine):
             ReceiverState.UNLOAD: self.unload_bundle,
             ReceiverState.UNPACK: self.unpack_bundle,
             ReceiverState.UPDATE: self.update_tasks,
+            ReceiverState.FINAL: self.finalize,
         }
 
     @staticmethod
     def start() -> ReceiverState:
         """Jump to UNLOAD state."""
-        log.debug('Starting receiver')
+        log.debug('Started (receiver)')
         return ReceiverState.UNLOAD
 
     def unload_bundle(self) -> ReceiverState:
@@ -266,7 +268,7 @@ class Receiver(StateMachine):
         try:
             self.bundle = self.queue.completed.get(timeout=2)
             self.queue.completed.task_done()
-            return ReceiverState.UNPACK if self.bundle else ReceiverState.HALT
+            return ReceiverState.UNPACK if self.bundle else ReceiverState.FINAL
         except QueueEmpty:
             return ReceiverState.UNLOAD
 
@@ -287,6 +289,12 @@ class Receiver(StateMachine):
                     print(task.args, file=self.redirect_failures)
         return ReceiverState.UNLOAD
 
+    @staticmethod
+    def finalize() -> ReceiverState:
+        """Return HALT."""
+        log.debug('Done (receiver)')
+        return ReceiverState.HALT
+
 
 class ReceiverThread(Thread):
     """Run receiver within dedicated thread."""
@@ -303,98 +311,7 @@ class ReceiverThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
-        log.debug('Stopping receiver')
-        self.machine.halt()
-        super().stop(wait=wait, timeout=timeout)
-
-
-class TerminatorState(State, Enum):
-    """Finite states of the terminator machine."""
-    START = 0
-    WAIT_INITIAL = 1
-    WAIT_FINAL = 2
-    HALT = 3
-
-
-class Terminator(StateMachine):
-    """Await final task signals."""
-
-    queue: QueueServer
-    final_task_id: str = None
-
-    state = TerminatorState.START
-    states = TerminatorState
-
-    def __init__(self, queue: QueueServer) -> None:
-        """Initialize with queue server."""
-        self.queue = queue
-
-    @cached_property
-    def actions(self) -> Dict[TerminatorState, Callable[[], TerminatorState]]:
-        return {
-            TerminatorState.START: self.start,
-            TerminatorState.WAIT_INITIAL: self.wait_initial,
-            TerminatorState.WAIT_FINAL: self.wait_final
-        }
-
-    @staticmethod
-    def start() -> TerminatorState:
-        """Jump to WAIT_INITIAL state."""
-        log.debug('Starting terminator')
-        return TerminatorState.WAIT_INITIAL
-
-    def wait_initial(self) -> TerminatorState:
-        """Wait for first task id from scheduler/submitter."""
-        try:
-            task_id = self.queue.terminator.get(timeout=2)
-            self.queue.terminator.task_done()
-            if task_id is not None:
-                self.final_task_id = task_id.decode()
-                log.trace(f'Awaiting final task from clients ({self.final_task_id})')
-                return TerminatorState.WAIT_FINAL
-            else:
-                return TerminatorState.HALT
-        except QueueEmpty:
-            return TerminatorState.WAIT_INITIAL
-
-    def wait_final(self) -> TerminatorState.WAIT_FINAL:
-        """Wait for client given task IDs and HALT if matching."""
-        try:
-            task_id = self.queue.terminator.get(timeout=2)
-            self.queue.terminator.task_done()
-            if task_id is not None:
-                if task_id.decode() == self.final_task_id:
-                    # NOTE: if the final task is long-lived and the other clients are in a holding pattern
-                    # there can be a timing issue where the server gets the final task id but
-                    # the other clients are timing out on a 1-second delay checking their local queues.
-                    # So we need to give them time to disconnect when they get the signal
-                    log.trace(f'Received final task ({self.final_task_id})')
-                    time.sleep(2)
-                    return TerminatorState.HALT
-                else:
-                    return TerminatorState.WAIT_FINAL
-            else:
-                return TerminatorState.HALT
-        except QueueEmpty:
-            return TerminatorState.WAIT_FINAL
-
-
-class TerminatorThread(Thread):
-    """Run terminator within dedicated thread."""
-
-    def __init__(self, queue: QueueServer) -> None:
-        """Initialize machine."""
-        super().__init__(name='hypershell-terminator')
-        self.machine = Terminator(queue=queue)
-
-    def run_with_exceptions(self) -> None:
-        """Run machine."""
-        self.machine.run()
-        log.debug('Done (terminator)')
-
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
-        """Stop machine."""
-        log.debug('Stopping terminator')
+        log.warning('Stopping (receiver)')
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
@@ -508,7 +425,7 @@ class HeartMonitorThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
-        log.debug('Stopping (heartbeat)')
+        log.warning('Stopping (heartbeat)')
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
@@ -554,7 +471,7 @@ class ServerThread(Thread):
 
     def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
-        log.info('Starting server')
+        log.info('Started')
         with self.queue:
             self.start_threads()
             self.wait_submitter()
@@ -578,11 +495,13 @@ class ServerThread(Thread):
     def wait_submitter(self) -> None:
         """Wait on task submission to complete."""
         if self.submitter is not None:
+            log.trace('Waiting (submitter)')
             self.submitter.join()
 
     def wait_scheduler(self) -> None:
         """Wait scheduling until complete."""
         if self.scheduler is not None:
+            log.trace('Waiting (scheduler)')
             self.scheduler.join()
             self.queue.terminator.put(self.scheduler.final_task_id.encode())
             # NOTE: final_task_id triggers terminator to switch to waiting on clients
@@ -613,20 +532,14 @@ class ServerThread(Thread):
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
+        log.warning('Stopping')
         if self.submitter is not None:
-            log.trace('Waiting on submitter')
             self.submitter.stop(wait=wait, timeout=timeout)
         if self.scheduler is not None:
-            log.trace('Waiting on scheduler')
             self.scheduler.stop(wait=wait, timeout=timeout)
-        self.queue.completed.put(None)
-        log.trace('Waiting on receiver')
-        self.receiver.stop(wait=wait, timeout=timeout)
-        log.trace('Waiting on terminator')
-        self.terminator.stop(wait=wait, timeout=timeout)
-        log.trace('Waiting on heart monitor')
         self.heartmonitor.stop(wait=wait, timeout=timeout)
-        log.trace('Waiting on server')
+        self.queue.completed.put(None)
+        self.receiver.stop(wait=wait, timeout=timeout)
         super().stop(wait=wait, timeout=timeout)
 
 
