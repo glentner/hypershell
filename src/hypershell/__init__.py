@@ -10,12 +10,13 @@ import logging
 import functools
 
 # external libs
-from cmdkit.app import Application, ApplicationGroup
+from cmdkit.app import Application, ApplicationGroup, exit_status
 from cmdkit.cli import Interface
+from cmdkit.config import ConfigurationError
 
 # internal libs
 from hypershell.__meta__ import __version__, __authors__, __description__, __contact__, __copyright__, __website__
-from hypershell.core.exceptions import handle_uncaught_exception
+from hypershell.core.exceptions import handle_uncaught_exception, handle_exception
 from hypershell.core.config import config, init_paths
 from hypershell.core.logging import initialize_logging
 from hypershell.submit import submit_from, submit_file, SubmitThread, SubmitApp
@@ -68,6 +69,7 @@ Copyright {__copyright__}
 
 Application.exceptions = {
     Exception: functools.partial(handle_uncaught_exception, logger=log),
+    ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
 }
 
 
