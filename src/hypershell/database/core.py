@@ -14,7 +14,7 @@ from urllib.parse import urlencode
 
 # external libs
 from cmdkit.config import Namespace, ConfigurationError
-from sqlalchemy import create_engine
+from sqlalchemy.engine import create_engine, Engine
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.exc import ArgumentError
@@ -198,16 +198,28 @@ if config.provider not in providers:
 
 # NOTE: override provider with correct library implementation name
 params = Namespace({**config, 'provider': providers[config.provider]})
-url = DatabaseURL.from_namespace(params)
-try:
-    engine = create_engine(url.encode(), connect_args=connect_args, **engine_config)
-    if engine_echo:
-        logging.getLogger('sqlalchemy.engine').addHandler(handler)
-        logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
-except ArgumentError as error:
-    raise ConfigurationError(f'Database URL: {repr(url)}') from error
+
+
+def get_url() -> DatabaseURL:
+    """Wraps parsing within function."""
+    try:
+        return DatabaseURL.from_namespace(params)
+    except AttributeError as error:
+        raise ConfigurationError(str(error)) from error
+
+
+def get_engine() -> Engine:
+    """Wraps engine creation."""
+    try:
+        if engine_echo:
+            logging.getLogger('sqlalchemy.engine').addHandler(handler)
+            logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+        return create_engine(get_url().encode(), connect_args=connect_args, **engine_config)
+    except ArgumentError as error:
+        raise ConfigurationError(f'DatabaseURL: {error}') from error
 
 
 # manage thread-local sessions
+engine = get_engine()
 factory = sessionmaker(bind=engine)
 Session = scoped_session(factory)
