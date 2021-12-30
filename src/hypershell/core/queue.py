@@ -15,8 +15,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 # internal libs
-from .logging import HOSTNAME
-from .config import default, config as _config
+from hypershell.core.config import default, config as _config
 
 # public interface
 __all__ = ['QueueConfig', 'QueueInterface', 'QueueServer', 'QueueClient']

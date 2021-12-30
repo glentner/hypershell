@@ -14,7 +14,7 @@ from datetime import datetime
 from cmdkit.app import exit_status
 
 # internal libs
-from .config import get_site
+from hypershell.core.config import get_site
 
 # public interface
 __all__ = ['handle_disconnect', 'handle_exception', 'handle_uncaught_exception', ]

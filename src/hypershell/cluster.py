@@ -26,8 +26,7 @@ from cmdkit.app import Application
 from cmdkit.cli import Interface, ArgumentError
 
 # internal libs
-from hypershell import config
-from hypershell.core.config import load_task_env
+from hypershell.core.config import config, load_task_env
 from hypershell.core.queue import QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.logging import Logger, HOSTNAME

@@ -16,7 +16,7 @@ from datetime import datetime
 from dataclasses import dataclass
 
 # internal libs
-from .logging import HOSTNAME
+from hypershell.core.logging import HOSTNAME
 
 
 class ClientState(Enum):

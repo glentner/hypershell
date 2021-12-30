@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import Optional
 
 # standard libs
-from abc import ABC, abstractmethod
 import threading
+from abc import ABC, abstractmethod
 
 # public interface
 __all__ = ['Thread', ]
