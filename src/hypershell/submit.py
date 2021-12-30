@@ -342,7 +342,7 @@ class QueueCommitter(StateMachine):
     def get_task(self) -> QueueCommitterState:
         """Get tasks from local queue and check buffer."""
         try:
-            task = self.local.get(timeout=2)
+            task = self.local.get(timeout=1)
         except QueueEmpty:
             return QueueCommitterState.GET
         if task is not None:
