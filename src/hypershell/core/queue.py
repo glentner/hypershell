@@ -53,9 +53,7 @@ class QueueInterface(BaseManager, ABC):
     config: QueueConfig
     scheduled: JoinableQueue[Optional[List[bytes]]]
     completed: JoinableQueue[Optional[List[bytes]]]
-    connected: JoinableQueue[Optional[List[bytes]]]
     heartbeat: JoinableQueue[Optional[bytes]]
-    terminator: JoinableQueue[Optional[bytes]]
 
     def __init__(self, config: QueueConfig) -> None:
         """Initialize queue interface."""
@@ -83,14 +81,10 @@ class QueueServer(QueueInterface):
         """Initialize queues and start server."""
         self.scheduled = JoinableQueue(maxsize=self.config.size)
         self.completed = JoinableQueue(maxsize=self.config.size)
-        self.connected = JoinableQueue(maxsize=0)  # Note: platform specific max (unbounded in practice)
         self.heartbeat = JoinableQueue(maxsize=0)
-        self.terminator = JoinableQueue(maxsize=1)
         self.register('_get_scheduled', callable=self._get_scheduled)
         self.register('_get_completed', callable=self._get_completed)
-        self.register('_get_connected', callable=self._get_connected)
         self.register('_get_heartbeat', callable=self._get_heartbeat)
-        self.register('_get_terminator', callable=self._get_terminator)
         super().start()
 
     def _get_scheduled(self) -> JoinableQueue[Optional[List[bytes]]]:
@@ -99,14 +93,8 @@ class QueueServer(QueueInterface):
     def _get_completed(self) -> JoinableQueue[Optional[List[bytes]]]:
         return self.completed
 
-    def _get_connected(self) -> JoinableQueue[Optional[List[bytes]]]:
-        return self.connected
-
     def _get_heartbeat(self) -> JoinableQueue[Optional[bytes]]:
         return self.heartbeat
-
-    def _get_terminator(self) -> JoinableQueue[Optional[bytes]]:
-        return self.terminator
 
     def __enter__(self) -> QueueServer:
         """Start the server."""
@@ -123,25 +111,17 @@ class QueueClient(QueueInterface):
 
     _get_scheduled: Callable[[], JoinableQueue[Optional[List[bytes]]]]
     _get_completed: Callable[[], JoinableQueue[Optional[List[bytes]]]]
-
-    _get_connected: Callable[[], JoinableQueue[Optional[List[bytes]]]]
     _get_heartbeat: Callable[[], JoinableQueue[Optional[bytes]]]
-    _get_terminator: Callable[[], JoinableQueue[Optional[bytes]]]
 
     def connect(self) -> None:
         """Connect to server."""
         self.register('_get_scheduled')
         self.register('_get_completed')
-        self.register('_get_connected')
         self.register('_get_heartbeat')
-        self.register('_get_terminator')
         super().connect()
         self.scheduled = self._get_scheduled()
         self.completed = self._get_completed()
-        self.connected = self._get_connected()
         self.heartbeat = self._get_heartbeat()
-        self.terminator = self._get_terminator()
-        self.connected.put(HOSTNAME.encode())
 
     def __enter__(self) -> QueueClient:
         """Connect to server."""

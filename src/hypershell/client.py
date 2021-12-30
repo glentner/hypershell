@@ -86,7 +86,6 @@ class ClientScheduler(StateMachine):
 
     task: Task
     tasks: List[Task]
-    final_task_id: str = None
 
     state = SchedulerState.START
     states = SchedulerState
@@ -132,7 +131,6 @@ class ClientScheduler(StateMachine):
     def unpack_bundle(self) -> SchedulerState:
         """Unpack latest bundle of tasks."""
         self.tasks = [Task.unpack(data) for data in self.bundle]
-        self.final_task_id = self.tasks[-1].id
         return SchedulerState.POP_TASK
 
     def pop_task(self) -> SchedulerState:
@@ -174,13 +172,7 @@ class ClientSchedulerThread(Thread):
         """Stop machine."""
         log.warning('Stopping (scheduler)')
         self.machine.halt()
-        log.debug('Stopping scheduler')
         super().stop(wait=wait, timeout=timeout)
-
-    @property
-    def final_task_id(self) -> Optional[str]:
-        """Task id of the last task from the last bundle."""
-        return self.machine.final_task_id
 
 
 DEFAULT_BUNDLESIZE: int = default.client.bundlesize
@@ -415,10 +407,13 @@ class TaskExecutor(StateMachine):
 class TaskThread(Thread):
     """Run task executor within dedicated thread."""
 
+    id: int
+
     def __init__(self,
                  id: int, inbound: Queue[Optional[str]], outbound: Queue[Optional[str]],
                  template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None) -> None:
         """Initialize task executor."""
+        self.id = id
         super().__init__(name=f'hypershell-executor-{id}')
         self.machine = TaskExecutor(id=id, inbound=inbound, outbound=outbound, template=template,
                                     redirect_output=redirect_output, redirect_errors=redirect_errors)
@@ -583,7 +578,6 @@ class ClientThread(Thread):
             self.wait_scheduler()
             self.wait_executors()
             self.wait_collector()
-            self.register_final_task()
             self.wait_heartbeat()
         log.info('Done')
 
@@ -619,14 +613,6 @@ class ClientThread(Thread):
         log.trace('Waiting (heartbeat)')
         self.heartbeat.signal_finished()
         self.heartbeat.join()
-
-    def register_final_task(self) -> None:
-        """Send final task ID to server."""
-        if self.scheduler.final_task_id:
-            log.trace(f'Registering final task ({self.scheduler.final_task_id})')
-            self.client.terminator.put(self.scheduler.final_task_id.encode())
-        else:
-            log.warning('No tasks received')
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""

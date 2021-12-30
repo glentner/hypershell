@@ -50,7 +50,7 @@ import time
 import logging
 from enum import Enum
 from datetime import datetime, timedelta
-from functools import cached_property, partial
+from functools import cached_property
 from queue import Empty as QueueEmpty, Full as QueueFull
 
 # external libs
@@ -73,7 +73,6 @@ __all__ = ['serve_from', 'serve_file', 'serve_forever', 'ServerThread', 'ServerA
            'DEFAULT_BUNDLESIZE', 'DEFAULT_ATTEMPTS', ]
 
 
-# module level logger
 log: Logger = logging.getLogger(__name__)
 
 
@@ -167,7 +166,6 @@ class Scheduler(StateMachine):
 
     def pack_bundle(self) -> SchedulerState:
         """Pack tasks into bundle (list)."""
-        self.final_task_id = self.tasks[-1].id
         self.bundle = [task.pack() for task in self.tasks]
         return SchedulerState.POST
 
@@ -209,11 +207,6 @@ class SchedulerThread(Thread):
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
 
-    @property
-    def final_task_id(self) -> Optional[str]:
-        """The task id of the last task of the last bundle scheduled."""
-        return self.machine.final_task_id
-
 
 class ReceiverState(State, Enum):
     """Finite states for receiver."""
@@ -231,8 +224,6 @@ class Receiver(StateMachine):
     tasks: List[Task]
     queue: QueueServer
     bundle: List[bytes]
-
-    final_task_id: str
 
     live: bool
     redirect_failures: IO
@@ -266,7 +257,7 @@ class Receiver(StateMachine):
     def unload_bundle(self) -> ReceiverState:
         """Get the next bundle from the completed task queue."""
         try:
-            self.bundle = self.queue.completed.get(timeout=2)
+            self.bundle = self.queue.completed.get(timeout=1)
             self.queue.completed.task_done()
             return ReceiverState.UNPACK if self.bundle else ReceiverState.FINAL
         except QueueEmpty:
@@ -307,7 +298,6 @@ class ReceiverThread(Thread):
     def run_with_exceptions(self) -> None:
         """Run machine."""
         self.machine.run()
-        log.debug('Done (receiver)')
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
@@ -319,10 +309,13 @@ class ReceiverThread(Thread):
 class HeartbeatState(State, Enum):
     """Finite states of the terminator machine."""
     START = 0
-    GET = 1
-    CHECK = 2
-    FINAL = 3
-    HALT = 4
+    NEXT = 1
+    UPDATE = 2
+    SWITCH = 3
+    CHECK = 4
+    SIGNAL = 5
+    FINAL = 6
+    HALT = 7
 
 
 DEFAULT_EVICT: int = default.server.evict
@@ -333,10 +326,14 @@ class HeartMonitor(StateMachine):
 
     queue: QueueServer
     beats: Dict[str, Heartbeat]
-
     last_check: datetime
     wait_check: timedelta
     evict_after: timedelta
+
+    startup_phase: bool = True  # should not halt until at least one client
+    scheduler_done: bool = False  # set by parent thread when scheduling is over
+    should_signal: bool = False  # set by parent thread to signal clients
+    latest_heartbeat: Heartbeat = None
 
     state = HeartbeatState.START
     states = HeartbeatState
@@ -356,53 +353,84 @@ class HeartMonitor(StateMachine):
     def actions(self) -> Dict[HeartbeatState, Callable[[], HeartbeatState]]:
         return {
             HeartbeatState.START: self.start,
-            HeartbeatState.GET: self.get_heartbeat,
-            HeartbeatState.CHECK: self.check_all,
+            HeartbeatState.NEXT: self.get_next,
+            HeartbeatState.UPDATE: self.update_client,
+            HeartbeatState.SWITCH: self.switch_mode,
+            HeartbeatState.CHECK: self.check_clients,
+            HeartbeatState.SIGNAL: self.signal_clients,
             HeartbeatState.FINAL: self.finalize,
         }
 
     @staticmethod
     def start() -> HeartbeatState:
         """Jump to WAIT_INITIAL state."""
-        log.debug('Starting heart monitor')
-        return HeartbeatState.GET
+        log.debug('Started (heartbeat)')
+        return HeartbeatState.NEXT
 
-    def get_heartbeat(self) -> HeartbeatState:
+    def get_next(self) -> HeartbeatState:
         """Get and stash heartbeat from clients."""
         try:
             hb_data = self.queue.heartbeat.get(timeout=1)
             self.queue.heartbeat.task_done()
+            self.startup_phase = False
             if not hb_data:
                 return HeartbeatState.FINAL
             else:
-                hb = Heartbeat.unpack(hb_data)
-                if hb.state is not ClientState.FINISHED:
-                    log.trace(f'Heartbeat - running ({hb.host}: {hb.uuid})')
-                    self.beats[hb.uuid] = hb
-                else:
-                    log.trace(f'Client disconnected ({hb.host}: {hb.uuid})')
-                    if hb.uuid in self.beats:
-                        self.beats.pop(hb.uuid)
-                    if not self.beats:
-                        return HeartbeatState.FINAL
+                self.latest_heartbeat = Heartbeat.unpack(hb_data)
+                return HeartbeatState.UPDATE
         except QueueEmpty:
-            pass
-        now = datetime.now().astimezone()
+            return HeartbeatState.SWITCH
+
+    def update_client(self) -> HeartbeatState:
+        """Update client with heartbeat or disconnect."""
+        hb = self.latest_heartbeat
+        if hb.state is not ClientState.FINISHED:
+            if hb.uuid not in self.beats:
+                log.debug(f'Registered client ({hb.host}: {hb.uuid})')
+            else:
+                log.trace(f'Heartbeat - running ({hb.host}: {hb.uuid})')
+            self.beats[hb.uuid] = hb
+            return HeartbeatState.SWITCH
+        else:
+            log.trace(f'Client disconnected ({hb.host}: {hb.uuid})')
+            if hb.uuid in self.beats:
+                self.beats.pop(hb.uuid)
+            return HeartbeatState.SWITCH
+
+    def switch_mode(self) -> HeartbeatState:
+        """Decide to bail, signal, check, or get another heartbeat."""
+        if self.startup_phase:
+            return HeartbeatState.NEXT
+        if self.should_signal:
+            return HeartbeatState.SIGNAL
+        if not self.beats and self.scheduler_done:
+            return HeartbeatState.FINAL
+        now = datetime.now()
         if (now - self.last_check) > self.wait_check:
             self.last_check = now
             return HeartbeatState.CHECK
         else:
-            return HeartbeatState.GET
+            return HeartbeatState.NEXT
 
-    def check_all(self) -> HeartbeatState:
+    def check_clients(self) -> HeartbeatState:
         """Check last heartbeat on all clients and evict if necessary."""
-        log.trace(f'Checking missed heartbeats')
-        for uuid, hb in self.beats.items():
+        log.debug(f'Check clients ({len(self.beats)} connected)')
+        for uuid in list(self.beats):
+            hb = self.beats.get(uuid)
             age = self.last_check - hb.time
             if age > self.evict_after:
                 log.warning(f'Evicting client ({hb.host}: {uuid})')
                 self.beats.pop(uuid)
-        return HeartbeatState.GET
+        return HeartbeatState.SWITCH
+
+    def signal_clients(self) -> HeartbeatState:
+        """Send shutdown signal to all connected clients."""
+        log.info(f'Signaling clients ({len(self.beats)} connected)')
+        for hb in self.beats.values():
+            self.queue.scheduled.put(None)
+            log.debug(f'Disconnect requested ({hb.host}: {hb.uuid})')
+        self.should_signal = False
+        return HeartbeatState.SWITCH
 
     @staticmethod
     def finalize() -> HeartbeatState:
@@ -423,6 +451,14 @@ class HeartMonitorThread(Thread):
         """Run machine."""
         self.machine.run()
 
+    def signal_clients(self) -> None:
+        """Set signal flag to post sentinel for each connected clients."""
+        self.machine.should_signal = True
+
+    def signal_scheduler_done(self) -> None:
+        """Set flag to tell heart monitor that scheduler is done."""
+        self.machine.scheduler_done = True
+
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
         log.warning('Stopping (heartbeat)')
@@ -437,7 +473,6 @@ class ServerThread(Thread):
     submitter: Optional[SubmitThread]
     scheduler: Optional[SchedulerThread]
     receiver: ReceiverThread
-    terminator: TerminatorThread
     heartmonitor: HeartMonitorThread
     live_mode: bool
 
@@ -465,7 +500,6 @@ class ServerThread(Thread):
             self.scheduler = SchedulerThread(queue=self.queue, bundlesize=bundlesize, attempts=max_retries + 1,
                                              eager=eager, forever_mode=forever_mode)
         self.receiver = ReceiverThread(queue=self.queue, live=self.live_mode, redirect_failures=redirect_failures)
-        self.terminator = TerminatorThread(queue=self.queue)
         self.heartmonitor = HeartMonitorThread(queue=self.queue, evict_after=evict_after)
         super().__init__(name='hypershell-server')
 
@@ -476,9 +510,7 @@ class ServerThread(Thread):
             self.start_threads()
             self.wait_submitter()
             self.wait_scheduler()
-            self.signal_clients()
-            self.wait_heartmonitor()
-            self.wait_terminator()
+            self.wait_heartbeat()
             self.wait_receiver()
         log.info('Done')
 
@@ -488,9 +520,8 @@ class ServerThread(Thread):
             self.submitter.start()
         if self.scheduler is not None:
             self.scheduler.start()
-        self.receiver.start()
-        self.terminator.start()
         self.heartmonitor.start()
+        self.receiver.start()
 
     def wait_submitter(self) -> None:
         """Wait on task submission to complete."""
@@ -503,31 +534,18 @@ class ServerThread(Thread):
         if self.scheduler is not None:
             log.trace('Waiting (scheduler)')
             self.scheduler.join()
-            self.queue.terminator.put(self.scheduler.final_task_id.encode())
-            # NOTE: final_task_id triggers terminator to switch to waiting on clients
 
-    def signal_clients(self) -> None:
-        """Send disconnect signal for each client."""
-        try:
-            log.info('Sending all-done to clients')
-            for hostname in iter(partial(self.queue.connected.get, timeout=1), None):
-                self.queue.scheduled.put(None)  # NOTE: one for each client
-                self.queue.connected.task_done()
-                log.trace(f'Disconnect request posted ({hostname.decode()})')
-        except QueueEmpty:
-            pass
-
-    def wait_heartmonitor(self) -> None:
+    def wait_heartbeat(self) -> None:
         """Wait for heartmonitor to stop."""
+        log.trace('Waiting (heartbeat)')
+        self.heartmonitor.signal_scheduler_done()
+        self.heartmonitor.signal_clients()
         self.heartmonitor.join()
-
-    def wait_terminator(self) -> None:
-        """Wait for last client to signal final task id."""
-        self.terminator.join()
-        self.queue.completed.put(None)  # signal receiver
 
     def wait_receiver(self) -> None:
         """Wait for receiver to stop."""
+        log.trace('Waiting (receiver)')
+        self.queue.completed.put(None)
         self.receiver.join()
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:

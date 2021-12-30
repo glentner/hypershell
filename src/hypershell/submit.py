@@ -309,7 +309,6 @@ class QueueCommitter(StateMachine):
     bundlesize: int
     bundlewait: int
     previous_submit: datetime
-    final_task_id: str = None
 
     state = QueueCommitterState.START
     states = QueueCommitterState
@@ -359,12 +358,9 @@ class QueueCommitter(StateMachine):
     def pack_bundle(self) -> QueueCommitterState:
         """Pack tasks into bundle for remote queue."""
         if self.tasks:
-            self.final_task_id = self.tasks[-1].id
             self.bundle = [task.pack() for task in self.tasks]
             return QueueCommitterState.COMMIT
         else:
-            # NOTE: we shouldn't get here - but rarely we do?
-            # We somehow get a wait time overflow and proceed here without any tasks
             return QueueCommitterState.GET
 
     def commit(self) -> QueueCommitterState:
@@ -407,11 +403,6 @@ class QueueCommitterThread(Thread):
         log.warning('Stopping (committer: no database)')
         self.machine.halt()
         super().stop(wait=wait, timeout=timeout)
-
-    @property
-    def final_task_id(self) -> Optional[str]:
-        """The task id of the last task of the last bundle committed."""
-        return self.machine.final_task_id
 
 
 class LiveSubmitThread(Thread):
