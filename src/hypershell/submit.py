@@ -43,6 +43,7 @@ from typing import List, Iterable, Iterator, IO, Optional, Dict, Callable
 
 # standard libs
 import os
+import io
 import sys
 import functools
 import logging
@@ -256,6 +257,7 @@ class DatabaseCommitterThread(Thread):
 class SubmitThread(Thread):
     """Manage asynchronous task queueing and submission workload."""
 
+    source: Iterable[str]
     queue: Queue[Optional[Task]]
     loader: LoaderThread
     committer: DatabaseCommitterThread
@@ -263,6 +265,7 @@ class SubmitThread(Thread):
     def __init__(self, source: Iterable[str], bundlesize: int = DEFAULT_BUNDLESIZE,
                  bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize queue and child threads."""
+        self.source = source
         self.queue = Queue(maxsize=bundlesize)
         self.loader = LoaderThread(source=source, queue=self.queue)
         self.committer = DatabaseCommitterThread(queue=self.queue, bundlesize=bundlesize, bundlewait=bundlewait)
@@ -270,13 +273,24 @@ class SubmitThread(Thread):
 
     def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
-        log.info('Started')
+        log.debug('Started')
+        log.info(f'Reading tasks from {self.source_name}')
         self.loader.start()
         self.committer.start()
         self.loader.join()
         self.queue.put(None)
         self.committer.join()
-        log.info('Done')
+        log.debug('Done')
+
+    @functools.cached_property
+    def source_name(self) -> str:
+        """Log details of source."""
+        if self.source is sys.stdin:
+            return '<stdin>'
+        elif isinstance(self.source, io.TextIOWrapper):
+            return self.source.name
+        else:
+            return '<iterable>'
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
@@ -408,6 +422,7 @@ class QueueCommitterThread(Thread):
 class LiveSubmitThread(Thread):
     """Manage asynchronous task queueing and submission workload."""
 
+    source: Iterable[str]
     local: Queue[Optional[Task]]
     client: QueueClient
     loader: LoaderThread
@@ -416,6 +431,7 @@ class LiveSubmitThread(Thread):
     def __init__(self, source: Iterable[str], queue_config: QueueConfig,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize queue and child threads."""
+        self.source = source
         self.local = Queue(maxsize=bundlesize)
         self.loader = LoaderThread(source=source, queue=self.local)
         self.client = QueueClient(config=queue_config)
@@ -425,7 +441,8 @@ class LiveSubmitThread(Thread):
 
     def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
-        log.info('Started')
+        log.debug('Started')
+        log.info(f'Reading tasks from {self.source_name}')
         with self.client:
             self.loader.start()
             self.committer.start()
@@ -434,7 +451,17 @@ class LiveSubmitThread(Thread):
             self.local.put(None)
             log.trace('Waiting (committer)')
             self.committer.join()
-        log.info('Done')
+        log.debug('Done')
+
+    @functools.cached_property
+    def source_name(self) -> str:
+        """Log details of source."""
+        if self.source is sys.stdin:
+            return '<stdin>'
+        elif isinstance(self.source, io.TextIOWrapper):
+            return self.source.name
+        else:
+            return '<iterable>'
 
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""

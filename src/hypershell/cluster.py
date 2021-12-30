@@ -240,7 +240,6 @@ class ClusterApp(Application):
 
     def run(self) -> None:
         """Run cluster."""
-        log.info(f'Reading tasks from {self.filename}')
         if self.live_mode and self.forever_mode:
             raise ArgumentError('Using --forever with --no-db is invalid')
         if self.live_mode and self.restart_mode:
@@ -302,14 +301,6 @@ class ClusterApp(Application):
             raise ArgumentError('Cannot specify -o/--output PATH with remote clients')
         if self.errors_path and self.mode != 'local':
             raise ArgumentError('Cannot specify -e/--errors PATH with remote clients')
-
-    @cached_property
-    def filename(self) -> str:
-        """The basename of the file."""
-        if self.restart_mode:
-            return '<none>'
-        else:
-            return '<stdin>' if self.filepath == '-' else os.path.basename(self.filepath)
 
     @cached_property
     def output_stream(self) -> IO:
