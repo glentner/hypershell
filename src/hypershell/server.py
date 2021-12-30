@@ -341,7 +341,7 @@ class HeartMonitor(StateMachine):
     def __init__(self, queue: QueueServer, evict_after: int = DEFAULT_EVICT) -> None:
         """Initialize with queue server."""
         self.queue = queue
-        self.last_check = datetime.now().astimezone()
+        self.last_check = datetime.now()
         self.beats = {}
         if evict_after > 10:
             self.wait_check = timedelta(seconds=int(evict_after / 10))

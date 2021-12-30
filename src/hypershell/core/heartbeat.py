@@ -49,7 +49,7 @@ class Heartbeat:
         """Create new instance."""
         return cls(uuid=(uuid or str(gen_uuid())),
                    host=(host or HOSTNAME),
-                   time=(time or datetime.now().astimezone()),
+                   time=(time or datetime.now()),
                    state=(state or ClientState.RUNNING))
 
     def pack(self: Heartbeat) -> bytes:
