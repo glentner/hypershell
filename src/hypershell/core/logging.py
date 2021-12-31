@@ -21,9 +21,13 @@ from hypershell.core.config import config
 __all__ = ['Logger', 'LogRecord', 'HOSTNAME', 'handler', 'level', 'initialize_logging', ]
 
 
-# cached for frequent use
+# Cached for later use
 HOSTNAME = socket.gethostname()
+
+# Automatically disable colors
 NO_TTY = False if 'HYPERSHELL_FORCE_COLOR' in os.environ else not sys.stderr.isatty()
+if not config.logging.color:
+    NO_TTY = True
 
 
 class Ansi(Enum):

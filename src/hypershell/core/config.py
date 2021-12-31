@@ -13,10 +13,27 @@ import ctypes
 import functools
 
 # external libs
-from cmdkit.config import Namespace, Configuration, Environ
+from cmdkit.config import Namespace, Configuration, Environ, ConfigurationError
 
 # public interface
 __all__ = ['default', 'config', 'get_site', 'init_paths', 'load', 'update', 'load_task_env', ]
+
+
+DEFAULT_LOGGING_STYLE = 'default'
+LOGGING_STYLES = {
+    'default': {
+        'format': ('%(ansi_bold)s%(ansi_level)s%(levelname)8s%(ansi_reset)s %(ansi_faint)s[%(name)s]%(ansi_reset)s'
+                   ' %(message)s'),
+    },
+    'long': {
+        'format': '%(asctime)s.%(msecs)03d %(hostname)s %(levelname)8s [%(name)s] %(message)s',
+    },
+    'fancy': {
+        'format': ('%(ansi_faint)s%(asctime)s.%(msecs)03d %(hostname)s %(ansi_reset)s'
+                   '%(ansi_level)s%(ansi_bold)s%(levelname)8s%(ansi_reset)s '
+                   '%(ansi_faint)s[%(name)s]%(ansi_reset)s %(message)s'),
+    }
+}
 
 
 # environment variables and configuration files are automatically
@@ -26,9 +43,11 @@ default = Namespace({
         'provider': 'sqlite',
     },
     'logging': {
+        'color': True,
         'level': 'warning',
-        'format': '%(ansi_color)s%(levelname)-7s%(ansi_reset)s [%(name)s] %(msg)s',
-        'datefmt': '%Y-%m-%d %H:%M:%S'
+        'datefmt': '%Y-%m-%d %H:%M:%S',
+        'style': DEFAULT_LOGGING_STYLE,
+        **LOGGING_STYLES.get(DEFAULT_LOGGING_STYLE),
     },
     'submit': {
         'bundlesize': 1,
@@ -110,8 +129,19 @@ def init_paths() -> None:
 
 def load() -> Configuration:
     """Load configuration."""
-    return Configuration.from_local(env=True, prefix='HYPERSHELL', default=default,
-                                    system=path.system.config, user=path.user.config, local=path.local.config)
+    try:
+        _config = Configuration.from_local(env=True, prefix='HYPERSHELL', default=default,
+                                           system=path.system.config, user=path.user.config, local=path.local.config)
+        # automatically extend logging configuration with 'style' collection by name (e.g., 'format')
+        logging_style = _config.logging.style.lower()
+        if logging_style != DEFAULT_LOGGING_STYLE:
+            if logging_style not in LOGGING_STYLES:
+                raise ConfigurationError(f'Unknown logging style \'{_config.logging.style}\'')
+            _format = LOGGING_STYLES.get(logging_style)
+            _config.extend(logging=Namespace({'logging': _format}))
+        return _config
+    except Exception as error:
+        raise ConfigurationError(str(error)) from error
 
 
 # global configuration instance is set on import (but can be reloaded)
