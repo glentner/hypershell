@@ -5,48 +5,36 @@
 
 
 # type annotations
-from typing import Dict
+from typing import Dict, Union
 
 # standard libraries
 import os
 import sys
 import socket
 import logging
-from enum import Enum
+import traceback
+from datetime import datetime
+
+# external libs
+from cmdkit.app import exit_status
+from cmdkit.config import ConfigurationError
 
 # internal libs
-from hypershell.core.config import config
+from hypershell.core.ansi import Ansi, faint, bold, magenta
+from hypershell.core.config import config, get_site
 
 # public interface
 __all__ = ['Logger', 'LogRecord', 'HOSTNAME', 'handler', 'level', 'initialize_logging', ]
 
 
+def _critical(err: Union[Exception, str]) -> None:
+    """Apply basic formatting to exceptions at import-time."""
+    text = err if isinstance(err, str) else f'{err.__class__.__name__}: {err}'
+    print(f'{bold(magenta("CRITICAL"))}{faint(":")} {text}', file=sys.stderr)
+
+
 # Cached for later use
 HOSTNAME = socket.gethostname()
-
-# Automatically disable colors
-NO_TTY = False
-if not sys.stderr.isatty() or not config.logging.color:
-    NO_TTY = True
-if 'HYPERSHELL_FORCE_COLOR' in os.environ:
-    NO_TTY = False
-
-
-class Ansi(Enum):
-    """ANSI escape sequences for colors."""
-    RESET = '\033[0m' if not NO_TTY else ''
-    BOLD = '\033[1m' if not NO_TTY else ''
-    FAINT = '\033[2m' if not NO_TTY else ''
-    ITALIC = '\033[3m' if not NO_TTY else ''
-    UNDERLINE = '\033[4m' if not NO_TTY else ''
-    BLACK = '\033[30m' if not NO_TTY else ''
-    RED = '\033[31m' if not NO_TTY else ''
-    GREEN = '\033[32m' if not NO_TTY else ''
-    YELLOW = '\033[33m' if not NO_TTY else ''
-    BLUE = '\033[34m' if not NO_TTY else ''
-    MAGENTA = '\033[35m' if not NO_TTY else ''
-    CYAN = '\033[36m' if not NO_TTY else ''
-    WHITE = '\033[37m' if not NO_TTY else ''
 
 
 level_color: Dict[str, Ansi] = {
@@ -59,7 +47,7 @@ level_color: Dict[str, Ansi] = {
 }
 
 
-TRACE = logging.DEBUG - 5
+TRACE: int = logging.DEBUG - 5
 logging.addLevelName(TRACE, 'TRACE')
 
 
@@ -102,16 +90,44 @@ class LogRecord(logging.LogRecord):
 logging.setLogRecordFactory(LogRecord)
 
 
+class StreamHandler(logging.StreamHandler):
+    """A StreamHandler that panics on exceptions in the logging configuration."""
+
+    def handleError(self, record: LogRecord) -> None:
+        """Pretty-print message and write traceback to file."""
+        err_type, err_val, tb = sys.exc_info()
+        _critical(f'LoggingError: {err_val}')
+        time = datetime.now().strftime('%Y%m%d-%H%M%S')
+        path = os.path.join(get_site()['log'], f'exception-{time}.log')
+        with open(path, mode='w') as stream:
+            print(traceback.format_exc(), file=stream)
+        _critical(f'Exception traceback written to {path}')
+        sys.exit(exit_status.bad_config)
+
+
 # log to stderr with user-configurable formatting
-handler = logging.StreamHandler(stream=sys.stderr)
-handler.setFormatter(
-    logging.Formatter(config.logging.format, datefmt=config.logging.datefmt)
-)
+try:
+    handler = StreamHandler(stream=sys.stderr)
+    handler.setFormatter(
+        logging.Formatter(config.logging.format,
+                          datefmt=config.logging.datefmt)
+    )
+except Exception as error:
+    _critical(error)
+    sys.exit(exit_status.bad_config)
+try:
+    levelname = config.logging.level
+    if not isinstance(levelname, str):
+        raise ConfigurationError(f'Unrecognized logging level \'{levelname}\'')
+    levelname = levelname.upper()
+    if levelname not in level_color:
+        raise ConfigurationError(f'Unrecognized logging level \'{levelname}\'')
+except Exception as error:
+    _critical(error)
+    sys.exit(exit_status.bad_config)
 
 
-# level handled at logger level (not handler)
-levelname = config.logging.level.upper()
-level = TRACE if levelname == 'TRACE' else getattr(logging, levelname)
+level: int = TRACE if levelname == 'TRACE' else getattr(logging, levelname)
 
 
 # null handler for library use

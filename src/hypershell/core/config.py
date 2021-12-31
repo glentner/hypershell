@@ -9,14 +9,25 @@ from typing import TypeVar, Union, List
 
 # standard libs
 import os
+import sys
 import ctypes
 import functools
 
 # external libs
-from cmdkit.config import Namespace, Configuration, Environ, ConfigurationError
+from cmdkit.config import Namespace, Configuration, Environ, ConfigurationError  # noqa: unused import
+from cmdkit.app import exit_status
+
+# internal libs
+from hypershell.core.ansi import faint, bold, magenta
 
 # public interface
 __all__ = ['default', 'config', 'get_site', 'init_paths', 'load', 'update', 'load_task_env', ]
+
+
+def _critical(err: Union[Exception, str]) -> None:
+    """Apply basic formatting to exceptions at import-time."""
+    text = err if isinstance(err, str) else f'{err.__class__.__name__}: {err}'
+    print(f'{bold(magenta("CRITICAL"))}{faint(":")} {text}', file=sys.stderr)
 
 
 DEFAULT_LOGGING_STYLE = 'default'
@@ -129,23 +140,31 @@ def init_paths() -> None:
 
 def load() -> Configuration:
     """Load configuration."""
-    try:
-        _config = Configuration.from_local(env=True, prefix='HYPERSHELL', default=default,
-                                           system=path.system.config, user=path.user.config, local=path.local.config)
-        # automatically extend logging configuration with 'style' collection by name (e.g., 'format')
-        logging_style = _config.logging.style.lower()
-        if logging_style != DEFAULT_LOGGING_STYLE:
-            if logging_style not in LOGGING_STYLES:
-                raise ConfigurationError(f'Unknown logging style \'{_config.logging.style}\'')
-            _format = LOGGING_STYLES.get(logging_style)
-            _config.extend(logging=Namespace({'logging': _format}))
-        return _config
-    except Exception as error:
-        raise ConfigurationError(str(error)) from error
+    return Configuration.from_local(env=True, prefix='HYPERSHELL', default=default,
+                                    system=path.system.config, user=path.user.config, local=path.local.config)
 
 
-# global configuration instance is set on import (but can be reloaded)
-config: Configuration = load()
+try:
+    config = load()
+except Exception as error:
+    _critical(f'ConfigurationError: {error}')
+    sys.exit(exit_status.bad_config)
+
+try:
+    _style = config.logging.style
+    _which = config.which('logging', 'style')
+    _blame = f'HYPERSHELL_LOGGING_LEVEL={_style}' if _which == 'env' else path.get(_which).config
+    if not isinstance(_style, str):
+        raise ConfigurationError(f'Invalid logging style ({_blame})')
+    _style = _style.lower()
+    if _style not in LOGGING_STYLES:
+        raise ConfigurationError(f'Unrecognized logging style \'{_style}\' ({_blame})')
+except Exception as error:
+    _critical(error)
+    sys.exit(exit_status.bad_config)
+
+if _style != DEFAULT_LOGGING_STYLE:
+    config.extend(logging=Namespace({'logging': LOGGING_STYLES.get(_style)}))
 
 
 def update(scope: str, data: dict) -> None:
