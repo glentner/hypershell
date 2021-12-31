@@ -153,7 +153,11 @@ except Exception as error:
 try:
     _style = config.logging.style
     _which = config.which('logging', 'style')
-    _blame = f'HYPERSHELL_LOGGING_LEVEL={_style}' if _which == 'env' else path.get(_which).config
+    _blame = '<default>'
+    if _which == 'env':
+        _blame = f'HYPERSHELL_LOGGING_LEVEL={_style}'
+    elif _which != 'default':
+        _blame = path.get(_which).config
     if not isinstance(_style, str):
         raise ConfigurationError(f'Invalid logging style ({_blame})')
     _style = _style.lower()
