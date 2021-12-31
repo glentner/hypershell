@@ -430,7 +430,7 @@ class HeartMonitor(StateMachine):
 
     def signal_clients(self) -> HeartbeatState:
         """Send shutdown signal to all connected clients."""
-        log.info(f'Signaling clients ({len(self.beats)} connected)')
+        log.debug(f'Signaling clients ({len(self.beats)} connected)')
         for hb in self.beats.values():
             self.queue.scheduled.put(None)
             log.debug(f'Disconnect requested ({hb.host}: {hb.uuid})')
@@ -511,14 +511,14 @@ class ServerThread(Thread):
 
     def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
-        log.info('Started')
+        log.debug('Started')
         with self.queue:
             self.start_threads()
             self.wait_submitter()
             self.wait_scheduler()
             self.wait_heartbeat()
             self.wait_receiver()
-        log.info('Done')
+        log.debug('Done')
 
     def start_threads(self) -> None:
         """Start child threads."""

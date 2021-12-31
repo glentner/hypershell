@@ -572,14 +572,14 @@ class ClientThread(Thread):
 
     def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
-        log.info(f'Started ({self.num_tasks} executors)')
+        log.debug(f'Started ({self.num_tasks} executors)')
         with self.client:
             self.start_threads()
             self.wait_scheduler()
             self.wait_executors()
             self.wait_collector()
             self.wait_heartbeat()
-        log.info('Done')
+        log.debug('Done')
 
     def start_threads(self) -> None:
         """Start child threads."""
