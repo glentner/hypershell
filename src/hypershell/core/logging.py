@@ -25,26 +25,28 @@ __all__ = ['Logger', 'LogRecord', 'HOSTNAME', 'handler', 'level', 'initialize_lo
 HOSTNAME = socket.gethostname()
 
 # Automatically disable colors
-NO_TTY = False if 'HYPERSHELL_FORCE_COLOR' in os.environ else not sys.stderr.isatty()
-if not config.logging.color:
+NO_TTY = False
+if not sys.stderr.isatty() or not config.logging.color:
     NO_TTY = True
+if 'HYPERSHELL_FORCE_COLOR' in os.environ:
+    NO_TTY = False
 
 
 class Ansi(Enum):
     """ANSI escape sequences for colors."""
-    RESET = '\033[0m'
-    BOLD = '\033[1m'
-    FAINT = '\033[2m'
-    ITALIC = '\033[3m'
-    UNDERLINE = '\033[4m'
-    BLACK = '\033[30m'
-    RED = '\033[31m'
-    GREEN = '\033[32m'
-    YELLOW = '\033[33m'
-    BLUE = '\033[34m'
-    MAGENTA = '\033[35m'
-    CYAN = '\033[36m'
-    WHITE = '\033[37m'
+    RESET = '\033[0m' if not NO_TTY else ''
+    BOLD = '\033[1m' if not NO_TTY else ''
+    FAINT = '\033[2m' if not NO_TTY else ''
+    ITALIC = '\033[3m' if not NO_TTY else ''
+    UNDERLINE = '\033[4m' if not NO_TTY else ''
+    BLACK = '\033[30m' if not NO_TTY else ''
+    RED = '\033[31m' if not NO_TTY else ''
+    GREEN = '\033[32m' if not NO_TTY else ''
+    YELLOW = '\033[33m' if not NO_TTY else ''
+    BLUE = '\033[34m' if not NO_TTY else ''
+    MAGENTA = '\033[35m' if not NO_TTY else ''
+    CYAN = '\033[36m' if not NO_TTY else ''
+    WHITE = '\033[37m' if not NO_TTY else ''
 
 
 level_color: Dict[str, Ansi] = {
@@ -80,8 +82,8 @@ class LogRecord(logging.LogRecord):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.hostname = HOSTNAME
-        self.ansi_level = '' if NO_TTY else level_color[self.levelname].value
-        self.ansi_reset = '' if NO_TTY else Ansi.RESET.value
+        self.ansi_level = level_color.get(self.levelname).value
+        self.ansi_reset = Ansi.RESET.value
         self.ansi_bold = Ansi.BOLD.value
         self.ansi_faint = Ansi.FAINT.value
         self.ansi_italic = Ansi.ITALIC.value
