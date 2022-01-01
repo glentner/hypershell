@@ -636,7 +636,7 @@ FILE                        Path to task file ("-" for <stdin>).
 options:
 -H, --bind            ADDR  Bind address (default: {QueueConfig.host}).
 -p, --port            NUM   Port number (default: {QueueConfig.port}).
--k, --auth            KEY   Cryptography key to secure server.
+-k, --auth            KEY   Cryptographic key to secure server.
     --forever               Do not halt even if all tasks finished.
     --restart               Restart scheduling from last completed task.
 -b, --bundlesize      NUM   Size of task bundle (default: {DEFAULT_BUNDLESIZE}).

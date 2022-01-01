@@ -654,7 +654,7 @@ options:
 -w, --bundlewait  SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
 -H, --host        ADDR  Hostname for server.
 -p, --port        NUM   Port number for server.
--k, --auth        KEY   Cryptography key to connect to server.
+-k, --auth        KEY   Cryptographic key to connect to server.
 -o, --output      PATH  Redirect task output (default: <stdout>).
 -e, --errors      PATH  Redirect task errors (default: <stderr>).   
 -h, --help              Show this message and exit.\
