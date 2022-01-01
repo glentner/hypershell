@@ -5,32 +5,24 @@
 
 
 # type annotations
-from typing import Dict, Union
+from typing import Dict
 
 # standard libraries
-import os
 import sys
 import socket
 import logging
-import traceback
-from datetime import datetime
 
 # external libs
 from cmdkit.app import exit_status
 from cmdkit.config import ConfigurationError
 
 # internal libs
-from hypershell.core.ansi import Ansi, faint, bold, magenta
-from hypershell.core.config import config, get_site
+from hypershell.core.ansi import Ansi
+from hypershell.core.config import config
+from hypershell.core.exceptions import write_traceback
 
 # public interface
 __all__ = ['Logger', 'LogRecord', 'HOSTNAME', 'handler', 'level', 'initialize_logging', ]
-
-
-def _critical(err: Union[Exception, str]) -> None:
-    """Apply basic formatting to exceptions at import-time."""
-    text = err if isinstance(err, str) else f'{err.__class__.__name__}: {err}'
-    print(f'{bold(magenta("CRITICAL"))}{faint(":")} {text}', file=sys.stderr)
 
 
 # Cached for later use
@@ -96,12 +88,7 @@ class StreamHandler(logging.StreamHandler):
     def handleError(self, record: LogRecord) -> None:
         """Pretty-print message and write traceback to file."""
         err_type, err_val, tb = sys.exc_info()
-        _critical(f'LoggingError: {err_val}')
-        time = datetime.now().strftime('%Y%m%d-%H%M%S')
-        path = os.path.join(get_site()['log'], f'exception-{time}.log')
-        with open(path, mode='w') as stream:
-            print(traceback.format_exc(), file=stream)
-        _critical(f'Exception traceback written to {path}')
+        write_traceback(err_val)
         sys.exit(exit_status.bad_config)
 
 
@@ -113,8 +100,10 @@ try:
                           datefmt=config.logging.datefmt)
     )
 except Exception as error:
-    _critical(error)
+    write_traceback(error)
     sys.exit(exit_status.bad_config)
+
+
 try:
     levelname = config.logging.level
     if not isinstance(levelname, str):
@@ -123,7 +112,7 @@ try:
     if levelname not in level_color:
         raise ConfigurationError(f'Unrecognized logging level \'{levelname}\'')
 except Exception as error:
-    _critical(error)
+    write_traceback(error)
     sys.exit(exit_status.bad_config)
 
 

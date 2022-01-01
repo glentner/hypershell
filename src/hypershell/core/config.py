@@ -81,7 +81,7 @@ default = Namespace({
 
 
 def load() -> Configuration:
-    """Load configuration."""
+    """Load configuration from files and merge environment variables."""
     return Configuration.from_local(env=True, prefix='HYPERSHELL', default=default,
                                     system=path.system.config, user=path.user.config, local=path.local.config)
 
@@ -89,8 +89,9 @@ def load() -> Configuration:
 try:
     config = load()
 except Exception as error:
-    _critical(f'ConfigurationError: {error}')
+    write_traceback(error)
     sys.exit(exit_status.bad_config)
+
 
 try:
     _style = config.logging.style
@@ -106,8 +107,9 @@ try:
     if _style not in LOGGING_STYLES:
         raise ConfigurationError(f'Unrecognized logging style \'{_style}\' ({_blame})')
 except Exception as error:
-    _critical(error)
+    write_traceback(error)
     sys.exit(exit_status.bad_config)
+
 
 if _style != DEFAULT_LOGGING_STYLE:
     config.extend(logging=Namespace({'logging': LOGGING_STYLES.get(_style)}))

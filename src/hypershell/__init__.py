@@ -16,8 +16,8 @@ from cmdkit.config import ConfigurationError
 
 # internal libs
 from hypershell.__meta__ import __version__, __authors__, __description__, __contact__, __copyright__, __website__
-from hypershell.core.exceptions import handle_uncaught_exception, handle_exception
-from hypershell.core.config import config, init_paths
+from hypershell.core.exceptions import write_traceback, handle_exception
+from hypershell.core.config import config
 from hypershell.core.logging import initialize_logging
 from hypershell.submit import submit_from, submit_file, SubmitThread, SubmitApp
 from hypershell.server import serve_from, serve_file, serve_forever, ServerThread, ServerApp
@@ -68,7 +68,7 @@ Copyright {__copyright__}
 """
 
 Application.exceptions = {
-    Exception: functools.partial(handle_uncaught_exception, logger=log),
+    Exception: functools.partial(write_traceback, logger=log, status=exit_status.runtime_error),
     ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
 }
 
@@ -91,7 +91,6 @@ class HyperShellApp(ApplicationGroup):
 
 def main() -> int:
     """Entry-point for console application."""
-    init_paths()
     initialize_logging()
     return HyperShellApp.main(sys.argv[1:])
 
