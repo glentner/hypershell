@@ -31,11 +31,11 @@ class StateMachine(ABC):
 
     def next(self) -> State:
         """Return next state (halt if necessary)."""
-        return self.states.HALT if self.__should_halt else self.actions.get(self.state)()
+        return self.states.HALT if self.__should_halt else self.actions.get(self.state)()  # noqa: no member HALT
 
     def run(self) -> None:
         """Run machine until state is set to `HALT`."""
-        while self.state is not self.states.HALT:
+        while self.state is not self.states.HALT:  # noqa: no member HALT
             self.state = self.next()
 
     def halt(self) -> None:
