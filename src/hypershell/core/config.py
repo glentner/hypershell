@@ -80,10 +80,34 @@ default = Namespace({
 })
 
 
-def load() -> Configuration:
+@functools.lru_cache(maxsize=None)
+def load_file(filepath: str) -> Namespace:
+    """Load configuration file manually."""
+    try:
+        if not os.path.exists(filepath):
+            return Namespace({})
+        else:
+            return Namespace.from_toml(filepath)
+    except Exception as err:
+        raise ConfigurationError(f'(from file: {filepath}) {err.__class__.__name__}: {err}')
+
+
+@functools.lru_cache(maxsize=None)
+def load_env() -> Environ:
+    """Load environment variables and expand hierarchy as namespace."""
+    return Environ(prefix='HYPERSHELL').expand()
+
+
+def load(**preload: Namespace) -> Configuration:
     """Load configuration from files and merge environment variables."""
-    return Configuration.from_local(env=True, prefix='HYPERSHELL', default=default,
-                                    system=path.system.config, user=path.user.config, local=path.local.config)
+    return Configuration(**{
+        **preload,
+        'default': default,
+        'system': load_file(path.system.config),
+        'user': load_file(path.user.config),
+        'local': load_file(path.local.config),
+        'env': load_env(),
+    })
 
 
 try:
@@ -93,26 +117,30 @@ except Exception as error:
     sys.exit(exit_status.bad_config)
 
 
+def get_logging_style() -> str:
+    """Get and check valid on `config.logging.style`."""
+    style = config.logging.style
+    source = config.which('logging', 'style')
+    label = '<default>'
+    if source == 'env':
+        label = f'HYPERSHELL_LOGGING_LEVEL={style}'
+    elif source != 'default':
+        label = f'from file: {path.get(source).config}'
+    if not isinstance(style, str):
+        raise ConfigurationError(f'Invalid logging style ({label})')
+    style = style.lower()
+    if style in LOGGING_STYLES:
+        return style
+    else:
+        raise ConfigurationError(f'Unrecognized logging style \'{style}\' ({label})')
+
+
 try:
-    _style = config.logging.style
-    _which = config.which('logging', 'style')
-    _blame = '<default>'
-    if _which == 'env':
-        _blame = f'HYPERSHELL_LOGGING_LEVEL={_style}'
-    elif _which != 'default':
-        _blame = path.get(_which).config
-    if not isinstance(_style, str):
-        raise ConfigurationError(f'Invalid logging style ({_blame})')
-    _style = _style.lower()
-    if _style not in LOGGING_STYLES:
-        raise ConfigurationError(f'Unrecognized logging style \'{_style}\' ({_blame})')
+    # Rebuild configuration with preloads
+    config = load(logging=Namespace({'logging': LOGGING_STYLES.get(get_logging_style())}))
 except Exception as error:
     write_traceback(error)
     sys.exit(exit_status.bad_config)
-
-
-if _style != DEFAULT_LOGGING_STYLE:
-    config.extend(logging=Namespace({'logging': LOGGING_STYLES.get(_style)}))
 
 
 def update(scope: str, data: dict) -> None:
