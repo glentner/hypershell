@@ -10,7 +10,6 @@ from typing import TypeVar, Union, List
 # standard libs
 import os
 import sys
-import ctypes
 import functools
 
 # external libs
@@ -18,16 +17,11 @@ from cmdkit.config import Namespace, Configuration, Environ, ConfigurationError 
 from cmdkit.app import exit_status
 
 # internal libs
-from hypershell.core.ansi import faint, bold, magenta
+from hypershell.core.platform import path
+from hypershell.core.exceptions import write_traceback
 
 # public interface
-__all__ = ['default', 'config', 'get_site', 'init_paths', 'load', 'update', 'load_task_env', ]
-
-
-def _critical(err: Union[Exception, str]) -> None:
-    """Apply basic formatting to exceptions at import-time."""
-    text = err if isinstance(err, str) else f'{err.__class__.__name__}: {err}'
-    print(f'{bold(magenta("CRITICAL"))}{faint(":")} {text}', file=sys.stderr)
+__all__ = ['default', 'config', 'load', 'update', 'load_task_env', ]
 
 
 DEFAULT_LOGGING_STYLE = 'default'
@@ -84,58 +78,6 @@ default = Namespace({
         # NOTE: defining HYPERSHELL_EXPORT_XXX defines XXX within task env
     }
 })
-
-
-cwd = os.getcwd()
-home = os.getenv('HOME')
-if os.name == 'nt':
-    is_admin = ctypes.windll.shell32.IsUserAnAdmin() == 1
-    site = Namespace(system=os.path.join(os.getenv('ProgramData'), 'HyperShell'),
-                     user=os.path.join(os.getenv('AppData'), 'HyperShell'),
-                     local=os.path.join(cwd, '.hypershell'))
-    path = Namespace({
-        'system': {
-            'lib': os.path.join(site.system, 'Library'),
-            'log': os.path.join(site.system, 'Logs'),
-            'config': os.path.join(site.system, 'Config.toml')},
-        'user': {
-            'lib': os.path.join(site.user, 'Library'),
-            'log': os.path.join(site.user, 'Logs'),
-            'config': os.path.join(site.user, 'Config.toml')},
-        'local': {
-            'lib': os.path.join(site.local, 'Library'),
-            'log': os.path.join(site.local, 'Logs'),
-            'config': os.path.join(site.local, 'Config.toml')}
-    })
-else:
-    is_admin = os.getuid() == 0
-    site = Namespace(system='/', user=os.path.join(home, '.hypershell'),
-                     local=os.path.join(cwd, '.hypershell'))
-    path = Namespace({
-        'system': {
-            'lib': os.path.join(site.system, 'var', 'lib', 'hypershell'),
-            'log': os.path.join(site.system, 'var', 'log', 'hypershell'),
-            'config': os.path.join(site.system, 'etc', 'hypershell.toml')},
-        'user': {
-            'lib': os.path.join(site.user, 'lib'),
-            'log': os.path.join(site.user, 'log'),
-            'config': os.path.join(site.user, 'config.toml')},
-        'local': {
-            'lib': os.path.join(site.local, 'lib'),
-            'log': os.path.join(site.local, 'log'),
-            'config': os.path.join(site.local, 'config.toml')}
-    })
-
-
-def get_site() -> Namespace:
-    """Retrieve path namespace for either 'system' (if admin) or 'user'."""
-    return path.system if is_admin else path.user
-
-
-def init_paths() -> None:
-    """Automatically create necessary directories."""
-    os.makedirs(get_site().get('lib'), exist_ok=True)
-    os.makedirs(get_site().get('log'), exist_ok=True)
 
 
 def load() -> Configuration:
