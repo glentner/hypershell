@@ -375,7 +375,7 @@ class ClusterApp(Application):
     ssh_group: str = None
     interface.add_argument('--ssh-group', default=None)
 
-    remote_exe: str = 'hyper-shell'
+    remote_exe: str = sys.argv[0]
     interface.add_argument('--remote-exe', default=remote_exe)
 
     export_env: bool = False
