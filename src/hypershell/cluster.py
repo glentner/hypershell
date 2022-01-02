@@ -25,7 +25,7 @@ from functools import cached_property
 # external libs
 from cmdkit.app import Application
 from cmdkit.cli import Interface, ArgumentError
-from cmdkit.config import ConfigurationError
+from cmdkit.config import ConfigurationError, Namespace
 
 # internal libs
 from hypershell.core.config import config, load_task_env, blame
@@ -198,6 +198,11 @@ class NodeList(list):
         return result
 
 
+def compile_env() -> str:
+    """Build environment variable argument expansion for remote client launch command."""
+    return ' '.join([f'{key}="{value}"' for key, value in Namespace.from_env('HYPERSHELL').items()])
+
+
 class SSHCluster(Thread):
     """Run server with external ssh clients."""
 
@@ -212,7 +217,8 @@ class SSHCluster(Thread):
                  launcher: str = 'ssh', launcher_args: List[str] = None, nodelist: List[str] = None,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, live: bool = False,
-                 num_tasks: int = 1, remote_exe: str = 'hyper-shell', redirect_failures: IO = None) -> None:
+                 num_tasks: int = 1, remote_exe: str = 'hyper-shell', redirect_failures: IO = None,
+                 export_env: bool = False) -> None:
         """Initialize server and client threads."""
         if nodelist is None:
             raise AttributeError('Expected nodelist')
@@ -221,8 +227,10 @@ class SSHCluster(Thread):
                                    bundlewait=bundlewait, max_retries=max_retries, eager=eager, address=bind,
                                    forever_mode=forever_mode, restart_mode=restart_mode,
                                    redirect_failures=redirect_failures)
+        launcher_env = '' if not export_env else compile_env()
         launcher_args = '' if launcher_args is None else ' '.join(launcher_args)
-        self.client_argv = [f'{launcher} {launcher_args} {host} {remote_exe} client -H {HOSTNAME} -p {bind[1]} '
+        self.client_argv = [f'{launcher} {launcher_args} {host} {launcher_env} {remote_exe} '
+                            f'client -H {HOSTNAME} -p {bind[1]} '
                             f'-N {num_tasks} -b {bundlesize} -w {bundlewait} -t \'"{template}"\' -k {auth}'
                             for host in nodelist]
         super().__init__(name='hypershell-cluster')
@@ -279,8 +287,8 @@ def run_ssh(**options) -> None:
 
 APP_NAME = 'hyper-shell cluster'
 APP_USAGE = f"""\
-usage: hyper-shell cluster [-h] [FILE | --restart | --forever] [--no-db] [-N NUM] [-t CMD] 
-                           [-b SIZE] [-w SEC] [-o PATH] [-e PATH] [-f PATH] [-r NUM [--eager]] 
+usage: hyper-shell cluster [-h] [FILE | --restart | --forever] [--no-db] [-N NUM] [-t CMD] [--env]
+                           [-b SIZE] [-w SEC] [-o PATH] [-e PATH] [-f PATH] [-r NUM [--eager]]
                            [--ssh [HOST... | --ssh-group NAME] | --mpi | --launcher=ARGS...]\
 """
 APP_HELP = f"""\
@@ -309,6 +317,7 @@ options:
     --restart               Start scheduling from last completed task.
     --ssh-args     ARGS     Command-line arguments for SSH.
     --ssh-group    NAME     Name of ssh nodelist group in config.
+-E, --env                   Send environment variables.
 -o, --output       PATH     File path for task outputs (default: <stdout>).
 -e, --errors       PATH     File path for task errors (default: <stderr>).
 -f, --failures     PATH     File path to write failed task args (default: <none>).
@@ -369,6 +378,9 @@ class ClusterApp(Application):
     remote_exe: str = 'hyper-shell'
     interface.add_argument('--remote-exe', default=remote_exe)
 
+    export_env: bool = False
+    interface.add_argument('-E', '--env', action='store_true', dest='export_env')
+
     port: int = QueueConfig.port
     interface.add_argument('-p', '--port', default=port, type=int)
 
@@ -410,7 +422,7 @@ class ClusterApp(Application):
         else:
             nodelist = NodeList.from_cmdline(self.ssh_mode if self.ssh_mode != '<default>' else None)
         run_ssh(**options, launcher='ssh', launcher_args=[self.ssh_args, ], nodelist=nodelist,
-                remote_exe=self.remote_exe, bind=('0.0.0.0', self.port))
+                remote_exe=self.remote_exe, bind=('0.0.0.0', self.port), export_env=self.export_env)
 
     @cached_property
     def launchers(self) -> Dict[str, Callable]:
