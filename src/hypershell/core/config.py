@@ -5,7 +5,7 @@
 
 
 # type annotations
-from typing import TypeVar, Union, List
+from typing import TypeVar, Union, List, Optional
 
 # standard libs
 import os
@@ -21,7 +21,7 @@ from hypershell.core.platform import path
 from hypershell.core.exceptions import write_traceback
 
 # public interface
-__all__ = ['default', 'config', 'load', 'update', 'load_task_env', ]
+__all__ = ['default', 'config', 'load', 'update', 'load_task_env', 'LOGGING_STYLES', 'blame', ]
 
 
 DEFAULT_LOGGING_STYLE = 'default'
@@ -30,8 +30,8 @@ LOGGING_STYLES = {
         'format': ('%(ansi_bold)s%(ansi_level)s%(levelname)8s%(ansi_reset)s %(ansi_faint)s[%(name)s]%(ansi_reset)s'
                    ' %(message)s'),
     },
-    'long': {
-        'format': '%(asctime)s.%(msecs)03d %(hostname)s %(levelname)8s [%(name)s] %(message)s',
+    'system': {
+        'format': '%(asctime)s.%(msecs)03d %(hostname)s %(levelname)8s [%(app_id)s] [%(name)s] %(message)s',
     },
     'fancy': {
         'format': ('%(ansi_faint)s%(asctime)s.%(msecs)03d %(hostname)s %(ansi_reset)s'
@@ -101,8 +101,7 @@ def load_env() -> Environ:
 def load(**preload: Namespace) -> Configuration:
     """Load configuration from files and merge environment variables."""
     return Configuration(**{
-        **preload,
-        'default': default,
+        'default': default, **preload,  # preloads AFTER defaults
         'system': load_file(path.system.config),
         'user': load_file(path.user.config),
         'local': load_file(path.local.config),
@@ -113,33 +112,41 @@ def load(**preload: Namespace) -> Configuration:
 try:
     config = load()
 except Exception as error:
-    write_traceback(error)
+    write_traceback(error, module=__name__)
     sys.exit(exit_status.bad_config)
+
+
+def blame(*varpath: str) -> Optional[str]:
+    """Construct filename or variable assignment string based on precedent of `varpath`"""
+    source = config.which(*varpath)
+    if not source:
+        return None
+    if source in ('system', 'user', 'local'):
+        return f'from: {path.get(source).config}'
+    elif source == 'env':
+        return 'from: HYPERSHELL_' + '_'.join([node.upper() for node in varpath])
+    else:
+        return f'from: <{source}>'
 
 
 def get_logging_style() -> str:
     """Get and check valid on `config.logging.style`."""
     style = config.logging.style
-    source = config.which('logging', 'style')
-    label = '<default>'
-    if source == 'env':
-        label = f'HYPERSHELL_LOGGING_LEVEL={style}'
-    elif source != 'default':
-        label = f'from file: {path.get(source).config}'
+    label = blame('logging', 'style')
     if not isinstance(style, str):
-        raise ConfigurationError(f'Invalid logging style ({label})')
+        raise ConfigurationError(f'Expected string for `logging.style` ({label})')
     style = style.lower()
     if style in LOGGING_STYLES:
         return style
     else:
-        raise ConfigurationError(f'Unrecognized logging style \'{style}\' ({label})')
+        raise ConfigurationError(f'Unrecognized `logging.style` \'{style}\' ({label})')
 
 
 try:
-    # Rebuild configuration with preloads
+    # Rebuild configuration but with injected preloads
     config = load(logging=Namespace({'logging': LOGGING_STYLES.get(get_logging_style())}))
 except Exception as error:
-    write_traceback(error)
+    write_traceback(error, module=__name__)
     sys.exit(exit_status.bad_config)
 
 

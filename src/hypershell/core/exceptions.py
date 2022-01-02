@@ -11,6 +11,7 @@ from typing import Union
 import os
 import sys
 import logging
+import functools
 import traceback
 from datetime import datetime
 
@@ -27,10 +28,11 @@ __all__ = ['display_critical', 'traceback_filepath', 'write_traceback',
            'handle_exception', 'handle_disconnect', ]
 
 
-def display_critical(err: Union[Exception, str]) -> None:
+def display_critical(error: Union[Exception, str], module: str = None) -> None:
     """Apply basic formatting to exceptions (i.e., without logging)."""
-    text = err if isinstance(err, str) else f'{err.__class__.__name__}: {err}'
-    print(f'{bold(magenta("CRITICAL"))}{faint(":")} {text}', file=sys.stderr)
+    text = error if isinstance(error, str) else f'{error.__class__.__name__}: {error}'
+    name = '' if not module else faint(f'[{module}]')
+    print(f'{bold(magenta("CRITICAL"))} {name} {text}', file=sys.stderr)
 
 
 def traceback_filepath(path: Namespace = None) -> str:
@@ -41,9 +43,9 @@ def traceback_filepath(path: Namespace = None) -> str:
 
 
 def write_traceback(exc: Exception, site: Namespace = None, logger: logging.Logger = None,
-                    status: int = exit_status.uncaught_exception) -> int:
+                    status: int = exit_status.uncaught_exception, module: str = None) -> int:
     """Write exception to file and return exit code."""
-    write = display_critical if not logger else logger.critical
+    write = functools.partial(display_critical, module=module) if not logger else logger.critical
     path = traceback_filepath(site)
     with open(path, mode='w') as stream:
         print(traceback.format_exc(), file=stream)

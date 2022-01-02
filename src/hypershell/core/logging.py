@@ -5,12 +5,14 @@
 
 
 # type annotations
-from typing import Dict
+from typing import Dict, Any
 
 # standard libraries
 import sys
+import uuid
 import socket
 import logging
+import functools
 
 # external libs
 from cmdkit.app import exit_status
@@ -18,17 +20,22 @@ from cmdkit.config import ConfigurationError
 
 # internal libs
 from hypershell.core.ansi import Ansi
-from hypershell.core.config import config
+from hypershell.core.config import config, blame
 from hypershell.core.exceptions import write_traceback
 
 # public interface
-__all__ = ['Logger', 'LogRecord', 'HOSTNAME', 'handler', 'level', 'initialize_logging', ]
+__all__ = ['Logger', 'HOSTNAME', 'handler', 'initialize_logging', ]
 
 
 # Cached for later use
 HOSTNAME = socket.gethostname()
 
 
+# Unique for every instance of hypershell
+INSTANCE = str(uuid.uuid4())
+
+
+# Canonical colors for logging messages
 level_color: Dict[str, Ansi] = {
     'TRACE': Ansi.CYAN,
     'DEBUG': Ansi.BLUE,
@@ -61,6 +68,7 @@ class LogRecord(logging.LogRecord):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.app_id = INSTANCE
         self.hostname = HOSTNAME
         self.ansi_level = level_color.get(self.levelname).value
         self.ansi_reset = Ansi.RESET.value
@@ -88,11 +96,32 @@ class StreamHandler(logging.StreamHandler):
     def handleError(self, record: LogRecord) -> None:
         """Pretty-print message and write traceback to file."""
         err_type, err_val, tb = sys.exc_info()
-        write_traceback(err_val)
+        write_traceback(err_val, module=__name__)
         sys.exit(exit_status.bad_config)
 
 
-# log to stderr with user-configurable formatting
+def level_from_name(name: Any, source: str = 'logging.level') -> int:
+    """Get level value from `name`."""
+    label = blame(*source.split('.'))
+    if not isinstance(name, str):
+        raise ConfigurationError(f'Expected string for logging level, given \'{name}\' ({label})')
+    name = name.upper()
+    if name == 'TRACE':
+        return TRACE
+    elif name in ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'):
+        return getattr(logging, name)
+    else:
+        raise ConfigurationError(f'Unsupported logging level \'{name}\' ({label})')
+
+
+try:
+    levelname = config.logging.level
+    level = level_from_name(levelname)
+except Exception as error:
+    write_traceback(error, module=__name__)
+    sys.exit(exit_status.bad_config)
+
+
 try:
     handler = StreamHandler(stream=sys.stderr)
     handler.setFormatter(
@@ -100,23 +129,8 @@ try:
                           datefmt=config.logging.datefmt)
     )
 except Exception as error:
-    write_traceback(error)
+    write_traceback(error, module=__name__)
     sys.exit(exit_status.bad_config)
-
-
-try:
-    levelname = config.logging.level
-    if not isinstance(levelname, str):
-        raise ConfigurationError(f'Unrecognized logging level \'{levelname}\'')
-    levelname = levelname.upper()
-    if levelname not in level_color:
-        raise ConfigurationError(f'Unrecognized logging level \'{levelname}\'')
-except Exception as error:
-    write_traceback(error)
-    sys.exit(exit_status.bad_config)
-
-
-level: int = TRACE if levelname == 'TRACE' else getattr(logging, levelname)
 
 
 # null handler for library use
@@ -125,8 +139,7 @@ logger.setLevel(level)
 logger.addHandler(logging.NullHandler())
 
 
-# called by entry-point to configure console handler
+@functools.cache
 def initialize_logging() -> None:
-    """Enable logging output to the console."""
-    if handler not in logger.handlers:
-        logger.addHandler(handler)
+    """Enable logging output to the console and rotating files."""
+    logger.addHandler(handler)

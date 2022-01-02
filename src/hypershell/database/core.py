@@ -9,10 +9,12 @@ from __future__ import annotations
 from typing import Any
 
 # standard libs
+import sys
 import logging
 from urllib.parse import urlencode
 
 # external libs
+from cmdkit.app import exit_status
 from cmdkit.config import Namespace, ConfigurationError
 from sqlalchemy.engine import create_engine, Engine
 from sqlalchemy.pool import StaticPool
@@ -22,8 +24,9 @@ from sqlalchemy.exc import ArgumentError
 # internal libs
 from hypershell.core.config import config
 from hypershell.core.logging import handler
+from hypershell.core.exceptions import write_traceback
 
-# initialize module level logger
+
 log = logging.getLogger(__name__)
 
 
@@ -192,20 +195,15 @@ if config.provider == 'sqlite':
         connect_args['check_same_thread'] = False
 
 
-if config.provider not in providers:
-    raise ConfigurationError(f'Unsupported database \'{config.provider}\'')
-
-
-# NOTE: override provider with correct library implementation name
-params = Namespace({**config, 'provider': providers[config.provider]})
-
-
 def get_url() -> DatabaseURL:
     """Wraps parsing within function."""
+    if config.provider not in providers:
+        raise ConfigurationError(f'Unsupported database \'{config.provider}\'')
     try:
+        params = Namespace({**config, 'provider': providers[config.provider]})
         return DatabaseURL.from_namespace(params)
-    except AttributeError as error:
-        raise ConfigurationError(str(error)) from error
+    except AttributeError as err:
+        raise ConfigurationError(str(err)) from err
 
 
 def get_engine() -> Engine:
@@ -215,11 +213,14 @@ def get_engine() -> Engine:
             logging.getLogger('sqlalchemy.engine').addHandler(handler)
             logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
         return create_engine(get_url().encode(), connect_args=connect_args, **engine_config)
-    except ArgumentError as error:
-        raise ConfigurationError(f'DatabaseURL: {error}') from error
+    except ArgumentError as err:
+        raise ConfigurationError(f'DatabaseURL: {err}') from err
 
 
-# manage thread-local sessions
-engine = get_engine()
-factory = sessionmaker(bind=engine)
-Session = scoped_session(factory)
+try:
+    engine = get_engine()
+    factory = sessionmaker(bind=engine)
+    Session = scoped_session(factory)
+except Exception as error:
+    write_traceback(error, module=__name__)
+    sys.exit(exit_status.bad_config)
