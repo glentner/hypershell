@@ -25,7 +25,7 @@ from hypershell.core.platform import default_path
 
 # public interface
 __all__ = ['display_critical', 'traceback_filepath', 'write_traceback',
-           'handle_exception', 'handle_disconnect', ]
+           'handle_exception', 'handle_disconnect', 'handle_address_unknown', 'HostAddressInfo', ]
 
 
 def display_critical(error: Union[Exception, str], module: str = None) -> None:
@@ -63,4 +63,16 @@ def handle_disconnect(exc: Exception, logger: logging.Logger) -> int:
 def handle_exception(exc: Exception, logger: logging.Logger, status: int) -> int:
     """Log the exception argument and exit with `status`."""
     logger.critical(f'{exc.__class__.__name__}: ' + str(exc).replace('\n', ' - '))
+    return status
+
+
+class HostAddressInfo(Exception):
+    """Could not resolve hostname."""
+
+
+def handle_address_unknown(exc: Exception,  # noqa: unused
+                           logger: logging.Logger,
+                           status: int = exit_status.runtime_error) -> int:
+    """Could not get address info for hostname (see `socket.gaierror`)."""
+    logger.critical(f'{exc.__class__.__name__}: {exc}')
     return status

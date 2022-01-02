@@ -43,7 +43,7 @@ from enum import Enum
 from datetime import datetime, timedelta
 from queue import Queue, Empty as QueueEmpty, Full as QueueFull
 from subprocess import Popen, TimeoutExpired
-from functools import cached_property
+from socket import gaierror
 
 # external libs
 from cmdkit.app import Application, exit_status
@@ -56,7 +56,7 @@ from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.logging import HOSTNAME, Logger
-from hypershell.core.exceptions import handle_exception, handle_disconnect
+from hypershell.core.exceptions import handle_exception, handle_disconnect, handle_address_unknown, HostAddressInfo
 from hypershell.database.model import Task
 
 # public interface
@@ -697,21 +697,25 @@ class ClientApp(Application):
         EOFError: functools.partial(handle_disconnect, logger=log),
         ConnectionResetError: functools.partial(handle_disconnect, logger=log),
         ConnectionRefusedError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        HostAddressInfo: functools.partial(handle_address_unknown, logger=log, status=exit_status.runtime_error),
         **Application.exceptions,
     }
 
     def run(self) -> None:
         """Run client."""
-        run_client(num_tasks=self.num_tasks, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
-                   address=(self.host, self.port), auth=self.auth, template=self.template,
-                   redirect_output=self.output_stream, redirect_errors=self.errors_stream)
+        try:
+            run_client(num_tasks=self.num_tasks, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
+                       address=(self.host, self.port), auth=self.auth, template=self.template,
+                       redirect_output=self.output_stream, redirect_errors=self.errors_stream)
+        except gaierror:
+            raise HostAddressInfo(f'Could not resolve host \'{self.host}\'')
 
-    @cached_property
+    @functools.cached_property
     def output_stream(self) -> IO:
         """IO stream for task outputs."""
         return sys.stdout if not self.output_path else open(self.output_path, mode='w')
 
-    @cached_property
+    @functools.cached_property
     def errors_stream(self) -> IO:
         """IO stream for task errors."""
         return sys.stderr if not self.errors_path else open(self.errors_path, mode='w')
