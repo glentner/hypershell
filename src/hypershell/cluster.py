@@ -10,10 +10,11 @@ TODO: examples and notes
 
 # type annotations
 from __future__ import annotations
-from typing import IO, Optional, Iterable, List, Dict, Callable, Tuple
+from typing import IO, Optional, Iterable, List, Dict, Callable, Tuple, Type
 
 # standard libs
 import os
+import re
 import sys
 import time
 import logging
@@ -24,9 +25,10 @@ from functools import cached_property
 # external libs
 from cmdkit.app import Application
 from cmdkit.cli import Interface, ArgumentError
+from cmdkit.config import ConfigurationError
 
 # internal libs
-from hypershell.core.config import config, load_task_env
+from hypershell.core.config import config, load_task_env, blame
 from hypershell.core.queue import QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.logging import Logger, HOSTNAME
@@ -35,10 +37,10 @@ from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 from hypershell.submit import DEFAULT_BUNDLEWAIT
 
 # public interface
-__all__ = ['run_local', 'run_cluster', 'LocalCluster', 'RemoteCluster', 'ClusterApp', ]
+__all__ = ['run_local', 'run_cluster', 'run_ssh',
+           'LocalCluster', 'RemoteCluster', 'ClusterApp', ]
 
 
-# module level logger
 log: Logger = logging.getLogger(__name__)
 
 
@@ -81,7 +83,7 @@ class LocalCluster(Thread):
 
 
 class RemoteCluster(Thread):
-    """Run server with single local client."""
+    """Run server with remote clients via external launcher (e.g., MPI)."""
 
     server: ServerThread
     clients: Popen
@@ -123,6 +125,128 @@ class RemoteCluster(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
+class NodeList(list):
+    """A list of hostnames."""
+
+    name_pattern: re.Pattern = re.compile(r'^[a-z-A-Z0-9]*$')
+    range_pattern: re.Pattern = re.compile(r'\[((\d+|\d+-\d+)(,(\d+|\d+-\d+))*)]')
+
+    @classmethod
+    def from_cmdline(cls: Type[NodeList], arg: str = None) -> NodeList:
+        """Smart initialization via some command-line `arg`."""
+        if not arg:
+            return cls.from_config()
+        if cls.range_pattern.search(arg):
+            return cls.from_pattern(arg)
+        else:
+            return cls([arg, ])
+
+    @classmethod
+    def from_config(cls: Type[NodeList], groupname: str = None) -> NodeList:
+        """Load list of hostnames from configuration file."""
+
+        if 'ssh' not in config:
+            raise ConfigurationError('No `ssh` section found in configuration')
+        if 'nodelist' not in config.ssh:
+            raise ConfigurationError('No `ssh.nodelist` section found in configuration')
+
+        label = blame('ssh', 'nodelist')
+        if groupname is None:
+            if isinstance(config.ssh.nodelist, list):
+                return cls(config.ssh.nodelist)
+            elif isinstance(config.ssh.nodelist, dict):
+                raise ConfigurationError(f'SSH group unspecified but multiple groups in `ssh.nodelist` ({label})')
+            else:
+                raise ConfigurationError(f'Expected list for `ssh.nodelist` ({label})')
+
+        if isinstance(config.ssh.nodelist, dict):
+            if groupname not in config.ssh.nodelist:
+                raise ConfigurationError(f'No list \'{groupname}\' found in `ssh.nodelist` section ({label})')
+            elif not isinstance(config.ssh.nodelist.get(groupname), list):
+                raise ConfigurationError(f'Expected list for `ssh.nodelist.{groupname}` ({label})')
+            else:
+                return cls(config.ssh.nodelist.get(groupname))
+        else:
+            raise ConfigurationError(f'Expected either list or section for `ssh.nodelist` ({label})')
+
+    @classmethod
+    def from_pattern(cls: Type[NodeList], pattern: str) -> NodeList:
+        """Expand a `pattern` to multiple hostnames."""
+        if match := cls.range_pattern.search(pattern):
+            range_spec = match.group()
+            prefix, suffix = pattern.split(range_spec)
+            segments = cls.expand_pattern(range_spec)
+            return cls([f'{prefix}{segment}{suffix}' for segment in segments])
+        else:
+            return cls([pattern, ])
+
+    @staticmethod
+    def expand_pattern(spec: str) -> List[str]:
+        """Take a range spec (e.g., [4,6-8]) and expand to [4,6,7,8]."""
+        spec = spec.strip('[]')
+        result = []
+        for group in spec.split(','):
+            if '-' in group:
+                start_chars, stop_chars = group.strip().split('-')
+                apply_padding = str if start_chars[0] != '0' else lambda s: str(s).zfill(len(start_chars))
+                start, stop = int(start_chars), int(stop_chars)
+                if stop < start:
+                    start, stop = stop, start
+                result.extend([apply_padding(value) for value in range(start, stop + 1)])
+            else:
+                result.extend([group, ])
+        return result
+
+
+class SSHCluster(Thread):
+    """Run server with external ssh clients."""
+
+    server: ServerThread
+    clients: List[Popen]
+    client_argv: List[str]
+
+    def __init__(self,
+                 source: Iterable[str] = None, template: str = DEFAULT_TEMPLATE,
+                 forever_mode: bool = False, restart_mode: bool = False,
+                 bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port),
+                 launcher: str = 'ssh', launcher_args: List[str] = None, nodelist: List[str] = None,
+                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
+                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, live: bool = False,
+                 num_tasks: int = 1, remote_exe: str = 'hyper-shell', redirect_failures: IO = None) -> None:
+        """Initialize server and client threads."""
+        if nodelist is None:
+            raise AttributeError('Expected nodelist')
+        auth = secrets.token_hex(64)
+        self.server = ServerThread(source=source, auth=auth, live=live, bundlesize=bundlesize,
+                                   bundlewait=bundlewait, max_retries=max_retries, eager=eager, address=bind,
+                                   forever_mode=forever_mode, restart_mode=restart_mode,
+                                   redirect_failures=redirect_failures)
+        launcher_args = '' if launcher_args is None else ' '.join(launcher_args)
+        self.client_argv = [f'{launcher} {launcher_args} {host} {remote_exe} client -H {HOSTNAME} -p {bind[1]} '
+                            f'-N {num_tasks} -b {bundlesize} -w {bundlewait} -t \'"{template}"\' -k {auth}'
+                            for host in nodelist]
+        super().__init__(name='hypershell-cluster')
+
+    def run_with_exceptions(self) -> None:
+        """Start child threads, wait."""
+        self.server.start()
+        time.sleep(2)  # NOTE: give the server a chance to start
+        self.clients = []
+        for argv in self.client_argv:
+            log.debug(f'Launching client: {argv}')
+            self.clients.append(Popen(argv, shell=True, stdout=sys.stdout, stderr=sys.stderr))
+        for client in self.clients:
+            client.wait()
+        self.server.join()
+
+    def stop(self, wait: bool = False, timeout: int = None) -> None:
+        """Stop child threads before main thread."""
+        self.server.stop(wait=wait, timeout=timeout)
+        for client in self.clients:
+            client.terminate()
+        super().stop(wait=wait, timeout=timeout)
+
+
 def run_local(**options) -> None:
     """Run local cluster until completion."""
     thread = LocalCluster.new(**options)
@@ -143,11 +267,21 @@ def run_cluster(**options) -> None:
         raise
 
 
+def run_ssh(**options) -> None:
+    """Run remote ssh cluster until completion."""
+    thread = SSHCluster.new(**options)
+    try:
+        thread.join()
+    except Exception:
+        thread.stop()
+        raise
+
+
 APP_NAME = 'hyper-shell cluster'
 APP_USAGE = f"""\
 usage: hyper-shell cluster [-h] [FILE | --restart | --forever] [--no-db] [-N NUM] [-t CMD] 
                            [-b SIZE] [-w SEC] [-o PATH] [-e PATH] [-f PATH] [-r NUM [--eager]] 
-                           [--ssh HOST... | --mpi | --launcher=ARGS...]\
+                           [--ssh [HOST... | --ssh-group NAME] | --mpi | --launcher=ARGS...]\
 """
 APP_HELP = f"""\
 {APP_USAGE}
@@ -155,28 +289,30 @@ APP_HELP = f"""\
 Start cluster locally, over SSH, or with a custom launcher.
 
 arguments:
-FILE                     Path to input task file (default: <stdin>).
+FILE                        Path to input task file (default: <stdin>).
 
 modes:
---ssh          HOST...   Launch directly with SSH host(s).
---mpi                    Same as '--launcher=mpirun'
---launcher     ARGS...   Use specific launch interface.
+--ssh              HOST...  Launch directly with SSH host(s).
+--mpi                       Same as '--launcher=mpirun'
+--launcher         ARGS...  Use specific launch interface.
 
 options:
--N, --num-tasks    NUM   Number of task executors per client.
--t, --template     CMD   Command-line template pattern.
--p, --port         NUM   Port number (default: {QueueConfig.port}).
--b, --bundlesize   SIZE  Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
--w, --bundlewait   SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
--r, --max-retries  NUM   Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
-    --eager              Schedule failed tasks before new tasks.
-    --no-db              Disable database (submit directly to clients).
-    --forever            Schedule forever.
-    --restart            Start scheduling from last completed task.
--o, --output       PATH  File path for task outputs (default: <stdout>).
--e, --errors       PATH  File path for task errors (default: <stderr>).
--f, --failures     PATH  File path to write failed task args (default: <none>).
--h, --help               Show this message and exit.\
+-N, --num-tasks    NUM      Number of task executors per client.
+-t, --template     CMD      Command-line template pattern.
+-p, --port         NUM      Port number (default: {QueueConfig.port}).
+-b, --bundlesize   SIZE     Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
+-w, --bundlewait   SEC      Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
+-r, --max-retries  NUM      Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
+    --eager                 Schedule failed tasks before new tasks.
+    --no-db                 Disable database (submit directly to clients).
+    --forever               Schedule forever.
+    --restart               Start scheduling from last completed task.
+    --ssh-args     ARGS     Command-line arguments for SSH.
+    --ssh-group    NAME     Name of ssh nodelist group in config.
+-o, --output       PATH     File path for task outputs (default: <stdout>).
+-e, --errors       PATH     File path for task errors (default: <stderr>).
+-f, --failures     PATH     File path to write failed task args (default: <none>).
+-h, --help                  Show this message and exit.\
 """
 
 
@@ -216,13 +352,19 @@ class ClusterApp(Application):
     restart_mode: bool = False
     interface.add_argument('--restart', action='store_true', dest='restart_mode')
 
-    ssh_mode: List[str] = None
+    ssh_mode: str = None
     mpi_mode: bool = False
     launch_mode: str = None
     mode_interface = interface.add_mutually_exclusive_group()
-    mode_interface.add_argument('--ssh', nargs='+', default=None, dest='ssh_mode')
+    mode_interface.add_argument('--ssh', nargs='?', const='<default>', default=None, dest='ssh_mode')
     mode_interface.add_argument('--mpi', action='store_true', dest='mpi_mode')
     mode_interface.add_argument('--launcher', default=None, dest='launch_mode')
+
+    ssh_args: str = ''
+    interface.add_argument('--ssh-args', default=ssh_args)
+
+    ssh_group: str = None
+    interface.add_argument('--ssh-group', default=None)
 
     remote_exe: str = 'hyper-shell'
     interface.add_argument('--remote-exe', default=remote_exe)
@@ -240,12 +382,6 @@ class ClusterApp(Application):
 
     def run(self) -> None:
         """Run cluster."""
-        if self.live_mode and self.forever_mode:
-            raise ArgumentError('Using --forever with --no-db is invalid')
-        if self.live_mode and self.restart_mode:
-            raise ArgumentError('Using --restart with --no-db is invalid')
-        if self.forever_mode and self.restart_mode:
-            raise ArgumentError('Using --forever with --restart is invalid')
         launcher = self.launchers.get(self.mode)
         launcher(source=self.source, num_tasks=self.num_tasks, template=self.template,
                  bundlesize=self.bundlesize, bundlewait=self.bundlewait,
@@ -267,10 +403,14 @@ class ClusterApp(Application):
         run_cluster(**options, launcher='mpirun',
                     remote_exe=self.remote_exe, bind=('0.0.0.0', self.port))
 
-    @staticmethod
-    def run_ssh(**options) -> None:
+    def run_ssh(self, **options) -> None:
         """Run remote cluster with SSH."""
-        log.critical('SSH-mode not implemented')
+        if self.ssh_group:
+            nodelist = NodeList.from_config(self.ssh_group)
+        else:
+            nodelist = NodeList.from_cmdline(self.ssh_mode if self.ssh_mode != '<default>' else None)
+        run_ssh(**options, launcher='ssh', launcher_args=[self.ssh_args, ], nodelist=nodelist,
+                remote_exe=self.remote_exe, bind=('0.0.0.0', self.port))
 
     @cached_property
     def launchers(self) -> Dict[str, Callable]:
@@ -301,6 +441,16 @@ class ClusterApp(Application):
             raise ArgumentError('Cannot specify -o/--output PATH with remote clients')
         if self.errors_path and self.mode != 'local':
             raise ArgumentError('Cannot specify -e/--errors PATH with remote clients')
+        if self.live_mode and self.forever_mode:
+            raise ArgumentError('Using --forever with --no-db is invalid')
+        if self.live_mode and self.restart_mode:
+            raise ArgumentError('Using --restart with --no-db is invalid')
+        if self.forever_mode and self.restart_mode:
+            raise ArgumentError('Using --forever with --restart is invalid')
+        if self.ssh_args and not self.ssh_mode:
+            raise ArgumentError('Unexpected --ssh-args when not in --ssh mode')
+        if self.ssh_group and self.ssh_mode != '<default>':
+            raise ArgumentError('Cannot specify --ssh with target with --ssh-group')
 
     @cached_property
     def output_stream(self) -> IO:
