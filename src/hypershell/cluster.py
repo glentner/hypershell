@@ -500,11 +500,11 @@ class ClusterApp(Application):
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Close IO streams if not standard streams."""
-        if self.input_stream is not None and self.input_stream is not sys.stdin:
+        if self.input_stream and self.input_stream is not sys.stdin:
             self.input_stream.close()
         if self.output_stream is not sys.stdout:
             self.output_stream.close()
         if self.errors_stream is not sys.stderr:
             self.errors_stream.close()
-        if self.failure_stream is not os.devnull:
+        if self.failure_stream:
             self.failure_stream.close()
