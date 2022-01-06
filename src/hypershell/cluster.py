@@ -32,7 +32,8 @@ from hypershell.core.config import config, load_task_env, blame
 from hypershell.core.queue import QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.logging import Logger, HOSTNAME
-from hypershell.client import ClientThread, DEFAULT_TEMPLATE
+from hypershell.core.template import DEFAULT_TEMPLATE
+from hypershell.client import ClientThread, DEFAULT_NUM_TASKS
 from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 from hypershell.submit import DEFAULT_BUNDLEWAIT
 
@@ -305,8 +306,8 @@ modes:
 --launcher         ARGS...  Use specific launch interface.
 
 options:
--N, --num-tasks    NUM      Number of task executors per client.
--t, --template     CMD      Command-line template pattern.
+-N, --num-tasks    NUM      Number of task executors per client (default: {DEFAULT_NUM_TASKS}).
+-t, --template     CMD      Command-line template pattern (default: "{DEFAULT_TEMPLATE}").
 -p, --port         NUM      Port number (default: {QueueConfig.port}).
 -b, --bundlesize   SIZE     Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
 -w, --bundlewait   SEC      Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).

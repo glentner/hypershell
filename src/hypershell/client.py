@@ -546,6 +546,10 @@ class ClientHeartbeatThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
+# Only create one task executor by default
+DEFAULT_NUM_TASKS = 1
+
+
 class ClientThread(Thread):
     """Manage asynchronous task bundle scheduling and receiving."""
 
@@ -560,7 +564,7 @@ class ClientThread(Thread):
     executors: List[TaskThread]
 
     def __init__(self,
-                 num_tasks: int = 1,
+                 num_tasks: int = DEFAULT_NUM_TASKS,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port),
                  auth: str = QueueConfig.auth, template: str = DEFAULT_TEMPLATE,
@@ -633,7 +637,8 @@ class ClientThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
-def run_client(num_tasks: int = 1, bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
+def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
+               bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None) -> None:
     """Run client until disconnect signal received."""
@@ -659,7 +664,7 @@ APP_HELP = f"""\
 Launch client directly, run tasks in parallel.
 
 options:
--N, --num-tasks   NUM   Number of tasks to run in parallel.
+-N, --num-tasks   NUM   Number of tasks to run in parallel (default: {DEFAULT_NUM_TASKS}).
 -t, --template    CMD   Command-line template pattern.
 -b, --bundlesize  SIZE  Bundle size for finished tasks (default: {DEFAULT_BUNDLESIZE}).
 -w, --bundlewait  SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
@@ -678,7 +683,7 @@ class ClientApp(Application):
     name = APP_NAME
     interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
 
-    num_tasks: int = 1
+    num_tasks: int = DEFAULT_NUM_TASKS
     interface.add_argument('-N', '--num-tasks', type=int, default=num_tasks)
 
     host: str = QueueConfig.host
