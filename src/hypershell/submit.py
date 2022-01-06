@@ -128,7 +128,7 @@ class Loader(StateMachine):
     def put_task(self) -> LoaderState:
         """Enqueue loaded task."""
         try:
-            self.queue.put(self.task, timeout=2)
+            self.queue.put(self.task, timeout=1)
             self.count += 1
             return LoaderState.GET
         except QueueFull:
@@ -212,7 +212,7 @@ class DatabaseCommitter(StateMachine):
     def get_task(self) -> DatabaseCommitterState:
         """Get tasks from local queue and check buffer."""
         try:
-            task = self.queue.get(timeout=2)
+            task = self.queue.get(timeout=1)
         except QueueEmpty:
             return DatabaseCommitterState.GET
         if task is not None:
