@@ -495,10 +495,10 @@ class ClientHeartbeat(StateMachine):
             heartbeat = Heartbeat.new(uuid=self.uuid, state=client_state)
             self.queue.heartbeat.put(heartbeat.pack(), timeout=2)
             if client_state is ClientState.RUNNING:
-                log.trace(f'Heartbeat - running ({heartbeat.host}: {heartbeat.uuid}')
+                log.trace(f'Heartbeat - running ({heartbeat.host}: {heartbeat.uuid})')
                 return HeartbeatState.WAIT
             else:
-                log.trace(f'Heartbeat - final ({heartbeat.host}: {heartbeat.uuid}')
+                log.trace(f'Heartbeat - final ({heartbeat.host}: {heartbeat.uuid})')
                 return HeartbeatState.FINAL
         except QueueEmpty:
             return HeartbeatState.SUBMIT
