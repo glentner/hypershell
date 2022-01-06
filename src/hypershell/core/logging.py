@@ -37,6 +37,7 @@ INSTANCE = str(uuid.uuid4())
 
 # Canonical colors for logging messages
 level_color: Dict[str, Ansi] = {
+    'DEVEL': Ansi.RED,
     'TRACE': Ansi.CYAN,
     'DEBUG': Ansi.BLUE,
     'INFO': Ansi.GREEN,
@@ -50,6 +51,10 @@ TRACE: int = logging.DEBUG - 5
 logging.addLevelName(TRACE, 'TRACE')
 
 
+DEVEL: int = 1
+logging.addLevelName(DEVEL, 'DEVEL')
+
+
 class Logger(logging.Logger):
     """Extend Logger to implement TRACE level."""
 
@@ -57,6 +62,11 @@ class Logger(logging.Logger):
         """Log 'msg % args' with severity 'TRACE'."""
         if self.isEnabledFor(TRACE):
             self._log(TRACE, msg, args, **kwargs)
+
+    def devel(self, msg: str, *args, **kwargs):
+        """Log 'msg % args' with severity 'DEVEL'."""
+        if self.isEnabledFor(DEVEL):
+            self._log(DEVEL, msg, args, **kwargs)
 
 
 # inject class back into logging library
@@ -108,6 +118,8 @@ def level_from_name(name: Any, source: str = 'logging.level') -> int:
     name = name.upper()
     if name == 'TRACE':
         return TRACE
+    elif name == 'DEVEL':
+        return DEVEL
     elif name in ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'):
         return getattr(logging, name)
     else:
