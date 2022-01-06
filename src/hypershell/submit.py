@@ -52,6 +52,7 @@ from queue import Queue, Empty as QueueEmpty, Full as QueueFull
 from enum import Enum
 
 # external libs
+from cmdkit.config import ConfigurationError
 from cmdkit.app import Application
 from cmdkit.cli import Interface
 
@@ -61,6 +62,7 @@ from hypershell.core.config import config, default
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.thread import Thread
+from hypershell.core.template import Template, DEFAULT_TEMPLATE
 from hypershell.database.model import Task
 
 # public interface
@@ -86,14 +88,18 @@ class Loader(StateMachine):
     task: Task
     source: Iterator[str]
     queue: Queue[Optional[Task]]
+    template: Template
+    count: int
 
     state = LoaderState.START
     states = LoaderState
 
-    def __init__(self, source: Iterable[str], queue: Queue[Optional[Task]]) -> None:
+    def __init__(self, source: Iterable[str], queue: Queue[Optional[Task]], template: str = DEFAULT_TEMPLATE) -> None:
         """Initialize source to read tasks and submit to database."""
-        self.source = iter(source)
+        self.template = Template(template)
+        self.source = map(self.template.expand, source)
         self.queue = queue
+        self.count = 0
 
     @functools.cached_property
     def actions(self) -> Dict[LoaderState, Callable[[], LoaderState]]:
@@ -123,6 +129,7 @@ class Loader(StateMachine):
         """Enqueue loaded task."""
         try:
             self.queue.put(self.task, timeout=2)
+            self.count += 1
             return LoaderState.GET
         except QueueFull:
             return LoaderState.PUT
@@ -137,10 +144,10 @@ class Loader(StateMachine):
 class LoaderThread(Thread):
     """Run loader within dedicated thread."""
 
-    def __init__(self, source: Iterable[str], queue: Queue[Optional[Task]]) -> None:
+    def __init__(self, source: Iterable[str], queue: Queue[Optional[Task]], template: str = DEFAULT_TEMPLATE) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-submit-loader')
-        self.machine = Loader(source=source, queue=queue)
+        self.machine = Loader(source=source, queue=queue, template=template)
 
     def run_with_exceptions(self) -> None:
         """Run machine."""
@@ -263,11 +270,11 @@ class SubmitThread(Thread):
     committer: DatabaseCommitterThread
 
     def __init__(self, source: Iterable[str], bundlesize: int = DEFAULT_BUNDLESIZE,
-                 bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
+                 bundlewait: int = DEFAULT_BUNDLEWAIT, template: str = DEFAULT_TEMPLATE) -> None:
         """Initialize queue and child threads."""
         self.source = source
         self.queue = Queue(maxsize=bundlesize)
-        self.loader = LoaderThread(source=source, queue=self.queue)
+        self.loader = LoaderThread(source=source, queue=self.queue, template=template)
         self.committer = DatabaseCommitterThread(queue=self.queue, bundlesize=bundlesize, bundlewait=bundlewait)
         super().__init__(name='hypershell-submit')
 
@@ -299,6 +306,11 @@ class SubmitThread(Thread):
         self.queue.put(None)
         self.committer.stop(wait=wait, timeout=timeout)
         super().stop(wait=wait, timeout=timeout)
+
+    @property
+    def task_count(self) -> int:
+        """Count of submitted tasks."""
+        return self.loader.machine.count
 
 
 class QueueCommitterState(State, Enum):
@@ -428,12 +440,12 @@ class LiveSubmitThread(Thread):
     loader: LoaderThread
     committer: QueueCommitterThread
 
-    def __init__(self, source: Iterable[str], queue_config: QueueConfig,
+    def __init__(self, source: Iterable[str], queue_config: QueueConfig, template: str = DEFAULT_TEMPLATE,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize queue and child threads."""
         self.source = source
         self.local = Queue(maxsize=bundlesize)
-        self.loader = LoaderThread(source=source, queue=self.local)
+        self.loader = LoaderThread(source=source, queue=self.local, template=template)
         self.client = QueueClient(config=queue_config)
         self.committer = QueueCommitterThread(local=self.local, client=self.client,
                                               bundlesize=bundlesize, bundlewait=bundlewait)
@@ -471,43 +483,54 @@ class LiveSubmitThread(Thread):
         self.committer.stop(wait=wait, timeout=timeout)
         super().stop(wait=wait, timeout=timeout)
 
+    @property
+    def task_count(self) -> int:
+        """Count of submitted tasks."""
+        return self.loader.machine.count
+
 
 def submit_from(source: Iterable[str], queue_config: QueueConfig = None,
-                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
+                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
+                template: str = DEFAULT_TEMPLATE) -> int:
     """Submit all task arguments from `source`."""
-    if queue_config:
-        thread = LiveSubmitThread.new(source=source, queue_config=queue_config,
-                                      bundlesize=bundlesize, bundlewait=bundlewait)
+    if not queue_config:
+        thread = SubmitThread.new(source=source, bundlesize=bundlesize, bundlewait=bundlewait,
+                                  template=template)
     else:
-        thread = SubmitThread.new(source=source, bundlesize=bundlesize, bundlewait=bundlewait)
+        thread = LiveSubmitThread.new(source=source, queue_config=queue_config, template=template,
+                                      bundlesize=bundlesize, bundlewait=bundlewait)
     try:
         thread.join()
     except Exception:
         thread.stop()
         raise
+    else:
+        return thread.task_count
 
 
 def submit_file(path: str, queue_config: QueueConfig = None,
-                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT, **options) -> None:
+                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
+                template: str = DEFAULT_TEMPLATE, **options) -> int:
     """Submit tasks by reading argument lines from local file `path`."""
     with open(path, mode='r', **options) as stream:
-        submit_from(stream, queue_config=queue_config, bundlesize=bundlesize, bundlewait=bundlewait)
+        return submit_from(stream, queue_config=queue_config, bundlesize=bundlesize,
+                           bundlewait=bundlewait, template=template)
 
 
 APP_NAME = 'hyper-shell submit'
 APP_USAGE = f"""\
-usage: {APP_NAME} [-h] [FILE] [-b NUM] [-w SEC]\
+usage: {APP_NAME} [-h] [FILE] [-b NUM] [-w SEC] [-t CMD]
+Submit tasks from a file.\
 """
 
 APP_HELP = f"""\
 {APP_USAGE}
 
-Submit command lines to the database.
-
 arguments:
 FILE                   Path to task file ("-" for <stdin>).
 
 options:
+-t, --template    CMD  Submit-time template expansion (default: "{DEFAULT_TEMPLATE}").
 -b, --bundlesize  NUM  Number of lines to buffer (default: {DEFAULT_BUNDLESIZE}).
 -w, --bundlewait  SEC  Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
 -h, --help             Show this message and exit.\
@@ -530,7 +553,8 @@ class SubmitApp(Application):
     bundlewait: int = config.submit.bundlewait
     interface.add_argument('-w', '--bundlewait', type=int, default=bundlewait)
 
-    count: int
+    template: str = DEFAULT_TEMPLATE
+    interface.add_argument('-t', '--template', default=template)
 
     def run(self) -> None:
         """Run submit thread."""
@@ -539,26 +563,16 @@ class SubmitApp(Application):
 
     def submit_all(self) -> None:
         """Submit all tasks from source."""
-        submit_from(self.enumerated(self.source), bundlesize=self.bundlesize, bundlewait=self.bundlewait)
-        log.info(f'Submitted {self.count} tasks from {self.filename}')
-
-    def enumerated(self, source: IO) -> Iterable[str]:
-        """Yield lines from `source` and update counter."""
-        for count, line in enumerate(source):
-            self.count = count + 1
-            yield line
+        count = submit_from(self.source, template=self.template,
+                            bundlesize=self.bundlesize, bundlewait=self.bundlewait)
+        log.info(f'Submitted {count} tasks')
 
     @staticmethod
     def check_config():
-        """Emit warning for particular configuration."""
+        """Halt if we are not connected to database."""
         db = config.database.get('file', None) or config.database.get('database', None)
         if config.database.provider == 'sqlite' and db in ('', ':memory:', None):
-            log.error('Submitting tasks to in-memory database has no effect')
-
-    @property
-    def filename(self) -> str:
-        """The basename of the file."""
-        return '<stdin>' if self.filepath == '-' else os.path.basename(self.filepath)
+            raise ConfigurationError('Submitting tasks to in-memory database has no effect')
 
     def __enter__(self) -> SubmitApp:
         """Open file if not stdin."""
