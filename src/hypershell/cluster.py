@@ -475,9 +475,9 @@ class ClusterApp(Application):
         return sys.stderr if not self.errors_path else open(self.errors_path, mode='w')
 
     @cached_property
-    def failure_stream(self) -> IO:
+    def failure_stream(self) -> Optional[IO]:
         """IO stream to write failed task args."""
-        return os.devnull if not self.failure_path else open(self.failure_path, mode='w')
+        return None if not self.failure_path else open(self.failure_path, mode='w')
 
     @cached_property
     def input_stream(self) -> Optional[IO]:
