@@ -54,6 +54,9 @@ default = Namespace({
         'style': DEFAULT_LOGGING_STYLE,
         **LOGGING_STYLES.get(DEFAULT_LOGGING_STYLE),
     },
+    'task': {
+        'cwd': os.getcwd(),
+    },
     'submit': {
         'bundlesize': 1,
         'bundlewait': 5  # seconds

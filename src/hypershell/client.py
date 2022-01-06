@@ -47,18 +47,20 @@ from socket import gaierror
 
 # external libs
 from cmdkit.app import Application, exit_status
-from cmdkit.cli import Interface
+from cmdkit.cli import Interface, ArgumentError
 
 # internal libs
+from hypershell.database.model import Task
 from hypershell.core.heartbeat import Heartbeat, ClientState
+from hypershell.core.platform import default_path
 from hypershell.core.config import default, config, load_task_env
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.logging import HOSTNAME, Logger
-from hypershell.core.exceptions import handle_exception, handle_disconnect, handle_address_unknown, HostAddressInfo
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
-from hypershell.database.model import Task
+from hypershell.core.exceptions import (handle_exception, handle_disconnect,
+                                        handle_address_unknown, HostAddressInfo)
 
 # public interface
 __all__ = ['run_client', 'ClientThread', 'ClientApp', 'DEFAULT_NUM_TASKS', ]
@@ -304,6 +306,19 @@ class ClientCollectorThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
+def task_env(task: Task) -> Dict[str, str]:
+    """Build environment dictionary for the given `task`."""
+    return {
+        **os.environ,
+        **load_task_env(),
+        'TASK_ID': task.id,
+        'TASK_ARGS': task.args,
+        'TASK_CWD': config.task.cwd,
+        'TASK_OUTPATH': os.path.join(default_path.lib, 'task', f'{task.id}.out'),
+        'TASK_ERRPATH': os.path.join(default_path.lib, 'task', f'{task.id}.err'),
+    }
+
+
 class TaskState(State, Enum):
     """Finite states for task executor."""
     START = 0
@@ -325,6 +340,7 @@ class TaskExecutor(StateMachine):
     template: Template
     redirect_output: IO
     redirect_errors: IO
+    capture: bool
 
     inbound: Queue[Optional[Task]]
     outbound: Queue[Optional[Task]]
@@ -333,7 +349,8 @@ class TaskExecutor(StateMachine):
     states = TaskState
 
     def __init__(self, id: int, inbound: Queue[Optional[Task]], outbound: Queue[Optional[Task]],
-                 template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None) -> None:
+                 template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None,
+                 capture: bool = False) -> None:
         """Initialize task executor."""
         self.id = id
         self.template = Template(template)
@@ -341,6 +358,7 @@ class TaskExecutor(StateMachine):
         self.outbound = outbound
         self.redirect_output = redirect_output or sys.stdout
         self.redirect_errors = redirect_errors or sys.stderr
+        self.capture = capture
 
     @functools.cached_property
     def actions(self) -> Dict[TaskState, Callable[[], TaskState]]:
@@ -383,12 +401,18 @@ class TaskExecutor(StateMachine):
 
     def start_task(self) -> TaskState:
         """Start current task locally."""
+        env = task_env(self.task)
         log.info(f'Running task ({self.task.id})')
         log.debug(f'Running task ({self.task.id}: {self.task.command})')
+        if self.capture:
+            self.task.outpath = env['TASK_OUTPATH']
+            self.task.errpath = env['TASK_ERRPATH']
+            self.redirect_output = open(self.task.outpath, mode='w')
+            self.redirect_errors = open(self.task.errpath, mode='w')
         self.task.start_time = datetime.now().astimezone()
-        self.process = Popen(self.task.command, shell=True, stdout=self.redirect_output, stderr=self.redirect_errors,
-                             env={**os.environ, **load_task_env(),
-                                  'TASK_ID': self.task.id, 'TASK_ARGS': self.task.args})
+        self.process = Popen(self.task.command, shell=True,
+                             stdout=self.redirect_output, stderr=self.redirect_errors,
+                             cwd=config.task.cwd, env=env)
         return TaskState.WAIT_TASK
 
     def wait_task(self) -> TaskState:
@@ -397,6 +421,9 @@ class TaskExecutor(StateMachine):
             self.task.exit_status = self.process.wait(timeout=2)
             self.task.completion_time = datetime.now().astimezone()
             log.debug(f'Completed task ({self.task.id})')
+            if self.capture:
+                self.redirect_output.close()
+                self.redirect_errors.close()
             return TaskState.PUT_LOCAL
         except TimeoutExpired:
             return TaskState.WAIT_TASK
@@ -421,13 +448,16 @@ class TaskThread(Thread):
     id: int
 
     def __init__(self,
-                 id: int, inbound: Queue[Optional[str]], outbound: Queue[Optional[str]],
-                 template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None) -> None:
+                 id: int,
+                 inbound: Queue[Optional[str]], outbound: Queue[Optional[str]],
+                 template: str = DEFAULT_TEMPLATE, capture: bool = False,
+                 redirect_output: IO = None, redirect_errors: IO = None) -> None:
         """Initialize task executor."""
         self.id = id
         super().__init__(name=f'hypershell-executor-{id}')
         self.machine = TaskExecutor(id=id, inbound=inbound, outbound=outbound, template=template,
-                                    redirect_output=redirect_output, redirect_errors=redirect_errors)
+                                    redirect_output=redirect_output, redirect_errors=redirect_errors,
+                                    capture=capture)
 
     def run_with_exceptions(self) -> None:
         """Run machine."""
@@ -568,7 +598,7 @@ class ClientThread(Thread):
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port),
                  auth: str = QueueConfig.auth, template: str = DEFAULT_TEMPLATE,
-                 redirect_output: IO = None, redirect_errors: IO = None,
+                 redirect_output: IO = None, redirect_errors: IO = None, capture: bool = False,
                  heartrate: int = DEFAULT_HEARTRATE) -> None:
         """Initialize queue manager and child threads."""
         super().__init__(name='hypershell-client')
@@ -581,8 +611,10 @@ class ClientThread(Thread):
         self.heartbeat = ClientHeartbeatThread(uuid=self.uuid, queue=self.client, heartrate=heartrate)
         self.collector = ClientCollectorThread(queue=self.client, local=self.outbound,
                                                bundlesize=bundlesize, bundlewait=bundlewait)
-        self.executors = [TaskThread(id=count+1, inbound=self.inbound, outbound=self.outbound, template=template,
-                                     redirect_output=redirect_output, redirect_errors=redirect_errors)
+        self.executors = [TaskThread(id=count+1,
+                                     inbound=self.inbound, outbound=self.outbound,
+                                     redirect_output=redirect_output, redirect_errors=redirect_errors,
+                                     template=template, capture=capture)
                           for count in range(num_tasks)]
 
     def run_with_exceptions(self) -> None:
@@ -640,10 +672,11 @@ class ClientThread(Thread):
 def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
-               template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None) -> None:
+               template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None,
+               capture: bool = False) -> None:
     """Run client until disconnect signal received."""
     thread = ClientThread.new(num_tasks=num_tasks, bundlesize=bundlesize, bundlewait=bundlewait,
-                              address=address, auth=auth, template=template,
+                              address=address, auth=auth, template=template, capture=capture,
                               redirect_output=redirect_output, redirect_errors=redirect_errors)
     try:
         thread.join()
@@ -665,14 +698,15 @@ Launch client directly, run tasks in parallel.
 
 options:
 -N, --num-tasks   NUM   Number of tasks to run in parallel (default: {DEFAULT_NUM_TASKS}).
--t, --template    CMD   Command-line template pattern.
+-t, --template    CMD   Command-line template pattern (default: "{DEFAULT_TEMPLATE}").
 -b, --bundlesize  SIZE  Bundle size for finished tasks (default: {DEFAULT_BUNDLESIZE}).
 -w, --bundlewait  SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
 -H, --host        ADDR  Hostname for server.
 -p, --port        NUM   Port number for server.
 -k, --auth        KEY   Cryptographic key to connect to server.
 -o, --output      PATH  Redirect task output (default: <stdout>).
--e, --errors      PATH  Redirect task errors (default: <stderr>).   
+-e, --errors      PATH  Redirect task errors (default: <stderr>).
+-c, --capture           Capture individual task <stdout> and <stderr>.
 -h, --help              Show this message and exit.\
 """
 
@@ -709,6 +743,9 @@ class ClientApp(Application):
     interface.add_argument('-o', '--output', default=None, dest='output_path')
     interface.add_argument('-e', '--errors', default=None, dest='errors_path')
 
+    capture: bool = False
+    interface.add_argument('-c', '--capture', action='store_true')
+
     exceptions = {
         EOFError: functools.partial(handle_disconnect, logger=log),
         ConnectionResetError: functools.partial(handle_disconnect, logger=log),
@@ -720,11 +757,18 @@ class ClientApp(Application):
     def run(self) -> None:
         """Run client."""
         try:
+            self.check_args()
             run_client(num_tasks=self.num_tasks, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
                        address=(self.host, self.port), auth=self.auth, template=self.template,
-                       redirect_output=self.output_stream, redirect_errors=self.errors_stream)
+                       redirect_output=self.output_stream, redirect_errors=self.errors_stream,
+                       capture=self.capture)
         except gaierror:
             raise HostAddressInfo(f'Could not resolve host \'{self.host}\'')
+
+    def check_args(self) -> None:
+        """Check for logical errors in command-line arguments."""
+        if self.capture and (self.output_path or self.errors_path):
+            raise ArgumentError('Cannot specify --capture with either --output or --errors')
 
     @functools.cached_property
     def output_stream(self) -> IO:

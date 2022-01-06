@@ -88,6 +88,9 @@ class Task(Model):
     completion_time = Column(DateTime(timezone=True), nullable=True)
     exit_status = Column(Integer(), nullable=True)
 
+    outpath = Column(Text(), nullable=True)
+    errpath = Column(Text(), nullable=True)
+
     attempt = Column(Integer(), nullable=False)
     retried = Column(Boolean(), nullable=False)
     previous_id = Column(Text().with_variant(UUID(), 'postgresql'), unique=True, nullable=True)
@@ -104,6 +107,8 @@ class Task(Model):
         'start_time': datetime,
         'completion_time': datetime,
         'exit_status': int,
+        'outpath': str,
+        'errpath': str,
         'attempt': int,
         'previous_id': str,
     }

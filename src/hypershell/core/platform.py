@@ -60,4 +60,5 @@ else:
 default_path = path.system if is_admin else path.user
 os.makedirs(default_path.lib, exist_ok=True)
 os.makedirs(default_path.log, exist_ok=True)
+os.makedirs(os.path.join(default_path.lib, 'task'), exist_ok=True)
 
