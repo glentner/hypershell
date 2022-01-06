@@ -57,10 +57,11 @@ from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.logging import HOSTNAME, Logger
 from hypershell.core.exceptions import handle_exception, handle_disconnect, handle_address_unknown, HostAddressInfo
+from hypershell.core.template import Template, DEFAULT_TEMPLATE
 from hypershell.database.model import Task
 
 # public interface
-__all__ = ['run_client', 'ClientThread', 'ClientApp', 'DEFAULT_TEMPLATE', ]
+__all__ = ['run_client', 'ClientThread', 'ClientApp', 'DEFAULT_NUM_TASKS', ]
 
 
 log: Logger = logging.getLogger(__name__)
@@ -224,7 +225,7 @@ class ClientCollector(StateMachine):
             CollectorState.CHECK_BUNDLE: self.check_bundle,
             CollectorState.PACK_BUNDLE: self.pack_bundle,
             CollectorState.PUT_REMOTE: self.put_remote,
-            CollectorState.FINALIZE: self.finalize,
+            CollectorState.FINAL: self.finalize,
         }
 
     def start(self) -> CollectorState:
@@ -303,18 +304,16 @@ class ClientCollectorThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
-DEFAULT_TEMPLATE = '{}'
-
-
 class TaskState(State, Enum):
     """Finite states for task executor."""
     START = 0
     GET_LOCAL = 1
-    START_TASK = 2
-    WAIT_TASK = 3
-    PUT_LOCAL = 4
-    FINALIZE = 5
-    HALT = 6
+    CREATE_TASK = 2
+    START_TASK = 3
+    WAIT_TASK = 4
+    PUT_LOCAL = 5
+    FINAL = 6
+    HALT = 7
 
 
 class TaskExecutor(StateMachine):
@@ -323,7 +322,7 @@ class TaskExecutor(StateMachine):
     id: int
     task: Task
     process: Popen
-    template: str
+    template: Template
     redirect_output: IO
     redirect_errors: IO
 
@@ -337,7 +336,7 @@ class TaskExecutor(StateMachine):
                  template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None) -> None:
         """Initialize task executor."""
         self.id = id
-        self.template = template
+        self.template = Template(template)
         self.inbound = inbound
         self.outbound = outbound
         self.redirect_output = redirect_output or sys.stdout
@@ -348,6 +347,7 @@ class TaskExecutor(StateMachine):
         return {
             TaskState.START: self.start,
             TaskState.GET_LOCAL: self.get_local,
+            TaskState.CREATE_TASK: self.create_task,
             TaskState.START_TASK: self.start_task,
             TaskState.WAIT_TASK: self.wait_task,
             TaskState.PUT_LOCAL: self.put_local,
@@ -364,17 +364,28 @@ class TaskExecutor(StateMachine):
         try:
             self.task = self.inbound.get(timeout=1)
             self.inbound.task_done()
-            return TaskState.START_TASK if self.task else TaskState.FINALIZE
+            return TaskState.CREATE_TASK if self.task else TaskState.FINAL
         except QueueEmpty:
             return TaskState.GET_LOCAL
 
+    def create_task(self) -> TaskState:
+        """Expand template and initialize task command-line."""
+        try:
+            self.task.client_host = HOSTNAME
+            self.task.command = self.template.expand(self.task.args)
+            return TaskState.START_TASK
+        except Exception as error:
+            log.error(f'{error.__class__.__name__}: {error}')
+            self.task.start_time = datetime.now().astimezone()
+            self.task.completion_time = datetime.now().astimezone()
+            self.task.exit_status = -1
+            return TaskState.PUT_LOCAL
+
     def start_task(self) -> TaskState:
         """Start current task locally."""
-        self.task.command = self.template.replace('{}', self.task.args)
-        self.task.start_time = datetime.now().astimezone()
-        self.task.client_host = HOSTNAME
         log.info(f'Running task ({self.task.id})')
         log.debug(f'Running task ({self.task.id}: {self.task.command})')
+        self.task.start_time = datetime.now().astimezone()
         self.process = Popen(self.task.command, shell=True, stdout=self.redirect_output, stderr=self.redirect_errors,
                              env={**os.environ, **load_task_env(),
                                   'TASK_ID': self.task.id, 'TASK_ARGS': self.task.args})
