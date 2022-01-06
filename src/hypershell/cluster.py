@@ -317,7 +317,7 @@ options:
     --forever               Schedule forever.
     --restart               Start scheduling from last completed task.
     --ssh-args     ARGS     Command-line arguments for SSH.
-    --ssh-group    NAME     Name of ssh nodelist group in config.
+    --ssh-group    NAME     SSH nodelist group in config.
 -E, --env                   Send environment variables.
 -o, --output       PATH     File path for task outputs (default: <stdout>).
 -e, --errors       PATH     File path for task errors (default: <stderr>).
