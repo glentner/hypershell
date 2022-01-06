@@ -53,7 +53,7 @@ from enum import Enum
 
 # external libs
 from cmdkit.config import ConfigurationError
-from cmdkit.app import Application
+from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
 
 # internal libs
@@ -63,6 +63,7 @@ from hypershell.core.fsm import State, StateMachine
 from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
+from hypershell.core.exceptions import handle_exception
 from hypershell.database.model import Task
 
 # public interface
@@ -555,6 +556,11 @@ class SubmitApp(Application):
 
     template: str = DEFAULT_TEMPLATE
     interface.add_argument('-t', '--template', default=template)
+
+    exceptions = {
+        ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
+        **Application.exceptions,
+    }
 
     def run(self) -> None:
         """Run submit thread."""
