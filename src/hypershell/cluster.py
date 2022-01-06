@@ -327,7 +327,7 @@ options:
 
 
 class ClusterApp(Application):
-    """Cluster application."""
+    """Run managed cluster."""
 
     name = APP_NAME
     interface = Interface(APP_NAME, APP_USAGE, APP_HELP)

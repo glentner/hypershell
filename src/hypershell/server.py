@@ -652,7 +652,7 @@ options:
 
 
 class ServerApp(Application):
-    """Run server."""
+    """Run server in stand-alone mode."""
 
     name = APP_NAME
     interface = Interface(APP_NAME, APP_USAGE, APP_HELP)

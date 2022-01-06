@@ -23,6 +23,7 @@ from hypershell.submit import submit_from, submit_file, SubmitThread, SubmitApp
 from hypershell.server import serve_from, serve_file, serve_forever, ServerThread, ServerApp
 from hypershell.client import run_client, ClientThread, ClientApp
 from hypershell.cluster import ClusterApp
+from hypershell.task import TaskGroupApp
 
 # public interface
 __all__ = ['config',
@@ -51,10 +52,11 @@ APP_HELP = f"""\
 {APP_USAGE}
 
 commands:
-submit                 Submit tasks manually.
-server                 Run server directly.
-client                 Run client directly.
-cluster                Launch cluster (recommended).
+submit                 {SubmitApp.__doc__}
+server                 {ServerApp.__doc__}
+client                 {ClientApp.__doc__}
+cluster                {ClusterApp.__doc__} (recommended)
+task                   {TaskGroupApp.__doc__}
 
 options:
 -h, --help             Show this message and exit.
@@ -86,6 +88,7 @@ class HyperShellApp(ApplicationGroup):
         'server': ServerApp,
         'client': ClientApp,
         'cluster': ClusterApp,
+        'task': TaskGroupApp,
     }
 
 

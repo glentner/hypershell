@@ -678,7 +678,7 @@ options:
 
 
 class ClientApp(Application):
-    """Run client."""
+    """Run individual client directly."""
 
     name = APP_NAME
     interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
