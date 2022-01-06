@@ -82,7 +82,7 @@ class SchedulerState(State, Enum):
     LOAD = 1
     PACK = 2
     POST = 3
-    FINALIZE = 4
+    FINAL = 4
     HALT = 5
 
 
@@ -134,7 +134,7 @@ class Scheduler(StateMachine):
             SchedulerState.LOAD: self.load_bundle,
             SchedulerState.PACK: self.pack_bundle,
             SchedulerState.POST: self.post_bundle,
-            SchedulerState.FINALIZE: self.finalize,
+            SchedulerState.FINAL: self.finalize,
         }
 
     def start(self) -> SchedulerState:
@@ -164,7 +164,7 @@ class Scheduler(StateMachine):
         # NOTE: An empty database must wait for at least one task
         # Note: Do not allow HALT before at least one bundle is scheduled
         elif not self.forever_mode and Task.count() > 0 and Task.count_remaining() == 0 and not self.startup_phase:
-            return SchedulerState.FINALIZE
+            return SchedulerState.FINAL
         else:
             time.sleep(DEFAULT_QUERY_PAUSE)
             return SchedulerState.LOAD

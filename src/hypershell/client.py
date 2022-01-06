@@ -73,7 +73,7 @@ class SchedulerState(State, Enum):
     UNPACK = 2
     POP_TASK = 3
     PUT_LOCAL = 4
-    FINALIZE = 5
+    FINAL = 5
     HALT = 6
 
 
@@ -105,7 +105,7 @@ class ClientScheduler(StateMachine):
             SchedulerState.UNPACK: self.unpack_bundle,
             SchedulerState.POP_TASK: self.pop_task,
             SchedulerState.PUT_LOCAL: self.put_local,
-            SchedulerState.FINALIZE: self.finalize,
+            SchedulerState.FINAL: self.finalize,
         }
 
     @staticmethod
@@ -186,7 +186,7 @@ class CollectorState(State, Enum):
     CHECK_BUNDLE = 2
     PACK_BUNDLE = 3
     PUT_REMOTE = 4
-    FINALIZE = 5
+    FINAL = 5
     HALT = 6
 
 
@@ -238,11 +238,11 @@ class ClientCollector(StateMachine):
         try:
             task = self.local.get(timeout=1)
             self.local.task_done()
-            if task is not None:
+            if task:
                 self.tasks.append(task)
                 return CollectorState.CHECK_BUNDLE
             else:
-                return CollectorState.FINALIZE
+                return CollectorState.FINAL
         except QueueEmpty:
             return CollectorState.CHECK_BUNDLE
 
@@ -351,7 +351,7 @@ class TaskExecutor(StateMachine):
             TaskState.START_TASK: self.start_task,
             TaskState.WAIT_TASK: self.wait_task,
             TaskState.PUT_LOCAL: self.put_local,
-            TaskState.FINALIZE: self.finalize,
+            TaskState.FINAL: self.finalize,
         }
 
     def start(self) -> TaskState:
