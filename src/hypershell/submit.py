@@ -42,14 +42,13 @@ from __future__ import annotations
 from typing import List, Iterable, Iterator, IO, Optional, Dict, Callable
 
 # standard libs
-import os
 import io
 import sys
 import functools
 import logging
+from enum import Enum
 from datetime import datetime
 from queue import Queue, Empty as QueueEmpty, Full as QueueFull
-from enum import Enum
 
 # external libs
 from cmdkit.config import ConfigurationError
@@ -493,7 +492,7 @@ class LiveSubmitThread(Thread):
 def submit_from(source: Iterable[str], queue_config: QueueConfig = None,
                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                 template: str = DEFAULT_TEMPLATE) -> int:
-    """Submit all task arguments from `source`."""
+    """Submit all task arguments from `source`, return count of submitted tasks."""
     if not queue_config:
         thread = SubmitThread.new(source=source, bundlesize=bundlesize, bundlewait=bundlewait,
                                   template=template)
@@ -557,6 +556,8 @@ class SubmitApp(Application):
     template: str = DEFAULT_TEMPLATE
     interface.add_argument('-t', '--template', default=template)
 
+    count: int = 0
+
     exceptions = {
         ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
         **Application.exceptions,
@@ -566,12 +567,12 @@ class SubmitApp(Application):
         """Run submit thread."""
         self.check_config()
         self.submit_all()
+        log.info(f'Submitted {self.count} tasks')
 
     def submit_all(self) -> None:
         """Submit all tasks from source."""
-        count = submit_from(self.source, template=self.template,
-                            bundlesize=self.bundlesize, bundlewait=self.bundlewait)
-        log.info(f'Submitted {count} tasks')
+        self.count = submit_from(self.source, template=self.template,
+                                 bundlesize=self.bundlesize, bundlewait=self.bundlewait)
 
     @staticmethod
     def check_config():
