@@ -9,11 +9,19 @@ from __future__ import annotations
 from typing import Dict, Callable, Type
 
 # standard libs
+import logging
 from enum import Enum
 from abc import ABC
 
+# internal libs
+from hypershell.core.exceptions import write_traceback
+from hypershell.core.logging import Logger
+
 # public interface
 __all__ = ['State', 'StateMachine', ]
+
+
+log: Logger = logging.getLogger(__name__)
 
 
 class State(Enum):
@@ -31,11 +39,24 @@ class StateMachine(ABC):
 
     def next(self) -> State:
         """Return next state (halt if necessary)."""
-        return self.states.HALT if self.__should_halt else self.actions.get(self.state)()  # noqa: no member HALT
+        previous_state = self.state
+        try:
+            if self.__should_halt:
+                return self.states.HALT  # noqa: HALT defined in implemented State enums
+            else:
+                action = self.actions.get(previous_state)
+                next_state = action()
+        except Exception as error:
+            log.critical(f'Uncaught exception from {self.__class__}')
+            write_traceback(error, logger=log, module=__name__)
+            raise
+        else:
+            log.devel(f'{self.__class__.__name__}: {previous_state} -> {next_state}')
+            return next_state
 
     def run(self) -> None:
         """Run machine until state is set to `HALT`."""
-        while self.state is not self.states.HALT:  # noqa: no member HALT
+        while self.state is not self.states.HALT:  # noqa: HALT defined in implemented State enums
             self.state = self.next()
 
     def halt(self) -> None:
