@@ -33,7 +33,7 @@ LOGGING_STYLES = {
     'system': {
         'format': '%(asctime)s.%(msecs)03d %(hostname)s %(levelname)8s [%(app_id)s] [%(name)s] %(message)s',
     },
-    'fancy': {
+    'detailed': {
         'format': ('%(ansi_faint)s%(asctime)s.%(msecs)03d %(hostname)s %(ansi_reset)s'
                    '%(ansi_level)s%(ansi_bold)s%(levelname)8s%(ansi_reset)s '
                    '%(ansi_faint)s[%(name)s]%(ansi_reset)s %(message)s'),
