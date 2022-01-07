@@ -37,7 +37,7 @@ def check_database_available():
 
 TASK_SUBMIT_USAGE = f"""\
 usage: hyper-shell task submit [-h] ARGS...
-Submit individual command-line task to database.\
+Submit individual command line to database.\
 """
 TASK_SUBMIT_HELP = f"""\
 {TASK_SUBMIT_USAGE}
@@ -60,7 +60,10 @@ class TaskSubmitApp(Application):
     def run(self) -> None:
         """Run submit thread."""
         check_database_available()
-        submit_from([' '.join(self.argv), ])
+        task = Task.new(args=' '.join(self.argv))
+        Task.add(task)
+        print(task.id)
+
 
 
 TASK_GROUP_USAGE = f"""\
