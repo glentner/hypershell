@@ -17,6 +17,8 @@ toml = ">=0.10.2"
 cmdkit = ">=2.6.0"
 sqlalchemy = ">=1.4.22"
 hypershell = {editable = true, path = "."}
+pyyaml = ">=6.0"
+rich = ">=10.16.2"
 
 [requires]
 python_version = "3.9"
