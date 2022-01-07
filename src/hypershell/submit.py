@@ -280,8 +280,7 @@ class SubmitThread(Thread):
 
     def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
-        log.debug('Started')
-        log.info(f'Reading tasks from {self.source_name}')
+        log.debug(f'Started ({self.source_name})')
         self.loader.start()
         self.committer.start()
         self.loader.join()
@@ -453,8 +452,7 @@ class LiveSubmitThread(Thread):
 
     def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
-        log.debug('Started')
-        log.info(f'Reading tasks from {self.source_name}')
+        log.debug(f'Started ({self.source_name})')
         with self.client:
             self.loader.start()
             self.committer.start()
