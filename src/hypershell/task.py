@@ -109,7 +109,12 @@ class TaskInfoApp(Application):
     interface.add_argument('uuid')
 
     format_json: bool = False
-    interface.add_argument('--json', action='store_true', dest='format_json')
+    print_stdout: bool = False
+    print_stderr: bool = False
+    print_interface = interface.add_mutually_exclusive_group()
+    print_interface.add_argument('--json', action='store_true', dest='format_json')
+    print_interface.add_argument('--stdout', action='store_true', dest='print_stdout')
+    print_interface.add_argument('--stderr', action='store_true', dest='print_stderr')
 
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
@@ -121,12 +126,33 @@ class TaskInfoApp(Application):
         """Run submit thread."""
         check_database_available()
         self.check_uuid()
-        self.write(Task.from_id(self.uuid).to_json())
+        task = Task.from_id(self.uuid)
+        if not (self.print_stdout or self.print_stderr):
+            self.write(task.to_json())
+            return
+        if self.print_stdout:
+            self.write_output(task)
+        if self.print_stderr:
+            self.write_errors(task)
 
     def check_uuid(self) -> None:
         """Check for valid UUID."""
         if not UUID_PATTERN.match(self.uuid):
             raise ArgumentError(f'Bad UUID: \'{self.uuid}\'')
+
+    @staticmethod
+    def write_output(task: Task) -> None:
+        """Fetch output file and print."""
+        with open(task.outpath, mode='r') as stream:
+            for line in stream:
+                print(line, end='', file=sys.stdout)
+
+    @staticmethod
+    def write_errors(task: Task) -> None:
+        """Fetch output file and print."""
+        with open(task.errpath, mode='r') as stream:
+            for line in stream:
+                print(line, end='', file=sys.stderr)
 
     def write(self, data: dict) -> None:
         """Format and print `data` to console."""
