@@ -162,10 +162,10 @@ class Task(Model):
         return cls.from_json(json.loads(data.decode()))
 
     @classmethod
-    def from_id(cls, id: str) -> Task:
+    def from_id(cls, id: str, caching: bool = True) -> Task:
         """Look up task by unique `id`."""
         try:
-            return Session.query(cls).filter_by(id=id).one()
+            return cls.query(caching).filter_by(id=id).one()
         except NoResultFound as error:
             raise cls.NotFound(f'No task with id={id}') from error
         except MultipleResultsFound as error:
@@ -179,8 +179,10 @@ class Task(Model):
                     attempt=attempt, retried=retried, **other)
 
     @classmethod
-    def query(cls) -> Query:
+    def query(cls, caching: bool = True) -> Query:
         """Get query interface for table with scoped session."""
+        if not caching:
+            Session.expire_all()
         return Session.query(cls)
 
     @classmethod

@@ -11,12 +11,13 @@ from typing import List, Dict, Callable
 # standard libs
 import re
 import sys
-import yaml
 import json
+import time
 import logging
 import functools
 
 # external libs
+import yaml
 from rich.console import Console
 from rich.syntax import Syntax
 from cmdkit.config import ConfigurationError
@@ -27,6 +28,7 @@ from sqlalchemy.exc import StatementError
 # internal libs
 from hypershell.core.config import config
 from hypershell.core.exceptions import handle_exception
+from hypershell.core.logging import Logger
 from hypershell.database.model import Task
 
 # public interface
@@ -34,7 +36,7 @@ __all__ = ['TaskGroupApp', ]
 
 
 # initialize application logger
-log = logging.getLogger('hypershell')
+log: Logger = logging.getLogger('hypershell')
 
 
 def check_database_available():
@@ -89,12 +91,12 @@ TASK_INFO_HELP = f"""\
 {TASK_INFO_USAGE}
 
 arguments:
-ID                     Unique UUID.
+ID                  Unique UUID.
 
 options:
-    --stdout           Fetch <stdout> from task.
-    --stderr           Fetch <stderr> from task.
--h, --help             Show this message and exit.\
+    --stdout        Fetch <stdout> from task.
+    --stderr        Fetch <stderr> from task.
+-h, --help          Show this message and exit.\
 """
 
 
@@ -151,6 +153,77 @@ class TaskInfoApp(Application):
         }
 
 
+# Time to wait between database queries
+DEFAULT_INTERVAL = 5
+
+
+TASK_WAIT_NAME = 'hyper-shell task wait'
+TASK_WAIT_USAGE = f"""\
+usage: {TASK_WAIT_NAME} [-h] ID [-n SEC] [--info [--json]]
+Wait for task to complete.\
+"""
+TASK_WAIT_HELP = f"""\
+{TASK_WAIT_USAGE}
+
+arguments:
+ID                    Unique UUID.
+
+options:
+-n, --interval  SEC   Time to wait between polling (default: {DEFAULT_INTERVAL}).
+    --info            Print information on task.
+    --json            Format output as JSON.
+-h, --help            Show this message and exit.\
+"""
+
+
+class TaskWaitApp(Application):
+    """Wait for task to complete."""
+
+    interface = Interface(TASK_WAIT_NAME, TASK_WAIT_USAGE, TASK_WAIT_HELP)
+
+    uuid: str
+    interface.add_argument('uuid')
+
+    interval: int = DEFAULT_INTERVAL
+    interface.add_argument('-n', '--interval', type=int, default=interval)
+
+    print_info: bool = False
+    format_json: bool = False
+    interface.add_argument('--info', action='store_true', dest='print_info')
+    interface.add_argument('--json', action='store_true', dest='format_json')
+
+    exceptions = {
+        Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        StatementError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        **Application.exceptions,
+    }
+
+    def run(self) -> None:
+        """Run submit thread."""
+        check_database_available()
+        self.check_uuid()
+        self.wait_task()
+        if self.print_info or self.format_json:
+            with TaskInfoApp(uuid=self.uuid, format_json=self.format_json) as app:
+                app.run()
+
+    def wait_task(self):
+        """Wait for the task to complete."""
+        while True:
+            task = Task.from_id(self.uuid, caching=False)
+            if task.exit_status is None:
+                log.trace(f'Waiting')
+                time.sleep(self.interval)
+            else:
+                log.trace(f'Task completed ({task.completion_time})')
+                break
+
+    def check_uuid(self) -> None:
+        """Check for valid UUID."""
+        if not UUID_PATTERN.match(self.uuid):
+            raise ArgumentError(f'Bad UUID: \'{self.uuid}\'')
+
+
 TASK_GROUP_NAME = 'hyper-shell task'
 TASK_GROUP_USAGE = f"""\
 usage: {TASK_GROUP_NAME} [-h] <command> [<args>...]
@@ -163,6 +236,7 @@ TASK_GROUP_HELP = f"""\
 commands:
 submit                 {TaskSubmitApp.__doc__}
 info                   {TaskInfoApp.__doc__}
+wait                   {TaskWaitApp.__doc__}
 
 options:
 -h, --help             Show this message and exit.\
@@ -179,4 +253,5 @@ class TaskGroupApp(ApplicationGroup):
     commands = {
         'submit': TaskSubmitApp,
         'info': TaskInfoApp,
+        'wait': TaskWaitApp,
     }
