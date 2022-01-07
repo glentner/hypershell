@@ -77,6 +77,9 @@ default = Namespace({
         'bundlewait': 5,  # Seconds
         'heartrate': 10,  # Seconds, period to wait between heartbeats
     },
+    'console': {
+        'theme': 'solarized-dark',
+    },
     'export': {
         # NOTE: defining HYPERSHELL_EXPORT_XXX defines XXX within task env
     }

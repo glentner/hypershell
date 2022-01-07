@@ -6,19 +6,28 @@
 
 # type annotations
 from __future__ import annotations
-from typing import List
+from typing import List, Dict, Callable
 
 # standard libs
+import re
+import sys
+import yaml
+import json
 import logging
+import functools
 
 # external libs
+from rich.console import Console
+from rich.syntax import Syntax
 from cmdkit.config import ConfigurationError
-from cmdkit.app import Application, ApplicationGroup
-from cmdkit.cli import Interface
+from cmdkit.app import Application, ApplicationGroup, exit_status
+from cmdkit.cli import Interface, ArgumentError
+from sqlalchemy.exc import StatementError
 
 # internal libs
 from hypershell.core.config import config
-from hypershell.submit import submit_from
+from hypershell.core.exceptions import handle_exception
+from hypershell.database.model import Task
 
 # public interface
 __all__ = ['TaskGroupApp', ]
@@ -65,9 +74,86 @@ class TaskSubmitApp(Application):
         print(task.id)
 
 
+# Catch bad UUID before we touch the database
+UUID_PATTERN: re.Pattern = re.compile(
+    r'^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$'
+)
 
+
+TASK_INFO_NAME = 'hyper-shell task info'
+TASK_INFO_USAGE = f"""\
+usage: {TASK_INFO_NAME} [-h] ID [--json | --stdout | --stderr]
+Get info on individual task.\
+"""
+TASK_INFO_HELP = f"""\
+{TASK_INFO_USAGE}
+
+arguments:
+ID                     Unique UUID.
+
+options:
+    --stdout           Fetch <stdout> from task.
+    --stderr           Fetch <stderr> from task.
+-h, --help             Show this message and exit.\
+"""
+
+
+class TaskInfoApp(Application):
+    """Lookup information on task."""
+
+    interface = Interface(TASK_INFO_NAME, TASK_INFO_USAGE, TASK_INFO_HELP)
+
+    uuid: str
+    interface.add_argument('uuid')
+
+    format_json: bool = False
+    interface.add_argument('--json', action='store_true', dest='format_json')
+
+    exceptions = {
+        Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        StatementError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        **Application.exceptions,
+    }
+
+    def run(self) -> None:
+        """Run submit thread."""
+        check_database_available()
+        self.check_uuid()
+        self.write(Task.from_id(self.uuid).to_json())
+
+    def check_uuid(self) -> None:
+        """Check for valid UUID."""
+        if not UUID_PATTERN.match(self.uuid):
+            raise ArgumentError(f'Bad UUID: \'{self.uuid}\'')
+
+    def write(self, data: dict) -> None:
+        """Format and print `data` to console."""
+        formatter = self.format_method[self.format_name]
+        output = formatter(data)
+        if sys.stdout.isatty():
+            output = Syntax(output, self.format_name, word_wrap=True,
+                            theme = config.console.theme, background_color = 'default')
+            Console().print(output)
+        else:
+            print(output, file=sys.stdout, flush=True)
+
+    @functools.cached_property
+    def format_name(self) -> str:
+        """Either 'json' or 'yaml'."""
+        return 'yaml' if not self.format_json else 'json'
+
+    @functools.cached_property
+    def format_method(self) -> Dict[str, Callable[[dict], str]]:
+        """Format data method."""
+        return {
+            'yaml': functools.partial(yaml.dump, indent=4, sort_keys=False),
+            'json': functools.partial(json.dumps, indent=4),
+        }
+
+
+TASK_GROUP_NAME = 'hyper-shell task'
 TASK_GROUP_USAGE = f"""\
-usage: hyper-shell task [-h] <command> [<args>...]
+usage: {TASK_GROUP_NAME} [-h] <command> [<args>...]
 Search, submit, track, and manage individual tasks.\
 """
 
@@ -75,6 +161,8 @@ TASK_GROUP_HELP = f"""\
 {TASK_GROUP_USAGE}
 
 commands:
+submit                 {TaskSubmitApp.__doc__}
+info                   {TaskInfoApp.__doc__}
 
 options:
 -h, --help             Show this message and exit.\
@@ -84,10 +172,11 @@ options:
 class TaskGroupApp(ApplicationGroup):
     """Search, submit, track, and manage individual tasks."""
 
-    interface = Interface('hyper-shell task', TASK_GROUP_USAGE, TASK_GROUP_HELP)
+    interface = Interface(TASK_GROUP_NAME, TASK_GROUP_USAGE, TASK_GROUP_HELP)
     interface.add_argument('command')
 
     command = None
     commands = {
         'submit': TaskSubmitApp,
+        'info': TaskInfoApp,
     }
