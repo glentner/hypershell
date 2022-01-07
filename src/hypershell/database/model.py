@@ -94,6 +94,7 @@ class Task(Model):
     attempt = Column(Integer(), nullable=False)
     retried = Column(Boolean(), nullable=False)
     previous_id = Column(Text().with_variant(UUID(), 'postgresql'), unique=True, nullable=True)
+    next_id = Column(Text().with_variant(UUID(), 'postgresql'), unique=True, nullable=True)
 
     columns = {
         'id': str,
@@ -111,6 +112,7 @@ class Task(Model):
         'errpath': str,
         'attempt': int,
         'previous_id': str,
+        'next_id': str,
     }
 
     class NotFound(NotFound):
@@ -259,10 +261,12 @@ class Task(Model):
         failed_tasks = cls.select_failed(attempts=attempts, limit=limit)
         if failed_tasks:
             log.trace(f'Selected {len(failed_tasks)} previously failed tasks')
-            tasks.extend([cls.new(args=task.args, attempt=task.attempt + 1, previous_id=task.id)
-                          for task in failed_tasks])
+            new_tasks = [cls.new(args=task.args, attempt=task.attempt + 1, previous_id=task.id)
+                         for task in failed_tasks]
+            tasks.extend(new_tasks)
             cls.add_all(tasks)
-            cls.update_all([{'id': task.id, 'retried': True} for task in failed_tasks])
+            cls.update_all([{'id': old_task.id, 'retried': True, 'next_id': new_task.id}
+                            for old_task, new_task in zip(failed_tasks, new_tasks)])
         return tasks
 
     @classmethod
