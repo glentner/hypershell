@@ -111,6 +111,7 @@ class Task(Model):
         'outpath': str,
         'errpath': str,
         'attempt': int,
+        'retried': int,
         'previous_id': str,
         'next_id': str,
     }
