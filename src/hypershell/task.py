@@ -250,6 +250,43 @@ class TaskWaitApp(Application):
             raise ArgumentError(f'Bad UUID: \'{self.uuid}\'')
 
 
+TASK_RUN_NAME = 'hyper-shell task run'
+TASK_RUN_USAGE = f"""\
+usage: {TASK_RUN_NAME} [-h] [-n SEC] ARGS... 
+Submit command and wait for completion.\
+"""
+TASK_RUN_HELP = f"""\
+{TASK_RUN_USAGE}
+
+arguments:
+ARGS                  Command-line arguments.
+
+options:
+-n, --interval  SEC   Time to wait between polling (default: {DEFAULT_INTERVAL}).
+-h, --help            Show this message and exit.\
+"""
+
+
+class TaskRunApp(Application):
+    """Submit command and wait for completion."""
+
+    interface = Interface(TASK_RUN_NAME, TASK_RUN_USAGE, TASK_RUN_HELP)
+
+    argv: List[str] = []
+    interface.add_argument('argv', nargs='+')
+
+    interval: int = DEFAULT_INTERVAL
+    interface.add_argument('-n', '--interval', type=int, default=interval)
+
+    def run(self) -> None:
+        """Run submit thread."""
+        task = Task.new(args=' '.join(self.argv))
+        Task.add(task)
+        TaskWaitApp(uuid=task.id, interval=self.interval).run()
+        TaskInfoApp(uuid=task.id, print_stdout=True).run()
+        TaskInfoApp(uuid=task.id, print_stderr=True).run()
+
+
 TASK_GROUP_NAME = 'hyper-shell task'
 TASK_GROUP_USAGE = f"""\
 usage: {TASK_GROUP_NAME} [-h] <command> [<args>...]
@@ -263,6 +300,7 @@ commands:
 submit                 {TaskSubmitApp.__doc__}
 info                   {TaskInfoApp.__doc__}
 wait                   {TaskWaitApp.__doc__}
+run                    {TaskRunApp.__doc__}
 
 options:
 -h, --help             Show this message and exit.\
@@ -280,4 +318,5 @@ class TaskGroupApp(ApplicationGroup):
         'submit': TaskSubmitApp,
         'info': TaskInfoApp,
         'wait': TaskWaitApp,
+        'run': TaskRunApp,
     }
