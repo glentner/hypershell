@@ -6,7 +6,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import List, Dict, Callable
+from typing import List, Dict, Callable, IO
 
 # standard libs
 import re
@@ -15,6 +15,7 @@ import json
 import time
 import logging
 import functools
+from shutil import copyfileobj
 
 # external libs
 import yaml
@@ -144,23 +145,15 @@ class TaskInfoApp(Application):
         elif not (self.print_stdout or self.print_stderr):
             self.write(task.to_json())
         elif self.print_stdout:
-            self.write_output(task)
+            self.write_file(task.outpath, sys.stdout)
         elif self.print_stderr:
-            self.write_errors(task)
+            self.write_file(task.errpath, sys.stderr)
 
     @staticmethod
-    def write_output(task: Task) -> None:
-        """Fetch output file and print."""
-        with open(task.outpath, mode='r') as stream:
-            for line in stream:
-                print(line, end='', file=sys.stdout)
-
-    @staticmethod
-    def write_errors(task: Task) -> None:
-        """Fetch output file and print."""
-        with open(task.errpath, mode='r') as stream:
-            for line in stream:
-                print(line, end='', file=sys.stderr)
+    def write_file(path: str, dest: IO) -> None:
+        """Write content from `path` to other `dest` stream."""
+        with open(path, mode='r') as stream:
+            copyfileobj(stream, dest)
 
     def write(self, data: dict) -> None:
         """Format and print `data` to console."""
