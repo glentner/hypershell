@@ -81,21 +81,29 @@ UUID_PATTERN: re.Pattern = re.compile(
 )
 
 
+def check_uuid(value: str) -> None:
+    """Check for valid UUID."""
+    if not UUID_PATTERN.match(value):
+        raise ArgumentError(f'Bad UUID: \'{value}\'')
+
+
 TASK_INFO_NAME = 'hyper-shell task info'
 TASK_INFO_USAGE = f"""\
-usage: {TASK_INFO_NAME} [-h] ID [--json | --stdout | --stderr]
+usage: {TASK_INFO_NAME} [-h] ID [--json | --stdout | --stderr | -x FIELD]
 Get info on individual task.\
 """
 TASK_INFO_HELP = f"""\
 {TASK_INFO_USAGE}
 
 arguments:
-ID                  Unique UUID.
+ID                   Unique UUID.
 
 options:
-    --stdout        Fetch <stdout> from task.
-    --stderr        Fetch <stderr> from task.
--h, --help          Show this message and exit.\
+    --json           Format output as JSON.
+-x, --extract FIELD  Print this field only.
+    --stdout         Fetch <stdout> from task.
+    --stderr         Fetch <stderr> from task.
+-h, --help           Show this message and exit.\
 """
 
 
@@ -115,6 +123,9 @@ class TaskInfoApp(Application):
     print_interface.add_argument('--stdout', action='store_true', dest='print_stdout')
     print_interface.add_argument('--stderr', action='store_true', dest='print_stderr')
 
+    extract_field: str = None
+    interface.add_argument('-x', '--extract', default=None, choices=Task.columns, dest='extract_field')
+
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         StatementError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
@@ -123,21 +134,19 @@ class TaskInfoApp(Application):
 
     def run(self) -> None:
         """Run submit thread."""
+        check_uuid(self.uuid)
         check_database_available()
-        self.check_uuid()
+        if self.extract_field and (self.print_stdout or self.print_stderr or self.format_json):
+            raise ArgumentError('Cannot use -x/--extract with other output formats')
         task = Task.from_id(self.uuid)
-        if not (self.print_stdout or self.print_stderr):
+        if self.extract_field:
+            print(json.dumps(getattr(task, self.extract_field)))
+        elif not (self.print_stdout or self.print_stderr):
             self.write(task.to_json())
-            return
-        if self.print_stdout:
+        elif self.print_stdout:
             self.write_output(task)
-        if self.print_stderr:
+        elif self.print_stderr:
             self.write_errors(task)
-
-    def check_uuid(self) -> None:
-        """Check for valid UUID."""
-        if not UUID_PATTERN.match(self.uuid):
-            raise ArgumentError(f'Bad UUID: \'{self.uuid}\'')
 
     @staticmethod
     def write_output(task: Task) -> None:
@@ -184,7 +193,7 @@ DEFAULT_INTERVAL = 5
 
 TASK_WAIT_NAME = 'hyper-shell task wait'
 TASK_WAIT_USAGE = f"""\
-usage: {TASK_WAIT_NAME} [-h] ID [-n SEC] [--info [--json]]
+usage: {TASK_WAIT_NAME} [-h] ID [-f] [-n SEC] [--info | --json | --status]
 Wait for task to complete.\
 """
 TASK_WAIT_HELP = f"""\
@@ -195,8 +204,9 @@ ID                    Unique UUID.
 
 options:
 -n, --interval  SEC   Time to wait between polling (default: {DEFAULT_INTERVAL}).
-    --info            Print information on task.
-    --json            Format output as JSON.
+    --info            Print info on task.
+    --json            Format info as JSON.
+    --status          Print exit status for task.
 -h, --help            Show this message and exit.\
 """
 
@@ -214,8 +224,11 @@ class TaskWaitApp(Application):
 
     print_info: bool = False
     format_json: bool = False
-    interface.add_argument('--info', action='store_true', dest='print_info')
-    interface.add_argument('--json', action='store_true', dest='format_json')
+    print_status: bool = False
+    output_interface = interface.add_mutually_exclusive_group()
+    output_interface.add_argument('--info', action='store_true', dest='print_info')
+    output_interface.add_argument('--json', action='store_true', dest='format_json')
+    output_interface.add_argument('--status', action='store_true', dest='print_status')
 
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
@@ -226,27 +239,26 @@ class TaskWaitApp(Application):
     def run(self) -> None:
         """Run submit thread."""
         check_database_available()
-        self.check_uuid()
+        check_uuid(self.uuid)
         self.wait_task()
         if self.print_info or self.format_json:
-            with TaskInfoApp(uuid=self.uuid, format_json=self.format_json) as app:
-                app.run()
+            TaskInfoApp(uuid=self.uuid, format_json=self.format_json).run()
+        elif self.print_status:
+            TaskInfoApp(uuid=self.uuid, extract_field='exit_status').run()
 
     def wait_task(self):
         """Wait for the task to complete."""
+        log.info(f'Waiting on task ({self.uuid})')
         while True:
             task = Task.from_id(self.uuid, caching=False)
             if task.exit_status is None:
-                log.trace(f'Waiting')
+                log.trace(f'Waiting ({self.uuid})')
                 time.sleep(self.interval)
-            else:
-                log.trace(f'Task completed ({task.completion_time})')
-                break
-
-    def check_uuid(self) -> None:
-        """Check for valid UUID."""
-        if not UUID_PATTERN.match(self.uuid):
-            raise ArgumentError(f'Bad UUID: \'{self.uuid}\'')
+                continue
+            if task.exit_status != 0:
+                log.warning(f'Non-zero exit status ({task.exit_status}) for task ({task.id})')
+            log.info(f'Task completed ({task.completion_time})')
+            break
 
 
 TASK_RUN_NAME = 'hyper-shell task run'
