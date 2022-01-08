@@ -35,8 +35,7 @@ from hypershell.database.model import Task
 __all__ = ['TaskGroupApp', ]
 
 
-# initialize application logger
-log: Logger = logging.getLogger('hypershell')
+log: Logger = logging.getLogger(__name__)
 
 
 def check_database_available():
