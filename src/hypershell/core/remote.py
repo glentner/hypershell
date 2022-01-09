@@ -102,25 +102,31 @@ class SSHConnection:
     def close(self: SSHConnection) -> None:
         """Close connection."""
         if self.client:
+            log.debug('Stopping SSH')
             self.client.close()
         if self.sftp:
+            log.debug('Stopping SFTP')
             self.sftp.close()
 
     def run(self: SSHConnection, *args, **kwargs) -> Tuple[ChannelStdinFile, ChannelFile, ChannelStderrFile]:
         """Run remote command and return <stdin>, <stdout> and <stderr>."""
         return self.client.exec_command(*args, **kwargs)
 
+    def open_sftp(self: SSHConnection) -> None:
+        """Establish SFTP connection."""
+        if not self.sftp:
+            log.debug('Starting SFTP')
+            self.sftp = self.client.open_sftp()
+
     def get_file(self: SSHConnection, remote_path: str, local_path: str) -> None:
         """Use SFTP to copy remote file to local file."""
-        if not self.sftp:
-            self.sftp = self.client.open_sftp()
+        self.open_sftp()
         log.trace(f'GET {self.config.hostname}:{remote_path} -> {local_path}')
         self.sftp.get(remote_path, local_path)
 
     def put_file(self: SSHConnection, local_path: str, remote_path: str) -> None:
         """Use SFTP to copy local file to remote file."""
-        if not self.sftp:
-            self.sftp = self.client.open_sftp()
+        self.open_sftp()
         log.trace(f'PUT {local_path} -> {self.config.hostname}:{remote_path}')
         self.sftp.put(local_path, remote_path, confirm=True)
 
