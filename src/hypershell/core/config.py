@@ -77,6 +77,9 @@ default = Namespace({
         'bundlewait': 5,  # Seconds
         'heartrate': 10,  # Seconds, period to wait between heartbeats
     },
+    'ssh': {
+        'config': os.path.join(os.getenv('HOME'), '.ssh', 'config'),
+    },
     'console': {
         'theme': 'solarized-dark',
     },

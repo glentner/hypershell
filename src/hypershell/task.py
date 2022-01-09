@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import List, Dict, Callable, IO
 
 # standard libs
+import os
 import re
 import sys
 import json
@@ -27,9 +28,11 @@ from cmdkit.cli import Interface, ArgumentError
 from sqlalchemy.exc import StatementError
 
 # internal libs
+from hypershell.core.platform import default_path
 from hypershell.core.config import config
 from hypershell.core.exceptions import handle_exception
-from hypershell.core.logging import Logger
+from hypershell.core.logging import Logger, HOSTNAME
+from hypershell.core.remote import SSHConnection
 from hypershell.database.model import Task
 
 # public interface
@@ -130,6 +133,7 @@ class TaskInfoApp(Application):
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         StatementError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        FileNotFoundError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         **Application.exceptions,
     }
 
@@ -139,19 +143,20 @@ class TaskInfoApp(Application):
         check_database_available()
         if self.extract_field and (self.print_stdout or self.print_stderr or self.format_json):
             raise ArgumentError('Cannot use -x/--extract with other output formats')
-        task = Task.from_id(self.uuid)
         if self.extract_field:
-            print(json.dumps(getattr(task, self.extract_field)))
+            print(json.dumps(getattr(self.task, self.extract_field)))
         elif not (self.print_stdout or self.print_stderr):
-            self.write(task.to_json())
+            self.write(self.task.to_json())
         elif self.print_stdout:
-            self.write_file(task.outpath, sys.stdout)
+            self.write_file(self.outpath, sys.stdout)
         elif self.print_stderr:
-            self.write_file(task.errpath, sys.stderr)
+            self.write_file(self.errpath, sys.stderr)
 
-    @staticmethod
-    def write_file(path: str, dest: IO) -> None:
+    def write_file(self: TaskInfoApp, path: str, dest: IO) -> None:
         """Write content from `path` to other `dest` stream."""
+        if not os.path.exists(path) and self.task.client_host != HOSTNAME:
+            log.debug(f'Fetching remote files ({self.task.client_host})')
+            self.copy_remote_files()
         with open(path, mode='r') as stream:
             copyfileobj(stream, dest)
 
@@ -178,6 +183,27 @@ class TaskInfoApp(Application):
             'yaml': functools.partial(yaml.dump, indent=4, sort_keys=False),
             'json': functools.partial(json.dumps, indent=4),
         }
+
+    def copy_remote_files(self: TaskInfoApp) -> None:
+        """Copy output and error files and write to local streams."""
+        with SSHConnection(self.task.client_host) as remote:
+            remote.get_file(self.task.outpath, self.outpath)
+            remote.get_file(self.task.errpath, self.errpath)
+
+    @functools.cached_property
+    def task(self: TaskInfoApp) -> Task:
+        """Look up the task from the database."""
+        return Task.from_id(self.uuid)
+
+    @functools.cached_property
+    def outpath(self: TaskInfoApp) -> str:
+        """Local task output file path."""
+        return os.path.join(default_path.lib, 'task', f'{self.task.id}.out')
+
+    @functools.cached_property
+    def errpath(self: TaskInfoApp) -> str:
+        """Local task error file path."""
+        return os.path.join(default_path.lib, 'task', f'{self.task.id}.err')
 
 
 # Time to wait between database queries
