@@ -6,26 +6,32 @@
 
 # type annotations
 from __future__ import annotations
-from typing import List, Dict, Callable, IO
+from typing import List, Dict, Callable, IO, Tuple, Any
 
 # standard libs
 import os
 import re
 import sys
+import csv
 import json
 import time
 import logging
 import functools
+from dataclasses import dataclass
 from shutil import copyfileobj
 
 # external libs
 import yaml
 from rich.console import Console
 from rich.syntax import Syntax
+from rich.table import Table
 from cmdkit.config import ConfigurationError
 from cmdkit.app import Application, ApplicationGroup, exit_status
 from cmdkit.cli import Interface, ArgumentError
+from sqlalchemy import Column
 from sqlalchemy.exc import StatementError
+from sqlalchemy.orm import Query
+from sqlalchemy.sql.elements import BinaryExpression
 
 # internal libs
 from hypershell.core.platform import default_path
@@ -33,7 +39,8 @@ from hypershell.core.config import config
 from hypershell.core.exceptions import handle_exception
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.remote import SSHConnection
-from hypershell.database.model import Task
+from hypershell.core.types import smart_coerce
+from hypershell.database.model import Task, to_json_type
 
 # public interface
 __all__ = ['TaskGroupApp', ]
@@ -317,6 +324,146 @@ class TaskRunApp(Application):
         TaskInfoApp(uuid=task.id, print_stderr=True).run()
 
 
+TASK_SEARCH_NAME = 'hyper-shell task search'
+TASK_SEARCH_USAGE = f"""\
+usage: hyper-shell task search [-h] [FIELD [FIELD ...]] [--where COND [COND ...]] 
+                               [--order-by FIELD [--desc]] [--x | --json | --csv] 
+                               [--count | --limit NUM]\
+"""
+TASK_SEARCH_HELP = f"""\
+{TASK_SEARCH_USAGE}
+
+Search for task(s) in database.
+
+arguments:
+FIELD                     Select specific named fields.
+
+options:
+-w, --where     COND...   List of conditional statements.
+-s, --order-by  FIELD     Order output by field.
+-x, --extract             Disable formatting for single column output.
+    --json                Format output as JSON.
+    --csv                 Format output as CSV.
+-l, --limit     NUM       Limit the number of rows.
+-c, --count               Show count of results.
+-h, --help                Show this message and exit.\
+"""
+
+
+class TaskSearchApp(Application):
+    """Search for tasks in database."""
+
+    interface = Interface(TASK_SEARCH_NAME, TASK_SEARCH_USAGE, TASK_SEARCH_HELP)
+
+    field_names: List[str] = list(Task.columns)
+    interface.add_argument('field_names', nargs='*', default=field_names)
+
+    where_clauses: List[str] = None
+    interface.add_argument('-w', '--where', nargs='*', default=None, dest='where_clauses')
+
+    order_by: str = None
+    order_desc: bool = False
+    interface.add_argument('-s', '--order-by', default=None, choices=field_names)
+    interface.add_argument('--desc', action='store_true', dest='order_desc')
+
+    limit: int = None
+    interface.add_argument('-l', '--limit', type=int, default=None)
+
+    count: bool = False
+    interface.add_argument('-c', '--count', action='store_true')
+
+    output_format: str = 'table'
+    output_formats: List[str] = ['table', 'json', 'csv', ]
+    output_interface = interface.add_mutually_exclusive_group()
+    output_interface.add_argument('--format', default=output_format, dest='output_format', choices=output_formats)
+    output_interface.add_argument('--json', action='store_const', const='json', dest='output_format')
+    output_interface.add_argument('--csv', action='store_const', const='csv', dest='output_format')
+    output_interface.add_argument('-x', '--extract', action='store_const', const='extract', dest='output_format')
+
+    def run(self) -> None:
+        """Run search application."""
+        check_database_available()
+        self.check_field_names()
+        if self.count:
+            print(self.build_query().count())
+        else:
+            self.print_output(self.build_query().all())
+
+    def build_query(self) -> Query:
+        """Build original query interface."""
+        query = Task.query(*self.fields)
+        if self.order_by:
+            field = getattr(Task, self.order_by)
+            if self.order_desc:
+                field = field.desc()
+            query = query.order_by(field)
+        for where_clause in self.build_filters():
+            query = query.filter(where_clause.compile())
+        if self.limit:
+            query = query.limit(self.limit)
+        return query
+
+    def build_filters(self) -> List[WhereClause]:
+        """Create list of field selectors from command-line arguments."""
+        if not self.where_clauses:
+            return []
+        else:
+            return [WhereClause.from_cmdline(arg) for arg in self.where_clauses]
+
+    @functools.cached_property
+    def fields(self) -> List[Column]:
+        """Field instances to query against."""
+        return [getattr(Task, name) for name in self.field_names]
+
+    @functools.cached_property
+    def print_output(self) -> Callable[[List[Tuple]], None]:
+        """The requested output formatter."""
+        return getattr(self, f'print_{self.output_format}')
+
+    def print_extract(self, results: List[Tuple]) -> None:
+        """Basic output from single column."""
+        if len(self.field_names) == 1:
+            for (value, ) in results:
+                print(json.dumps(to_json_type(value)).strip('"'), file=sys.stdout)
+        else:
+            raise ArgumentError(f'Cannot use -x/--extract for more than a single field')
+
+    def print_table(self, results: List[Tuple]) -> None:
+        """Print in table format from simple instances of ModelInterface."""
+        table = Table(title=None)
+        for name in self.field_names:
+            table.add_column(name)
+        for record in results:
+            table.add_row(*[json.dumps(to_json_type(value)).strip('"') for value in record])
+        Console().print(table)
+
+    def print_json(self, results: List[Tuple]) -> None:
+        """Print in JSON format from simple instances of ModelInterface."""
+        data = [{field: to_json_type(value) for field, value in zip(self.field_names, record)}
+                for record in results]
+        if sys.stdout.isatty():
+            Console().print(Syntax(json.dumps(data, indent=4, sort_keys=False), 'json',
+                                   word_wrap=True, theme=config.console.theme,
+                                   background_color='default'))
+        else:
+            print(json.dumps(data, indent=4, sort_keys=False), file=sys.stdout, flush=True)
+
+    def print_csv(self, results: List[Tuple]) -> None:
+        """Print in CVS format from simple instances of ModelInterface."""
+        writer = csv.writer(sys.stdout)
+        writer.writerow(self.field_names)
+        for record in results:
+            data = [to_json_type(value) for value in record]
+            data = [value if isinstance(value, str) else json.dumps(value) for value in data]
+            writer.writerow(data)
+
+    def check_field_names(self) -> None:
+        """Check field names are valid."""
+        for name in self.field_names:
+            if name not in Task.columns:
+                raise ArgumentError(f'Invalid field name \'{name}\'')
+
+
 TASK_GROUP_NAME = 'hyper-shell task'
 TASK_GROUP_USAGE = f"""\
 usage: {TASK_GROUP_NAME} [-h] <command> [<args>...]
@@ -331,6 +478,7 @@ submit                 {TaskSubmitApp.__doc__}
 info                   {TaskInfoApp.__doc__}
 wait                   {TaskWaitApp.__doc__}
 run                    {TaskRunApp.__doc__}
+search                 {TaskSearchApp.__doc__}
 
 options:
 -h, --help             Show this message and exit.\
@@ -349,4 +497,46 @@ class TaskGroupApp(ApplicationGroup):
         'info': TaskInfoApp,
         'wait': TaskWaitApp,
         'run': TaskRunApp,
+        'search': TaskSearchApp,
     }
+
+
+@dataclass
+class WhereClause:
+    """Parse and prepare query filters based on command-line argument."""
+
+    field: str
+    value: Any
+    operand: str
+
+    pattern = re.compile(r'^([a-z_]+)\s*(==|!=|>|>=|<|<=|~)\s*(.*)$')
+    op_call = {
+        '==': lambda lhs, rhs: lhs == rhs,
+        '!=': lambda lhs, rhs: lhs != rhs,
+        '>=': lambda lhs, rhs: lhs >= rhs,
+        '<=': lambda lhs, rhs: lhs <= rhs,
+        '>':  lambda lhs, rhs: lhs > rhs,
+        '<':  lambda lhs, rhs: lhs < rhs,
+        '~':  lambda lhs, rhs: lhs.regexp_match(rhs),
+    }
+
+    def compile(self) -> BinaryExpression:
+        """Build binary expression object out of elements."""
+        op_call = self.op_call.get(self.operand)
+        return op_call(getattr(Task, self.field), self.value)
+
+    @classmethod
+    def from_cmdline(cls, argument: str) -> WhereClause:
+        """
+        Construct from command-line `argument`.
+
+        Example:
+            >>> WhereClause.from_cmdline('exit_status != 0')
+            WhereClause(field='exit_status', value=0, operand='!=')
+        """
+        match = cls.pattern.match(argument)
+        if match:
+            field, operand, value = match.groups()
+            return WhereClause(field=field, value=smart_coerce(value), operand=operand)
+        else:
+            raise ArgumentError(f'Where clause not understood ({argument})')

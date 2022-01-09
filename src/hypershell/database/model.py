@@ -26,8 +26,10 @@ from sqlalchemy.dialects.postgresql import UUID
 from hypershell.core.logging import HOSTNAME, Logger
 from hypershell.database.core import schema, Session
 
+# public interface
+__all__ = ['Task', 'to_json_type', 'from_json_type', ]
 
-# initialize module level logger
+# module level logger
 log: Logger = logging.getLogger(__name__)
 
 
@@ -165,7 +167,7 @@ class Task(Model):
     def from_id(cls, id: str, caching: bool = True) -> Task:
         """Look up task by unique `id`."""
         try:
-            return cls.query(caching).filter_by(id=id).one()
+            return cls.query(caching=caching).filter_by(id=id).one()
         except NoResultFound as error:
             raise cls.NotFound(f'No task with id={id}') from error
         except MultipleResultsFound as error:
@@ -179,11 +181,12 @@ class Task(Model):
                     attempt=attempt, retried=retried, **other)
 
     @classmethod
-    def query(cls, caching: bool = True) -> Query:
+    def query(cls, *fields: Column, caching: bool = True) -> Query:
         """Get query interface for table with scoped session."""
+        target = fields or [cls, ]
         if not caching:
             Session.expire_all()
-        return Session.query(cls)
+        return Session.query(*target)
 
     @classmethod
     def add_all(cls, tasks: List[Task]) -> List[Task]:
