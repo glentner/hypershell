@@ -24,8 +24,8 @@ with open('src/hypershell/__meta__.py', mode='r') as source:
 
 
 # core dependencies
-DEPS = ['toml>=0.10.2', 'cmdkit>=2.6.0', 'sqlalchemy>=1.4.22', ]
-
+DEPS = ['toml>=0.10.2', 'cmdkit>=2.6.0', 'sqlalchemy>=1.4.22',
+        'pyyaml>=6.0', 'rich>=10.16.2', 'paramiko>=2.9.1']
 
 # add dependencies for readthedocs.io
 if os.environ.get('READTHEDOCS') == 'True':
