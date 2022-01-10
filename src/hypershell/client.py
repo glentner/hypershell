@@ -44,6 +44,7 @@ from datetime import datetime, timedelta
 from queue import Queue, Empty as QueueEmpty, Full as QueueFull
 from subprocess import Popen, TimeoutExpired
 from socket import gaierror
+from multiprocessing import AuthenticationError
 
 # external libs
 from cmdkit.app import Application, exit_status
@@ -750,6 +751,7 @@ class ClientApp(Application):
         EOFError: functools.partial(handle_disconnect, logger=log),
         ConnectionResetError: functools.partial(handle_disconnect, logger=log),
         ConnectionRefusedError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        AuthenticationError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         HostAddressInfo: functools.partial(handle_address_unknown, logger=log, status=exit_status.runtime_error),
         **Application.exceptions,
     }
