@@ -50,7 +50,7 @@ log: Logger = logging.getLogger(__name__)
 
 
 def check_database_available():
-    """Emit warning for particular configuration."""
+    """Raise ConfigurationError if no database is configured."""
     db = config.database.get('file', None) or config.database.get('database', None)
     if config.database.provider == 'sqlite' and db in ('', ':memory:', None):
         raise ConfigurationError('No database configured')
@@ -58,7 +58,7 @@ def check_database_available():
 
 TASK_SUBMIT_USAGE = f"""\
 usage: hyper-shell task submit [-h] ARGS...
-Submit individual command line to database.\
+Submit task to database.\
 """
 TASK_SUBMIT_HELP = f"""\
 {TASK_SUBMIT_USAGE}
@@ -72,7 +72,8 @@ options:
 
 
 class TaskSubmitApp(Application):
-    """Submit individual command-line task to database."""
+    """Submit task to database."""
+
     interface = Interface('hyper-shell task submit', TASK_SUBMIT_USAGE, TASK_SUBMIT_HELP)
 
     argv: List[str] = []
@@ -101,7 +102,7 @@ def check_uuid(value: str) -> None:
 TASK_INFO_NAME = 'hyper-shell task info'
 TASK_INFO_USAGE = f"""\
 usage: {TASK_INFO_NAME} [-h] ID [--json | --stdout | --stderr | -x FIELD]
-Get info on individual task.\
+Get metadata/status/outputs of task.\
 """
 TASK_INFO_HELP = f"""\
 {TASK_INFO_USAGE}
@@ -119,7 +120,7 @@ options:
 
 
 class TaskInfoApp(Application):
-    """Lookup information on task."""
+    """Get metadata/status/outputs of task."""
 
     interface = Interface(TASK_INFO_NAME, TASK_INFO_USAGE, TASK_INFO_HELP)
 
@@ -290,7 +291,7 @@ class TaskWaitApp(Application):
 TASK_RUN_NAME = 'hyper-shell task run'
 TASK_RUN_USAGE = f"""\
 usage: {TASK_RUN_NAME} [-h] [-n SEC] ARGS... 
-Submit command and wait for completion.\
+Submit task and wait for completion.\
 """
 TASK_RUN_HELP = f"""\
 {TASK_RUN_USAGE}
@@ -305,7 +306,7 @@ options:
 
 
 class TaskRunApp(Application):
-    """Submit command and wait for completion."""
+    """Submit task and wait for completion."""
 
     interface = Interface(TASK_RUN_NAME, TASK_RUN_USAGE, TASK_RUN_HELP)
 
@@ -327,7 +328,7 @@ class TaskRunApp(Application):
 TASK_SEARCH_NAME = 'hyper-shell task search'
 TASK_SEARCH_USAGE = f"""\
 usage: hyper-shell task search [-h] [FIELD [FIELD ...]] [--where COND [COND ...]] 
-                               [--order-by FIELD [--desc]] [--x | --json | --csv] 
+                               [--order-by FIELD [--desc]] [-x | --json | --csv] 
                                [--count | --limit NUM]\
 """
 TASK_SEARCH_HELP = f"""\
@@ -351,7 +352,7 @@ options:
 
 
 class TaskSearchApp(Application):
-    """Search for tasks in database."""
+    """Search for task(s) in database."""
 
     interface = Interface(TASK_SEARCH_NAME, TASK_SEARCH_USAGE, TASK_SEARCH_HELP)
 
