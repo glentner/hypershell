@@ -6,10 +6,15 @@ verify_ssl = true
 [dev-packages]
 pytest = ">=6.2.4"
 hypothesis = ">=6.14.4"
-ipython = ">=7.25.0"
+ipython = ">=7.25.0,<8"
 twine = ">=3.4.2"
 sphinx = ">=4.1.2"
-pydata-sphinx-theme = ">=0.6.3"
+sphinx-sitemap = "*"
+sphinx-autobuild = "*"
+sphinxext-opengraph = "*"
+sphinx-inline-tabs = "*"
+sphinx-copybutton = "*"
+furo = "*"
 psycopg2 = ">=2.9.1"
 
 [packages]

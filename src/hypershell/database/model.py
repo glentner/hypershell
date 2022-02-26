@@ -27,7 +27,7 @@ from hypershell.core.logging import HOSTNAME, Logger
 from hypershell.database.core import schema, Session
 
 # public interface
-__all__ = ['Task', 'to_json_type', 'from_json_type', ]
+__all__ = ['Task', 'to_json_type', 'from_json_type', 'Model', ]
 
 # module level logger
 log: Logger = logging.getLogger(__name__)

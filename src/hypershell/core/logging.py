@@ -37,6 +37,7 @@ INSTANCE = str(uuid.uuid4())
 
 # Canonical colors for logging messages
 level_color: Dict[str, Ansi] = {
+    'NULL': Ansi.NULL,
     'DEVEL': Ansi.RED,
     'TRACE': Ansi.CYAN,
     'DEBUG': Ansi.BLUE,
@@ -80,7 +81,7 @@ class LogRecord(logging.LogRecord):
         super().__init__(*args, **kwargs)
         self.app_id = INSTANCE
         self.hostname = HOSTNAME
-        self.ansi_level = level_color.get(self.levelname).value
+        self.ansi_level = level_color.get(self.levelname, Ansi.NULL).value
         self.ansi_reset = Ansi.RESET.value
         self.ansi_bold = Ansi.BOLD.value
         self.ansi_faint = Ansi.FAINT.value

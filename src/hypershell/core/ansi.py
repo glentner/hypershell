@@ -28,6 +28,7 @@ if 'HYPERSHELL_FORCE_COLOR' in os.environ:
 
 class Ansi(Enum):
     """ANSI escape sequences for colors."""
+    NULL = ''
     RESET = '\033[0m' if not NO_TTY else ''
     BOLD = '\033[1m' if not NO_TTY else ''
     FAINT = '\033[2m' if not NO_TTY else ''

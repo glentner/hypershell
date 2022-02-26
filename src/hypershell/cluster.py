@@ -33,7 +33,7 @@ from hypershell.core.queue import QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.template import DEFAULT_TEMPLATE
-from hypershell.client import ClientThread, DEFAULT_NUM_TASKS
+from hypershell.client import ClientThread, DEFAULT_NUM_TASKS, DEFAULT_DELAY
 from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 from hypershell.submit import DEFAULT_BUNDLEWAIT
 
@@ -57,15 +57,17 @@ class LocalCluster(Thread):
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, live: bool = False,
                  num_tasks: int = 1, redirect_failures: IO = None,
-                 redirect_output: IO = None, redirect_errors: IO = None) -> None:
+                 redirect_output: IO = None, redirect_errors: IO = None,
+                 delay_start: float = DEFAULT_DELAY, capture: bool = False) -> None:
         """Initialize server and client threads."""
         auth = secrets.token_hex(64)
         self.server = ServerThread(source=source, auth=auth, live=live, bundlesize=bundlesize, bundlewait=bundlewait,
                                    max_retries=max_retries, eager=eager, forever_mode=forever_mode,
                                    restart_mode=restart_mode, redirect_failures=redirect_failures)
         self.client = ClientThread(num_tasks=num_tasks, template=template, auth=auth,
-                                   bundlesize=bundlesize, bundlewait=bundlewait,
-                                   redirect_output=redirect_output, redirect_errors=redirect_errors)
+                                   bundlesize=bundlesize, bundlewait=bundlewait, delay_start=delay_start,
+                                   redirect_output=redirect_output, redirect_errors=redirect_errors,
+                                   capture=capture)
         super().__init__(name='hypershell-cluster')
 
     def run_with_exceptions(self) -> None:
@@ -97,7 +99,8 @@ class RemoteCluster(Thread):
                  bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port),
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, live: bool = False,
-                 num_tasks: int = 1, remote_exe: str = 'hyper-shell', redirect_failures: IO = None) -> None:
+                 num_tasks: int = 1, remote_exe: str = 'hyper-shell', redirect_failures: IO = None,
+                 delay_start: float = DEFAULT_DELAY, capture: bool = False) -> None:
         """Initialize server and client threads."""
         auth = secrets.token_hex(64)
         self.server = ServerThread(source=source, auth=auth, live=live, bundlesize=bundlesize,
@@ -105,8 +108,12 @@ class RemoteCluster(Thread):
                                    forever_mode=forever_mode, restart_mode=restart_mode,
                                    redirect_failures=redirect_failures)
         launcher_args = '' if launcher_args is None else ' '.join(launcher_args)
+        client_args = ''
+        if capture is True:
+            client_args += ' --capture'
         self.client_argv = (f'{launcher} {launcher_args} {remote_exe} client -H {HOSTNAME} -p {bind[1]} '
-                            f'-N {num_tasks} -b {bundlesize} -w {bundlewait} -t "{template}" -k {auth}')
+                            f'-N {num_tasks} -b {bundlesize} -w {bundlewait} -t "{template}" -k {auth} '
+                            f'-d {delay_start} {client_args}')
         super().__init__(name='hypershell-cluster')
 
     def run_with_exceptions(self) -> None:
@@ -219,7 +226,7 @@ class SSHCluster(Thread):
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, live: bool = False,
                  num_tasks: int = 1, remote_exe: str = 'hyper-shell', redirect_failures: IO = None,
-                 export_env: bool = False) -> None:
+                 export_env: bool = False, delay_start: float = DEFAULT_DELAY, capture: bool = False) -> None:
         """Initialize server and client threads."""
         if nodelist is None:
             raise AttributeError('Expected nodelist')
@@ -230,9 +237,12 @@ class SSHCluster(Thread):
                                    redirect_failures=redirect_failures)
         launcher_env = '' if not export_env else compile_env()
         launcher_args = '' if launcher_args is None else ' '.join(launcher_args)
+        client_args = ''
+        if capture is True:
+            client_args += ' --capture'
         self.client_argv = [f'{launcher} {launcher_args} {host} {launcher_env} {remote_exe} '
-                            f'client -H {HOSTNAME} -p {bind[1]} '
-                            f'-N {num_tasks} -b {bundlesize} -w {bundlewait} -t \'"{template}"\' -k {auth}'
+                            f'client -H {HOSTNAME} -p {bind[1]} -N {num_tasks} -b {bundlesize} -w {bundlewait} '
+                            f'-t \'"{template}"\' -k {auth} -d {delay_start} {client_args}'
                             for host in nodelist]
         super().__init__(name='hypershell-cluster')
 
@@ -288,9 +298,9 @@ def run_ssh(**options) -> None:
 
 APP_NAME = 'hyper-shell cluster'
 APP_USAGE = f"""\
-usage: hyper-shell cluster [-h] [FILE | --restart | --forever] [--no-db] [-N NUM] [-t CMD] [--env]
-                           [-b SIZE] [-w SEC] [-o PATH] [-e PATH] [-f PATH] [-r NUM [--eager]]
-                           [--ssh [HOST... | --ssh-group NAME] | --mpi | --launcher=ARGS...]\
+usage: hyper-shell cluster [-h] [FILE | --restart | --forever] [--no-db] [-N NUM] [-t CMD] [-b SIZE] [-w SEC]
+                           [-r NUM [--eager]] [--capture | [-o PATH] [-e PATH]] [-f PATH] [--delay-start SEC] 
+                           [--ssh [HOST... | --ssh-group NAME] [--env] | --mpi | --launcher=ARGS...]\
 """
 APP_HELP = f"""\
 {APP_USAGE}
@@ -319,6 +329,8 @@ options:
     --ssh-args     ARGS     Command-line arguments for SSH.
     --ssh-group    NAME     SSH nodelist group in config.
 -E, --env                   Send environment variables.
+-d, --delay-start  SEC      Delay time for launching clients (default: {DEFAULT_DELAY}).
+-c, --capture               Capture individual task <stdout> and <stderr>.         
 -o, --output       PATH     File path for task outputs (default: <stdout>).
 -e, --errors       PATH     File path for task errors (default: <stderr>).
 -f, --failures     PATH     File path to write failed task args (default: <none>).
@@ -347,6 +359,9 @@ class ClusterApp(Application):
 
     bundlewait: int = config.submit.bundlewait
     interface.add_argument('-w', '--bundlewait', type=int, default=bundlewait)
+
+    delay_start: float = DEFAULT_DELAY
+    interface.add_argument('-d', '--delay-start', type=float, default=delay_start)
 
     eager_mode: bool = False
     max_retries: int = DEFAULT_ATTEMPTS - 1
@@ -385,10 +400,12 @@ class ClusterApp(Application):
     port: int = QueueConfig.port
     interface.add_argument('-p', '--port', default=port, type=int)
 
+    capture: bool = False
     output_path: str = None
     errors_path: str = None
     interface.add_argument('-o', '--output', default=None, dest='output_path')
     interface.add_argument('-e', '--errors', default=None, dest='errors_path')
+    interface.add_argument('-c', '--capture', action='store_true')
 
     failure_path: str = None
     interface.add_argument('-f', '--failures', default=None, dest='failure_path')
@@ -400,7 +417,8 @@ class ClusterApp(Application):
                  bundlesize=self.bundlesize, bundlewait=self.bundlewait,
                  max_retries=self.max_retries, live=self.live_mode,
                  forever_mode=self.forever_mode, restart_mode=self.restart_mode,
-                 redirect_failures=self.failure_stream)
+                 redirect_failures=self.failure_stream, delay_start=self.delay_start,
+                 capture=self.capture)
 
     def run_local(self, **options) -> None:
         """Run local cluster."""

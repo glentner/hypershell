@@ -15,32 +15,18 @@ import sys
 import datetime
 sys.path.insert(0, os.path.abspath('../..'))
 
-import hyper_shell  # noqa
+import hypershell  # noqa
 
 # -- Project information -----------------------------------------------------
 
 year = datetime.datetime.now().year
-project = 'hyper-shell'
+project = 'hypershell'
 copyright = f'2019-{year} Geoffrey Lentner'
 author = 'Geoffrey Lentner <glentner@purdue.edu>'
 
 # The full version, including alpha/beta/rc tags
-release = hyper_shell.__version__
-version = hyper_shell.__version__
-
-
-# -- General configuration ---------------------------------------------------
-
-# Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
-# ones.
-extensions = [
-    'sphinx.ext.viewcode',
-]
-
-# Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
-source_suffix = '.rst'
+release = hypershell.__version__
+version = hypershell.__version__
 
 # The master toctree document.
 master_doc = 'index'
@@ -53,25 +39,16 @@ exclude_patterns = ['build', 'Thumbs.db', '.DS_Store']
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
 
-# -- Options for HTML output -------------------------------------------------
-
-# The theme to use for HTML and HTML Help pages.  See the documentation for
-# a list of builtin themes.
-#
-html_theme = 'sphinxbootstrap4theme'
-
-import sphinxbootstrap4theme
-html_theme_path = [sphinxbootstrap4theme.get_path()]
-
-# Add any paths that contain custom static files (such as style sheets) here,
-# relative to this directory. They are copied after the builtin static files,
-# so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+# export variables with epilogue
+rst_epilog = f"""
+.. |release| replace:: {release}
+.. |copyright| replace:: {copyright}
+"""
 
 # manual pages options
 man_pages = [(
-    'manpage',
-    'hyper-shell',
+    'index',
+    'hypershell',
     'process shell commands in parallel',
     'Geoffrey Lentner <glentner@purdue.edu>.',
     '1'

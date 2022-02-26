@@ -36,6 +36,7 @@ from typing import List, Tuple, Optional, Callable, Dict, IO
 import os
 import sys
 import time
+import random
 import logging
 import functools
 from uuid import uuid4 as gen_uuid
@@ -64,7 +65,7 @@ from hypershell.core.exceptions import (handle_exception, handle_disconnect,
                                         handle_address_unknown, HostAddressInfo)
 
 # public interface
-__all__ = ['run_client', 'ClientThread', 'ClientApp', 'DEFAULT_NUM_TASKS', ]
+__all__ = ['run_client', 'ClientThread', 'ClientApp', 'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY', ]
 
 
 log: Logger = logging.getLogger(__name__)
@@ -520,7 +521,7 @@ class ClientHeartbeat(StateMachine):
         return HeartbeatState.SUBMIT
 
     def submit(self) -> HeartbeatState:
-        """Get the next task from the local queue of new tasks."""
+        """Publish new heartbeat to remote queue."""
         try:
             client_state = self.client_state  # atomic
             heartbeat = Heartbeat.new(uuid=self.uuid, state=client_state)
@@ -557,7 +558,7 @@ class ClientHeartbeatThread(Thread):
     """Run heartbeat machine within dedicated thread."""
 
     def __init__(self, uuid: str, queue: QueueClient, heartrate: int = DEFAULT_HEARTRATE) -> None:
-        """Initialize heartrate machine."""
+        """Initialize heartbeat machine."""
         super().__init__(name=f'hypershell-heartbeat')
         self.machine = ClientHeartbeat(uuid=uuid, queue=queue, heartrate=heartrate)
 
@@ -580,6 +581,9 @@ class ClientHeartbeatThread(Thread):
 # Only create one task executor by default
 DEFAULT_NUM_TASKS = 1
 
+# We do not delay connecting to the server unless explicitly specified
+DEFAULT_DELAY = 0
+
 
 class ClientThread(Thread):
     """Manage asynchronous task bundle scheduling and receiving."""
@@ -587,6 +591,7 @@ class ClientThread(Thread):
     uuid: str
     client: QueueClient
     num_tasks: int
+    delay_start: float
 
     inbound: Queue[Optional[Task]]
     outbound: Queue[Optional[Task]]
@@ -600,14 +605,15 @@ class ClientThread(Thread):
                  address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port),
                  auth: str = QueueConfig.auth, template: str = DEFAULT_TEMPLATE,
                  redirect_output: IO = None, redirect_errors: IO = None, capture: bool = False,
-                 heartrate: int = DEFAULT_HEARTRATE) -> None:
+                 heartrate: int = DEFAULT_HEARTRATE, delay_start: float = DEFAULT_DELAY) -> None:
         """Initialize queue manager and child threads."""
         super().__init__(name='hypershell-client')
         self.uuid = str(gen_uuid())
         self.num_tasks = num_tasks
+        self.delay_start = delay_start
         self.client = QueueClient(config=QueueConfig(host=address[0], port=address[1], auth=auth))
-        self.inbound = Queue(maxsize=DEFAULT_BUNDLESIZE)
-        self.outbound = Queue(maxsize=DEFAULT_BUNDLESIZE)
+        self.inbound = Queue(maxsize=bundlesize)
+        self.outbound = Queue(maxsize=bundlesize)
         self.scheduler = ClientSchedulerThread(queue=self.client, local=self.inbound)
         self.heartbeat = ClientHeartbeatThread(uuid=self.uuid, queue=self.client, heartrate=heartrate)
         self.collector = ClientCollectorThread(queue=self.client, local=self.outbound,
@@ -621,6 +627,7 @@ class ClientThread(Thread):
     def run_with_exceptions(self) -> None:
         """Start child threads, wait."""
         log.debug(f'Started ({self.num_tasks} executors)')
+        self.wait_start()
         with self.client:
             self.start_threads()
             self.wait_scheduler()
@@ -628,6 +635,18 @@ class ClientThread(Thread):
             self.wait_collector()
             self.wait_heartbeat()
         log.debug('Done')
+
+    def wait_start(self) -> None:
+        """Wait constant period or random interval."""
+        if self.delay_start == 0:
+            return
+        if self.delay_start > 0:
+            log.debug(f'Waiting ({self.delay_start} seconds)')
+            time.sleep(self.delay_start)
+        else:
+            delay = random.uniform(0, -1 * self.delay_start)
+            log.debug(f'Waiting random ({delay:.1f} seconds)')
+            time.sleep(delay)
 
     def start_threads(self) -> None:
         """Start child threads."""
@@ -674,11 +693,13 @@ def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None,
-               capture: bool = False) -> None:
+               capture: bool = False, heartrate: int = DEFAULT_HEARTRATE,
+               delay_start: float = DEFAULT_DELAY, ) -> None:
     """Run client until disconnect signal received."""
     thread = ClientThread.new(num_tasks=num_tasks, bundlesize=bundlesize, bundlewait=bundlewait,
                               address=address, auth=auth, template=template, capture=capture,
-                              redirect_output=redirect_output, redirect_errors=redirect_errors)
+                              redirect_output=redirect_output, redirect_errors=redirect_errors,
+                              heartrate=heartrate, delay_start=delay_start)
     try:
         thread.join()
     except Exception:
@@ -688,7 +709,7 @@ def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
 
 APP_NAME = 'hyper-shell client'
 APP_USAGE = f"""\
-usage: hyper-shell client [-h] [-N NUM] [-t TEMPLATE] [-b SIZE] [-w SEC]
+usage: hyper-shell client [-h] [-N NUM] [-t TEMPLATE] [-b SIZE] [-w SEC] [-d SEC]
                           [-H ADDR] [-p PORT] [-k KEY] [-o PATH] [-e PATH]\
 """
 
@@ -705,6 +726,7 @@ options:
 -H, --host        ADDR  Hostname for server.
 -p, --port        NUM   Port number for server.
 -k, --auth        KEY   Cryptographic key to connect to server.
+-d, --delay-start SEC   Seconds to wait before start-up (default: {DEFAULT_DELAY}).   
 -o, --output      PATH  Redirect task output (default: <stdout>).
 -e, --errors      PATH  Redirect task errors (default: <stderr>).
 -c, --capture           Capture individual task <stdout> and <stderr>.
@@ -739,6 +761,9 @@ class ClientApp(Application):
     bundlewait: int = config.submit.bundlewait
     interface.add_argument('-w', '--bundlewait', type=int, default=bundlewait)
 
+    delay_start: float = DEFAULT_DELAY
+    interface.add_argument('-d', '--delay-start', type=float, default=delay_start)
+
     output_path: str = None
     errors_path: str = None
     interface.add_argument('-o', '--output', default=None, dest='output_path')
@@ -763,7 +788,7 @@ class ClientApp(Application):
             run_client(num_tasks=self.num_tasks, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
                        address=(self.host, self.port), auth=self.auth, template=self.template,
                        redirect_output=self.output_stream, redirect_errors=self.errors_stream,
-                       capture=self.capture)
+                       capture=self.capture, delay_start=self.delay_start, heartrate=config.client.heartrate)
         except gaierror:
             raise HostAddressInfo(f'Could not resolve host \'{self.host}\'')
 
