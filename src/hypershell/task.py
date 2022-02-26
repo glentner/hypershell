@@ -265,8 +265,8 @@ class TaskWaitApp(Application):
 
     def run(self) -> None:
         """Run submit thread."""
-        check_database_available()
         check_uuid(self.uuid)
+        check_database_available()
         self.wait_task()
         if self.print_info or self.format_json:
             TaskInfoApp(uuid=self.uuid, format_json=self.format_json).run()
