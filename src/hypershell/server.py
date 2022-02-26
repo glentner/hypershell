@@ -4,7 +4,7 @@
 """
 Schedule and update bundles of tasks from the database.
 
-The server can submit tasks for you so now need to directly submit before
+The server can submit tasks for you so no need to directly submit before
 invoking the server (see `hypershell.submit`).
 
 Example:
@@ -161,8 +161,7 @@ class Scheduler(StateMachine):
         if self.tasks:
             self.startup_phase = False
             return SchedulerState.PACK
-        # NOTE: An empty database must wait for at least one task
-        # Note: Do not allow HALT before at least one bundle is scheduled
+        # An empty database must wait for at least one task
         elif not self.forever_mode and Task.count() > 0 and Task.count_remaining() == 0 and not self.startup_phase:
             return SchedulerState.FINAL
         else:
@@ -348,7 +347,7 @@ class HeartMonitor(StateMachine):
         self.queue = queue
         self.last_check = datetime.now()
         self.beats = {}
-        if evict_after > 10:
+        if evict_after >= 10:
             self.wait_check = timedelta(seconds=int(evict_after / 10))
             self.evict_after = timedelta(seconds=evict_after)
         else:
@@ -571,11 +570,12 @@ def serve_from(source: Iterable[str], live: bool = False, redirect_failures: IO 
                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE,
-               restart_mode: bool = False) -> None:
+               restart_mode: bool = False, evict_after: int = DEFAULT_EVICT) -> None:
     """Run server with the given task `source`, run until complete."""
     thread = ServerThread.new(source=source, live=live, redirect_failures=redirect_failures,
                               bundlesize=bundlesize, bundlewait=bundlewait, address=address, auth=auth,
-                              max_retries=max_retries, eager=eager, restart_mode=restart_mode)
+                              max_retries=max_retries, eager=eager, restart_mode=restart_mode,
+                              evict_after=evict_after)
     try:
         thread.join()
     except Exception:
@@ -586,21 +586,23 @@ def serve_from(source: Iterable[str], live: bool = False, redirect_failures: IO 
 def serve_file(path: str, live: bool = False, redirect_failures: IO = None,
                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
-               max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE, **file_options) -> None:
+               max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE,
+               evict_after: int = DEFAULT_EVICT, **file_options) -> None:
     """Run server with tasks from a local file `path`, run until complete."""
     with open(path, mode='r', **file_options) as stream:
         serve_from(stream, live=live, redirect_failures=redirect_failures,
                    bundlesize=bundlesize, bundlewait=bundlewait, address=address, auth=auth,
-                   max_retries=max_retries, eager=eager)
+                   max_retries=max_retries, eager=eager, evict_after=evict_after)
 
 
 def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, redirect_failures: IO = None,
                   address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
-                  max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE) -> None:
+                  max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE,
+                  evict_after: int = DEFAULT_EVICT) -> None:
     """Run server forever."""
     thread = ServerThread.new(source=None, live=live, redirect_failures=redirect_failures,
                               bundlesize=bundlesize, address=address, auth=auth,
-                              forever_mode=True, max_retries=max_retries, eager=eager)
+                              forever_mode=True, max_retries=max_retries, eager=eager, evict_after=evict_after)
     try:
         thread.join()
     except Exception:
@@ -699,11 +701,13 @@ class ServerApp(Application):
         """Run server."""
         if self.forever_mode:
             serve_forever(bundlesize=self.bundlesize, address=(self.host, self.port), auth=self.auth,
-                          live=self.live_mode, redirect_failures=self.failure_stream, max_retries=self.max_retries)
+                          live=self.live_mode, redirect_failures=self.failure_stream,
+                          max_retries=self.max_retries, evict_after=config.server.evict)
         else:
             serve_from(source=self.input_stream, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
                        address=(self.host, self.port), auth=self.auth, max_retries=self.max_retries,
-                       live=self.live_mode, redirect_failures=self.failure_stream, restart_mode=self.restart_mode)
+                       live=self.live_mode, redirect_failures=self.failure_stream,
+                       restart_mode=self.restart_mode, evict_after=config.server.evict)
 
     def check_args(self):
         """Fail particular argument combinations."""
