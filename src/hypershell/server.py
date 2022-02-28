@@ -418,7 +418,7 @@ class HeartMonitor(StateMachine):
 
     def check_clients(self) -> HeartbeatState:
         """Check last heartbeat on all clients and evict if necessary."""
-        log.debug(f'Check clients ({len(self.beats)} connected)')
+        log.debug(f'Checking clients ({len(self.beats)} connected)')
         for uuid in list(self.beats):
             hb = self.beats.get(uuid)
             age = self.last_check - hb.time

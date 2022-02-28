@@ -16,7 +16,7 @@ __all__ = ['cwd', 'home', 'is_admin', 'site', 'path', 'default_path']
 
 
 cwd = os.getcwd()
-home = os.getenv('HOME')
+home = os.path.expanduser('~')
 if os.name == 'nt':
     is_admin = ctypes.windll.shell32.IsUserAnAdmin() == 1
     site = Namespace(system=os.path.join(os.getenv('ProgramData'), 'HyperShell'),

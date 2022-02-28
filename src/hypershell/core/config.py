@@ -17,7 +17,7 @@ from cmdkit.config import Namespace, Configuration, Environ, ConfigurationError 
 from cmdkit.app import exit_status
 
 # internal libs
-from hypershell.core.platform import path
+from hypershell.core.platform import path, home
 from hypershell.core.exceptions import write_traceback
 
 # public interface
@@ -78,7 +78,7 @@ default = Namespace({
         'heartrate': 10,  # Seconds, period to wait between heartbeats
     },
     'ssh': {
-        'config': os.path.join(os.getenv('HOME'), '.ssh', 'config'),
+        'config': os.path.join(home, '.ssh', 'config'),
     },
     'console': {
         'theme': 'solarized-dark',

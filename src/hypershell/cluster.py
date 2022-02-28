@@ -472,6 +472,10 @@ class ClusterApp(Application):
             raise ArgumentError('Cannot specify -o/--output PATH with remote clients')
         if self.errors_path and self.mode != 'local':
             raise ArgumentError('Cannot specify -e/--errors PATH with remote clients')
+        if self.capture and self.output_path:
+            raise ArgumentError('Cannot specify -c/--capture with -o/--output')
+        if self.capture and self.errors_path:
+            raise ArgumentError('Cannot specify -c/--capture with -e/--error')
         if self.live_mode and self.forever_mode:
             raise ArgumentError('Using --forever with --no-db is invalid')
         if self.live_mode and self.restart_mode:
