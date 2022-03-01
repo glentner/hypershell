@@ -24,6 +24,7 @@ from hypershell.server import serve_from, serve_file, serve_forever, ServerThrea
 from hypershell.client import run_client, ClientThread, ClientApp
 from hypershell.cluster import ClusterApp
 from hypershell.task import TaskGroupApp
+from hypershell.config import ConfigApp
 
 # public interface
 __all__ = ['config',
@@ -52,6 +53,7 @@ APP_HELP = f"""\
 {APP_USAGE}
 
 commands:
+config                 {ConfigApp.__doc__}
 submit                 {SubmitApp.__doc__}
 server                 {ServerApp.__doc__}
 client                 {ClientApp.__doc__}
@@ -89,6 +91,7 @@ class HyperShellApp(ApplicationGroup):
         'client': ClientApp,
         'cluster': ClusterApp,
         'task': TaskGroupApp,
+        'config': ConfigApp,
     }
 
 

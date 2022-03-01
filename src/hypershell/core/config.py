@@ -21,7 +21,7 @@ from hypershell.core.platform import path, home
 from hypershell.core.exceptions import write_traceback
 
 # public interface
-__all__ = ['default', 'config', 'load', 'update', 'load_task_env', 'LOGGING_STYLES', 'blame', ]
+__all__ = ['default', 'config', 'load', 'load_file', 'update', 'load_task_env', 'LOGGING_STYLES', 'blame', ]
 
 
 DEFAULT_LOGGING_STYLE = 'default'
