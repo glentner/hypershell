@@ -33,7 +33,7 @@ if os.environ.get('READTHEDOCS') == 'True':
 
 
 setup(
-    name             = metadata['__pkgname__'],
+    name             = 'hyper-shell',
     version          = metadata['__version__'],
     author           = metadata['__authors__'],
     author_email     = metadata['__contact__'],
@@ -55,7 +55,7 @@ setup(
                         'Operating System :: Microsoft :: Windows',
                         'License :: OSI Approved :: Apache Software License', ],
     install_requires = DEPS,
-    extra_requires = {
+    extras_require = {
         'postgres': ['psycopg2>=2.9.1', ],
     },
     entry_points     = {'console_scripts': ['hyper-shell=hypershell:main', ]},
