@@ -64,6 +64,7 @@ from hypershell.core.thread import Thread
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
 from hypershell.core.exceptions import handle_exception
 from hypershell.database.model import Task
+from hypershell.database import initdb
 
 # public interface
 __all__ = ['submit_from', 'submit_file', 'SubmitThread', 'LiveSubmitThread',
@@ -582,6 +583,8 @@ class SubmitApp(Application):
     def __enter__(self) -> SubmitApp:
         """Open file if not stdin."""
         self.source = sys.stdin if self.filepath == '-' else open(self.filepath, mode='r')
+        if config.database.provider == 'sqlite':
+            initdb()  # Auto-initialize if local sqlite provider
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
