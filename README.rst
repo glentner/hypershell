@@ -21,13 +21,21 @@ hyper-shell
     :target: https://pepy.tech/badge/hyper-shell
     :alt: Downloads
 
+|
 
-A cross-platform, high performance computing utility for processing shell commands
-over a distributed, asynchronous queue. *hyper-shell* is a single producer
-(server) many consumer (client) system.
+*HyperShell* is an elegant, cross-platform, high-performance computing utility for
+processing shell commands over a distributed, asynchronous queue. It is a highly
+scalable workflow automation tool for *many-task* scenarios.
 
-*hyper-shell* is pure Python and has been tested on Linux, macOS, and Windows 10 in
-Python 3.7 environments. The server and clients don't even need to be using the same
+There are several existing tools that serve a similar purpose, but lack some aspect
+that HyperShell provides (e.g., distributed, detailed logging, automated retries,
+super scale). Novel aspects of HyperShell include but are not limited to
+(1) cross-platform, (2) client-server design, (3) staggered launch for large scales,
+(4) persistent hosting of the server, and optionally (5) a database in-the-loop for
+restarts and persisting task metadata.
+
+*HyperShell* is pure Python and has been tested on Linux, macOS, and Windows 10 in
+Python 3.9 environments. The server and clients don't even need to use the same
 platform.
 
 
@@ -38,10 +46,7 @@ To install *hyper-shell*:
 
 .. code-block::
 
-    ➜ pip install hyper-shell
-
-For general use on a production system such as a shared computing cluster it is more robust
-to encapsulate *hyper-shell* within its own environment or module.
+    $ pip install hyper-shell
 
 
 Documentation
