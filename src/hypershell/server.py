@@ -65,7 +65,7 @@ from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueServer, QueueConfig
 from hypershell.core.heartbeat import Heartbeat, ClientState
 from hypershell.database.model import Task
-from hypershell.database import DATABASE_ENABLED
+from hypershell.database import initdb, DATABASE_ENABLED
 from hypershell.submit import SubmitThread, LiveSubmitThread, DEFAULT_BUNDLEWAIT
 
 # public interface
@@ -739,6 +739,8 @@ class ServerApp(Application):
     def __enter__(self) -> ServerApp:
         """Open file if not stdin."""
         self.check_args()
+        if config.database.provider == 'sqlite':
+            initdb()  # Auto-initialize if local sqlite provider
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:

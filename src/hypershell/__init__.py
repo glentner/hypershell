@@ -25,6 +25,7 @@ from hypershell.client import run_client, ClientThread, ClientApp
 from hypershell.cluster import ClusterApp
 from hypershell.task import TaskGroupApp
 from hypershell.config import ConfigApp
+from hypershell.database import InitDBApp
 
 # public interface
 __all__ = ['config',
@@ -59,6 +60,7 @@ server                 {ServerApp.__doc__}
 client                 {ClientApp.__doc__}
 cluster                {ClusterApp.__doc__} (recommended)
 task                   {TaskGroupApp.__doc__}
+initdb                 {InitDBApp.__doc__}
 
 options:
 -h, --help             Show this message and exit.
@@ -92,6 +94,7 @@ class HyperShellApp(ApplicationGroup):
         'cluster': ClusterApp,
         'task': TaskGroupApp,
         'config': ConfigApp,
+        'initdb': InitDBApp,
     }
 
 

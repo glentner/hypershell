@@ -29,7 +29,15 @@ DEPS = ['toml>=0.10.2', 'cmdkit>=2.6.0', 'sqlalchemy>=1.4.22',
 
 # add dependencies for readthedocs.io
 if os.environ.get('READTHEDOCS') == 'True':
-    DEPS.extend(['pydata-sphinx-theme>=0.6.3'])
+    DEPS.extend([
+        'sphinx>=4.1.2',
+        'sphinx-sitemap',
+        'sphinx-autobuild',
+        'sphinxext-opengraph',
+        'sphinx-inline-tabs',
+        'sphinx-copybutton',
+        'furo'
+    ])
 
 
 setup(
