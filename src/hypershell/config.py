@@ -251,7 +251,7 @@ class ConfigSetApp(Application):
 
     site_name: str = 'user'
     site_interface = interface.add_mutually_exclusive_group()
-    site_interface.add_argument('--user', action='store_const', const='user', dest='site_name')
+    site_interface.add_argument('--user', action='store_const', const='user', dest='site_name', default=site_name)
     site_interface.add_argument('--system', action='store_const', const='system', dest='site_name')
 
     def run(self) -> None:
