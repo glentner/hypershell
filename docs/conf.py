@@ -59,7 +59,7 @@ master_doc = 'index'
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'default'  # default: sphinx
+pygments_style = 'material'  # default: sphinx
 
 # -- Options for HTML output -------------------------------------------------
 
