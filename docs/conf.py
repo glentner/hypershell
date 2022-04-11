@@ -9,13 +9,14 @@
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#
-import os
-import sys
-import datetime
-sys.path.insert(0, os.path.abspath('../..'))
 
-import hypershell  # noqa
+import re
+import datetime
+
+# parse version from module source
+with open('../src/hypershell/__meta__.py', mode='r') as stream:
+    __version__ = re.search(r'__version__\s*=\s*[\'"]([^\'"]*)[\'"]', stream.read().strip()).group(1)
+
 
 # -- Project information -----------------------------------------------------
 
@@ -25,8 +26,8 @@ copyright = f'2019-{year} Geoffrey Lentner'  # noqa: shadows builtin name?
 author = 'Geoffrey Lentner <glentner@purdue.edu>'
 
 # The full version, including alpha/beta/rc tags
-release = hypershell.__version__
-version = hypershell.__version__
+release = __version__
+version = __version__
 
 
 # -- General configuration ---------------------------------------------------
