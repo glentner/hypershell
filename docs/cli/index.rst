@@ -10,9 +10,10 @@ Command-line
     :hidden:
     :maxdepth: 1
 
-    submit
+    cluster
     server
     client
+    submit
     config
-    task
     initdb
+    task
