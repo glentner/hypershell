@@ -27,27 +27,41 @@ Release v\ |release| (:ref:`Getting Started <getting_started>`)
 
 .. include:: _include/desc.rst
 
+The software is pure Python and has been tested on Linux, macOS, and Windows 10.
+The server and clients don't even need to use the same platform.
 
 -------------------
 
 Features
 --------
 
-**Simple, Scalable, Elastic**
+|
 
-With *hyper-shell* you can take a listing of shell commands and process them in parallel. Use
-the available *cluster* mode to process locally, automatically scale out using *SSH* or
-*MPI* (or some other custom launcher), or configure `Parsl <https://parsl-project.org>`_ to scale
-elastically using an HPC scheduler like *Slurm* or in the cloud with *Kubernetes*.
+**Simple, Scalable**
+
+With *hyper-shell* you can take a listing of shell commands and process them in parallel.
+Use the available *cluster* mode to process locally, automatically scale out using *SSH* or
+*MPI* (or some other custom launcher).
+
+On a single machine, process tasks in parallel. Use the ``-t`` option to specify a template
+for the input arguments. Process over a simple queue without a database with ``--no-db``.
 
 .. code-block:: bash
-    :caption: Trivial Example
+    :caption: Hello World
 
-    $ seq 4 | hyper-shell cluster -N2 -t 'echo {}'
+    $ seq 4 | hyper-shell cluster -N2 -t 'echo {}' --no-db
     0
     1
     2
     4
+
+Scale out to remote servers with SSH, define *groups* in your configuration file.
+Read full command-line tasks from a file and record those with non-zero exit status.
+
+.. code-block:: bash
+    :caption: Remote SSH Cluster
+
+    $ hyper-shell cluster tasks.in -N4 --ssh-group=xyz -f tasks.failed
 
 |
 
@@ -58,19 +72,20 @@ stand up the *server* on one machine and then connect to that server using a *cl
 a different environment.
 
 Start the *hyper-shell server* and set the bind address to ``0.0.0.0`` to allow remote connections.
-The server schedules tasks on a distributed queue.
+The server schedules tasks on a distributed queue. It is recommended that you protect your instance
+with a private *key* (``-k/--auth``).
 
 .. code-block:: bash
-    :caption: Stand Alone Server
+    :caption: Server
 
-    $ hyper-shell server -H '0.0.0.0' -k '<AUTHKEY>' < Taskfile
+    $ hyper-shell server -H '0.0.0.0' -k '<AUTHKEY>' --print < tasks.in > tasks.failed
 
 Connect to the running server from a different host (even from a different platform, e.g., Windows).
 You can connect with any number of clients from any number of hosts. The separate client connections
 will each pull tasks off the queue asynchronously, balancing the load.
 
 .. code-block:: bash
-    :caption: Remote Client
+    :caption: Client
 
     $ hyper-shell client -H '<HOSTNAME>' -k '<AUTHKEY>'
 
@@ -84,7 +99,7 @@ a unique UUID for each task (regardless of which client executes the task).
 Further, any environment variable defined with the ``HYPERSHELL_EXPORT_`` prefix will be injected into the
 environment of each task, *sans prefix*.
 
-Use ``-t`` (short for ``--template``) to execute a template, ``{}`` can be used to insert the incoming
+Use ``-t`` (short for ``--template``) to expand a template, ``{}`` can be used to insert the incoming
 task arguments (alternatively, use ``TASK_ARGS``). Be sure to use single quotes to delay the variable
 expansion. Many meta-patterns are supported (see full overview of :ref:`templates <templates>`:
 
@@ -96,7 +111,10 @@ expansion. Many meta-patterns are supported (see full overview of :ref:`template
 .. code-block:: bash
     :caption: Capture Output From Each Command
 
-    $ hyper-shell cluster Taskfile -N12 -t '{} >outputs/$TASK_ID.out'
+    $ hyper-shell cluster tasks.in -N12 -t './some_program.py {} >outputs/{/-}.out'
+
+Capturing `stdout` and `stderr` is supported directly in fact with the ``--capture`` option.
+See the full documentation for environment variables under :ref:`configuration <config>`.
 
 |
 
