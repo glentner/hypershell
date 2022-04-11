@@ -8,6 +8,9 @@ Installation
 ------------
 
 It is recommend that you install *hyper-shell* inside a virtual environment.
+See the :ref:`installation <install>` guide for more options
+and additional notes and recommendations.
+
 
 .. tab:: pipx
 
@@ -23,11 +26,6 @@ It is recommend that you install *hyper-shell* inside a virtual environment.
 
 |
 
-See the :ref:`installation <install>` guide for more options
-and additional notes and recommendations.
-
-|
-
 Basic Usage
 -----------
 
@@ -36,7 +34,7 @@ available in the :ref:`command-line <cli>` documentation.
 Complete, specific examples are also available in the tutorials section.
 
 In most cases, using the *cluster* subcommand is best. If you have some
-file, ``TASKFILE``, that lists shell commands that you might otherwise
+file, ``tasks.in``, that lists shell commands that you might otherwise
 execute alone (which would run each line in serial), pass that file
 to *hyper-shell* to process those commands in parallel.
 
