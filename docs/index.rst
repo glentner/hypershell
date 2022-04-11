@@ -144,7 +144,6 @@ See the full documentation for environment variables under :ref:`configuration <
     tutorial/distributed
     tutorial/hybrid
     tutorial/advanced
-    tutorial/parsl
 
 .. toctree::
     :hidden:
