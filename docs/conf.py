@@ -44,6 +44,7 @@ extensions = [
     'sphinx_sitemap',
     'sphinx_inline_tabs',
     'sphinx_copybutton',
+    'sphinxcontrib.details.directive'
 ]
 
 # Add any paths that contain templates here, relative to this directory.

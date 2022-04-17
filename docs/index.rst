@@ -39,29 +39,53 @@ Features
 
 **Simple, Scalable**
 
-With *hyper-shell* you can take a listing of shell commands and process them in parallel.
-Use the available *cluster* mode to process locally, automatically scale out using *SSH* or
-*MPI* (or some other custom launcher).
+Take a listing of shell commands and process them in parallel.
+In this example, we use the ``-t`` option to specify a template for the input arguments
+which are not fully formed shell commands. Larger workloads will want to use a database
+for managing tasks and scheduling. In this case, we can run this small example with
+``--no-db`` to disable the database and submit tasks directly to the shared queue.
 
-On a single machine, process tasks in parallel. Use the ``-t`` option to specify a template
-for the input arguments. Process over a simple queue without a database with ``--no-db``.
+.. admonition:: Trivial Example
+    :class: example
 
-.. code-block:: bash
-    :caption: Hello World
+    .. code-block:: shell
 
-    $ seq 4 | hyper-shell cluster -N2 -t 'echo {}' --no-db
-    0
-    1
-    2
-    4
+        seq 4 | hyper-shell cluster -N2 -t 'echo {}' --no-db
 
-Scale out to remote servers with SSH, define *groups* in your configuration file.
-Read full command-line tasks from a file and record those with non-zero exit status.
+    .. details:: Output
 
-.. code-block:: bash
-    :caption: Remote SSH Cluster
+        .. code-block:: none
 
-    $ hyper-shell cluster tasks.in -N4 --ssh-group=xyz -f tasks.failed
+            0
+            1
+            2
+            4
+
+|
+
+Scale out to remote servers with SSH and even define *groups* in your configuration file.
+By default, all command `stdout` and `stderr` are joined and written out directly.
+Capture individual task `stdout` and `stderr` with ``--capture``.
+Set the :ref:`logging <logging>` level to ``INFO`` to see each task start or ``DEBUG`` to
+see additional detail about what is running, where, and when.
+
+.. admonition:: Distributed Cluster over SSH
+    :class: example
+
+    .. code-block:: shell
+
+        hyper-shell cluster tasks.in -N4 --ssh-group=xyz --capture
+
+    .. details:: Logs
+
+        .. code-block:: none
+
+            2022-03-14 12:29:19.659 a00.cluster.xyz   INFO [hypershell.client] Running task (5fb74a31-fc38-4535-8b45-c19bc3dbedee)
+            2022-03-14 12:29:19.665 a01.cluster.xyz   INFO [hypershell.client] Running task (c1d32c32-3e76-48e0-b2c3-9420ea20b41b)
+            2022-03-14 12:29:19.668 a02.cluster.xyz   INFO [hypershell.client] Running task (4a6e19ec-d325-468f-a55b-03a797eb51d5)
+            2022-03-14 12:29:19.671 a03.cluster.xyz   INFO [hypershell.client] Running task (09587f55-4b50-4e2b-a528-55c60667b62a)
+            2022-03-14 12:29:19.674 a04.cluster.xyz   INFO [hypershell.client] Running task (1336f778-c9ab-4111-810e-229d572be62e)
+
 
 |
 
@@ -75,19 +99,24 @@ Start the *hyper-shell server* and set the bind address to ``0.0.0.0`` to allow 
 The server schedules tasks on a distributed queue. It is recommended that you protect your instance
 with a private *key* (``-k/--auth``).
 
-.. code-block:: bash
-    :caption: Server
+.. admonition:: Server
+    :class: example
 
-    $ hyper-shell server -H '0.0.0.0' -k '<AUTHKEY>' --print < tasks.in > tasks.failed
+    .. code-block:: shell
+
+        hyper-shell server -H '0.0.0.0' -k '<AUTHKEY>' --print < tasks.in > tasks.failed
+
 
 Connect to the running server from a different host (even from a different platform, e.g., Windows).
 You can connect with any number of clients from any number of hosts. The separate client connections
 will each pull tasks off the queue asynchronously, balancing the load.
 
-.. code-block:: bash
-    :caption: Client
+.. admonition:: Client
+    :class: example
 
-    $ hyper-shell client -H '<HOSTNAME>' -k '<AUTHKEY>'
+    .. code-block:: shell
+
+        hyper-shell client -H '<HOSTNAME>' -k '<AUTHKEY>'
 
 |
 
@@ -101,17 +130,19 @@ environment of each task, *sans prefix*.
 
 Use ``-t`` (short for ``--template``) to expand a template, ``{}`` can be used to insert the incoming
 task arguments (alternatively, use ``TASK_ARGS``). Be sure to use single quotes to delay the variable
-expansion. Many meta-patterns are supported (see full overview of :ref:`templates <templates>`:
+expansion. Many meta-patterns are supported (see full overview of :ref:`templates <templates>`):
 
 * File operations (e.g., the basename ``'{/}'``)
 * Slicing on whitespace (e.g., first ``'{[0]}'``, first three ``'{[:3]}'``, every other ``'{[::2]}'``)
 * Sub-commands (e.g., ``'{% dirname @ %}'``)
 * Lambda expressions in *x* (e.g., ``'{= x + 1 =}'``)
 
-.. code-block:: bash
-    :caption: Capture Output From Each Command
+.. admonition:: Templates
+    :class: example
 
-    $ hyper-shell cluster tasks.in -N12 -t './some_program.py {} >outputs/{/-}.out'
+    .. code-block:: shell
+
+        hyper-shell cluster tasks.in -N12 -t './some_program.py {} >outputs/{/-}.out'
 
 Capturing `stdout` and `stderr` is supported directly in fact with the ``--capture`` option.
 See the full documentation for environment variables under :ref:`configuration <config>`.
