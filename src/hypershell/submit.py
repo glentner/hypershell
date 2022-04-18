@@ -98,7 +98,7 @@ class Loader(StateMachine):
     def __init__(self, source: Iterable[str], queue: Queue[Optional[Task]], template: str = DEFAULT_TEMPLATE) -> None:
         """Initialize source to read tasks and submit to database."""
         self.template = Template(template)
-        self.source = map(self.template.expand, source)
+        self.source = map(self.template.expand, map(str.strip, map(str, source)))
         self.queue = queue
         self.count = 0
 
@@ -120,7 +120,7 @@ class Loader(StateMachine):
     def get_task(self) -> LoaderState:
         """Get the next task from the source."""
         try:
-            self.task = Task.new(args=str(next(self.source)).strip())
+            self.task = Task.new(args=next(self.source))
             log.trace(f'Loaded task ({self.task.args})')
             return LoaderState.PUT
         except StopIteration:
