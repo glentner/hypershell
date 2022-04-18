@@ -27,7 +27,7 @@ from hypershell.core.logging import handler
 from hypershell.core.exceptions import write_traceback
 
 # public interface
-__all__ = ['DatabaseURL', 'engine', 'Session', 'config', 'in_memory']
+__all__ = ['DatabaseURL', 'engine', 'Session', 'config', 'in_memory', 'schema', ]
 
 
 class DatabaseURL(dict):
