@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2022 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
-"""Build and installation script for hypershell."""
+"""Build and installation script for hyper-shell."""
 
 
 # standard libs
