@@ -41,6 +41,7 @@ from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.remote import SSHConnection
 from hypershell.core.types import smart_coerce
 from hypershell.database.model import Task, to_json_type
+from hypershell.database import initdb
 
 # public interface
 __all__ = ['TaskGroupApp', ]
@@ -500,6 +501,12 @@ class TaskGroupApp(ApplicationGroup):
         'run': TaskRunApp,
         'search': TaskSearchApp,
     }
+
+    def __enter__(self: TaskGroupApp) -> TaskGroupApp:
+        """Resource initialization."""
+        if config.database.provider == 'sqlite':
+            initdb()  # Auto-initialize if local sqlite provider
+        return self
 
 
 @dataclass

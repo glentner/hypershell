@@ -33,6 +33,7 @@ from hypershell.core.queue import QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.template import DEFAULT_TEMPLATE
+from hypershell.database import initdb
 from hypershell.client import ClientThread, DEFAULT_NUM_TASKS, DEFAULT_DELAY
 from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 from hypershell.submit import DEFAULT_BUNDLEWAIT
@@ -518,6 +519,8 @@ class ClusterApp(Application):
     def __enter__(self) -> ClusterApp:
         """Set up resources and attributes."""
         self.check_arguments()
+        if config.database.provider == 'sqlite':
+            initdb()  # Auto-initialize if local sqlite provider
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
