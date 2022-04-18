@@ -14,8 +14,10 @@ sphinx-autobuild = "*"
 sphinxext-opengraph = "*"
 sphinx-inline-tabs = "*"
 sphinx-copybutton = "*"
+sphinxcontrib-details-directive = "*"
 furo = "*"
 psycopg2 = ">=2.9.1"
+pymssql = "*"
 
 [packages]
 toml = ">=0.10.2"

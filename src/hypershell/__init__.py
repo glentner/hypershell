@@ -102,4 +102,3 @@ def main() -> int:
     """Entry-point for console application."""
     initialize_logging()
     return HyperShellApp.main(sys.argv[1:])
-

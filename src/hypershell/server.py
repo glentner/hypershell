@@ -11,7 +11,7 @@ Example:
     >>> from hypershell.server import serve_from
     >>> serve_from(['echo AA', 'echo BB', 'echo CC'])
 
-To run a server process indefinitely (maybe as a service), invoke `server_forever()`.
+To run a server process indefinitely (maybe as a service), invoke `serve_forever()`.
 Other programs can submit tasks at a later point.
 
 Example:
