@@ -4,60 +4,85 @@ Manual Page
 Synopsis
 --------
 
-| hyper-shell client  [-h] [*args*...]
-| hyper-shell server  [-h] *TASKFILE* [*args*...]
-| hyper-shell submit  [-h] *TASKFILE* [*args*...]
-| hyper-shell cluster [-h] *TASKFILE* [*args*...]
+| hyper-shell [-h] [-v] ...
 
+| hyper-shell cluster [-h] *FILE* [--ssh *HOST*... | --mpi | --launcher *ARGS*...] ...
+
+| hyper-shell submit [-h] *FILE* ...
+
+| hyper-shell server [-h] *FILE* ...
+
+| hyper-shell client [-h] ...
+
+| hyper-shell config [-h] {get | set | which | edit } [--user | --system] ...
+
+| hyper-shell task [-h] {submit | info | wait | run | search} ...
 
 Description
 -----------
 
-The ``hyper-shell`` utility is a cross-platform, high performance computing
-utility for processing arbitrary shell commands over a distributed, asynchronous
-queue.
+``hyper-shell`` is an elegant, cross-platform, high-performance computing utility for processing
+shell commands over a distributed, asynchronous queue. It is a highly scalable workflow automation
+tool for many-task scenarios.
 
-Command-Line Usage
-------------------
+Typically, ad hoc usage or batch jobs will use the ``cluster`` workflow. This automatically stands
+up the ``server`` and one or more ``client`` instances on remote servers and processes the commands
+from some input *FILE* until completion.
 
-hyper-shell cluster
-^^^^^^^^^^^^^^^^^^^
+This can function as a pure in-memory queue; however, one can configure a database in-the-loop
+to manage task scheduling and persistence. Stand up the ``server`` on its own and persistent
+``clients`` on the nodes in the cluster, and ``submit`` tasks independently.
 
-hyper-shell server
-^^^^^^^^^^^^^^^^^^
 
-hyper-shell client
-^^^^^^^^^^^^^^^^^^
+Cluster Usage
+-------------
 
-hyper-shell submit
-^^^^^^^^^^^^^^^^^^
+.. include:: _include/cluster_usage.rst
 
-hyper-shell config
-^^^^^^^^^^^^^^^^^^
 
-hyper-shell task search
-^^^^^^^^^^^^^^^^^^^^^^^
+Server Usage
+------------
 
-hyper-shell task submit
-^^^^^^^^^^^^^^^^^^^^^^^
+Client Usage
+------------
 
-hyper-shell task wait
-^^^^^^^^^^^^^^^^^^^^^
+Submit Usage
+------------
 
-hyper-shell task run
-^^^^^^^^^^^^^^^^^^^^
+Task Usage
+----------
+
 
 Templates
 ---------
 
+
 Configuration
 -------------
+
 
 Environment Variables
 ---------------------
 
 All environment variables that start with the ``HYPERSHELL_`` prefix will be
 injected into the execution environment of the tasks with the prefix stripped.
+
+``TASK_ID``
+
+    Unique task UUID.
+
+``TASK_ARGS``
+
+    Original input command-line argument(s) for the current task.
+
+Exit Status
+-----------
+
+0
+    Success.
+
+1
+    Usage or argument error.
 
 
 Examples
