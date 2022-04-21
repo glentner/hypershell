@@ -36,6 +36,7 @@ if os.environ.get('READTHEDOCS') == 'True':
         'sphinxext-opengraph',
         'sphinx-inline-tabs',
         'sphinx-copybutton',
+        'sphinxcontrib-details-directive',
         'furo'
     ])
 
