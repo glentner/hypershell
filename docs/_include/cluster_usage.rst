@@ -151,12 +151,13 @@ Options
 ``-d``, ``--delay-start`` *SEC*
     Delay time in seconds for launching clients (default: 0).
 
-    At larger scales it can be advantageous to delay the client launch sequence. With hundred or
-    thousands of clients it is a massive DDoS attach on your server. Further, even if the server
-    could handle the load, your throughput would be burst-y.
+    At larger scales it can be advantageous to uniformly delay the client launch sequences.
+    Hundreds or thousands of clients constitute a DDoS attack on your server.
+    Further, even if the server could handle the load, your throughput would be unbalanced,
+    coming in waves.
 
     Use ``--delay-start`` with a negative number to impose a uniform random delay up to the
-    magnitude specified (e.g., ``--delay-start=-600`` would delay the client by up to ten minutes).
+    magnitude specified (e.g., ``--delay-start=-600`` would delay the client up to ten minutes).
     This also has the effect of staggering the workload. If your tasks take on the order of 30
     minutes and you have 1000 nodes, choose ``--delay-start=-1800``.
 
