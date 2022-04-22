@@ -633,20 +633,19 @@ Tasks are bundled and clients pull them in these bundles. However, by default th
 is one, meaning that at small scales there is greater responsiveness.
 
 arguments:
-FILE                        Path to task file ("-" for <stdin>).
+FILE                        Path to input task file (default: <stdin>).
 
 options:
 -H, --bind            ADDR  Bind address (default: {QueueConfig.host}).
 -p, --port            NUM   Port number (default: {QueueConfig.port}).
 -k, --auth            KEY   Cryptographic key to secure server.
-    --forever               Do not halt even if all tasks finished.
-    --restart               Restart scheduling from last completed task.
+    --forever               Schedule forever.
+    --restart               Start scheduling from last completed task.
 -b, --bundlesize      NUM   Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
--t, --bundlewait      SEC   Seconds to wait before flushing tasks (with FILE, default: {DEFAULT_BUNDLEWAIT}).
+-w, --bundlewait      SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
 -r, --max-retries     NUM   Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
     --eager                 Schedule failed tasks before new tasks.
-    --no-db                 Run server without database.
-    --restart               Include previously failed or interrupted tasks.
+    --no-db                 Disable database (submit directly to clients).
     --print                 Print failed task args to <stdout>.
 -f, --failures        PATH  File path to redirect failed task args.
 -h, --help                  Show this message and exit.\
