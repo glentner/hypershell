@@ -41,20 +41,13 @@ from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.remote import SSHConnection
 from hypershell.core.types import smart_coerce
 from hypershell.database.model import Task, to_json_type
-from hypershell.database import initdb
+from hypershell.database import initdb, checkdb, DatabaseUninitialized
 
 # public interface
 __all__ = ['TaskGroupApp', ]
 
 
 log: Logger = logging.getLogger(__name__)
-
-
-def check_database_available():
-    """Raise ConfigurationError if no database is configured."""
-    db = config.database.get('file', None) or config.database.get('database', None)
-    if config.database.provider == 'sqlite' and db in ('', ':memory:', None):
-        raise ConfigurationError('No database configured')
 
 
 TASK_SUBMIT_USAGE = f"""\
@@ -82,7 +75,6 @@ class TaskSubmitApp(Application):
 
     def run(self) -> None:
         """Run submit thread."""
-        check_database_available()
         task = Task.new(args=' '.join(self.argv))
         Task.add(task)
         print(task.id)
@@ -149,7 +141,6 @@ class TaskInfoApp(Application):
     def run(self) -> None:
         """Run submit thread."""
         check_uuid(self.uuid)
-        check_database_available()
         if self.extract_field and (self.print_stdout or self.print_stderr or self.format_json):
             raise ArgumentError('Cannot use -x/--extract with other output formats')
         if self.extract_field:
@@ -267,7 +258,6 @@ class TaskWaitApp(Application):
     def run(self) -> None:
         """Run submit thread."""
         check_uuid(self.uuid)
-        check_database_available()
         self.wait_task()
         if self.print_info or self.format_json:
             TaskInfoApp(uuid=self.uuid, format_json=self.format_json).run()
@@ -384,7 +374,6 @@ class TaskSearchApp(Application):
 
     def run(self) -> None:
         """Run search application."""
-        check_database_available()
         self.check_field_names()
         if self.count:
             print(self.build_query().count())
@@ -502,10 +491,23 @@ class TaskGroupApp(ApplicationGroup):
         'search': TaskSearchApp,
     }
 
+    # NOTE: ApplicationGroup only defines the CompletedCommand mechanism.
+    #       Extending this allows for a shared exception for all task commands
+    exceptions = {
+        ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
+        DatabaseUninitialized: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        **ApplicationGroup.exceptions
+    }
+
     def __enter__(self: TaskGroupApp) -> TaskGroupApp:
         """Resource initialization."""
+        db = config.database.get('file', None) or config.database.get('database', None)
+        if config.database.provider == 'sqlite' and db in ('', ':memory:', None):
+            raise ConfigurationError('Missing database configuration')
         if config.database.provider == 'sqlite':
             initdb()  # Auto-initialize if local sqlite provider
+        else:
+            checkdb()
         return self
 
 

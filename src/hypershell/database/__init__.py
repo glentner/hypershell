@@ -11,6 +11,7 @@ import logging
 # external libs
 from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
+from sqlalchemy import inspect
 
 # internal libs
 from hypershell.core.logging import Logger
@@ -19,7 +20,7 @@ from hypershell.database.core import engine, in_memory
 from hypershell.database.model import Model
 
 # public interface
-__all__ = ['InitDBApp', 'initdb', 'DATABASE_ENABLED', ]
+__all__ = ['InitDBApp', 'initdb', 'checkdb', 'DatabaseUninitialized', 'DATABASE_ENABLED', ]
 
 # module level logger
 log: Logger = logging.getLogger(__name__)
@@ -28,6 +29,16 @@ log: Logger = logging.getLogger(__name__)
 def initdb() -> None:
     """Initialize database schema."""
     Model.metadata.create_all(engine)
+
+
+def checkdb() -> None:
+    """Ensure database connection and tables exist."""
+    if not inspect(engine).has_table('task'):
+        raise DatabaseUninitialized('Use \'initdb\' to initialize the database')
+
+
+class DatabaseUninitialized(Exception):
+    """The database needs to be initialized before operations."""
 
 
 INITDB_PROGRAM = 'hyper-shell initdb'

@@ -64,7 +64,7 @@ from hypershell.core.thread import Thread
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
 from hypershell.core.exceptions import handle_exception
 from hypershell.database.model import Task
-from hypershell.database import initdb
+from hypershell.database import initdb, checkdb
 
 # public interface
 __all__ = ['submit_from', 'submit_file', 'SubmitThread', 'LiveSubmitThread',
@@ -518,7 +518,7 @@ def submit_file(path: str, queue_config: QueueConfig = None,
 
 APP_NAME = 'hyper-shell submit'
 APP_USAGE = f"""\
-usage: {APP_NAME} [-h] [FILE] [-b NUM] [-w SEC] [-t CMD]
+usage: {APP_NAME} [-h] [FILE] [-b NUM] [-w SEC] [-t CMD] [--initdb]
 Submit tasks from a file.\
 """
 
@@ -532,6 +532,7 @@ options:
 -t, --template    CMD  Submit-time template expansion (default: "{DEFAULT_TEMPLATE}").
 -b, --bundlesize  NUM  Number of lines to buffer (default: {DEFAULT_BUNDLESIZE}).
 -w, --bundlewait  SEC  Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
+    --initdb           Auto-initialize database.
 -h, --help             Show this message and exit.\
 """
 
@@ -555,6 +556,9 @@ class SubmitApp(Application):
     template: str = DEFAULT_TEMPLATE
     interface.add_argument('-t', '--template', default=template)
 
+    auto_initdb: bool = False
+    interface.add_argument('--initdb', action='store_true', dest='auto_initdb')
+
     count: int = 0
 
     exceptions = {
@@ -564,7 +568,6 @@ class SubmitApp(Application):
 
     def run(self) -> None:
         """Run submit thread."""
-        self.check_config()
         self.submit_all()
         log.info(f'Submitted {self.count} tasks')
 
@@ -583,8 +586,11 @@ class SubmitApp(Application):
     def __enter__(self) -> SubmitApp:
         """Open file if not stdin."""
         self.source = sys.stdin if self.filepath == '-' else open(self.filepath, mode='r')
-        if config.database.provider == 'sqlite':
+        self.check_config()
+        if config.database.provider == 'sqlite' or self.auto_initdb:
             initdb()  # Auto-initialize if local sqlite provider
+        else:
+            checkdb()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:

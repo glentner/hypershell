@@ -65,7 +65,7 @@ from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueServer, QueueConfig
 from hypershell.core.heartbeat import Heartbeat, ClientState
 from hypershell.database.model import Task
-from hypershell.database import initdb, DATABASE_ENABLED
+from hypershell.database import initdb, checkdb, DATABASE_ENABLED
 from hypershell.submit import SubmitThread, LiveSubmitThread, DEFAULT_BUNDLEWAIT
 
 # public interface
@@ -613,7 +613,7 @@ def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, redi
 APP_NAME = 'hyper-shell server'
 APP_USAGE = f"""\
 usage: hyper-shell server [-h] [FILE | --forever | --restart] [-b NUM] [-w SEC] [-r NUM [--eager]]
-                          [-H ADDR] [-p PORT] [-k KEY] [--no-db] [--print | -f PATH]\
+                          [-H ADDR] [-p PORT] [-k KEY] [--no-db | --initdb] [--print | -f PATH]\
 """
 
 APP_HELP = f"""\
@@ -646,6 +646,7 @@ options:
 -r, --max-retries     NUM   Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
     --eager                 Schedule failed tasks before new tasks.
     --no-db                 Disable database (submit directly to clients).
+    --initdb                Auto-initialize database.
     --print                 Print failed task args to <stdout>.
 -f, --failures        PATH  File path to redirect failed task args.
 -h, --help                  Show this message and exit.\
@@ -688,7 +689,10 @@ class ServerApp(Application):
     interface.add_argument('-k', '--auth', default=auth)
 
     live_mode: bool = False
-    interface.add_argument('--no-db', action='store_true', dest='live_mode')
+    auto_initdb: bool = False
+    db_interface = interface.add_mutually_exclusive_group()
+    db_interface.add_argument('--no-db', action='store_true', dest='live_mode')
+    db_interface.add_argument('--initdb', action='store_true', dest='auto_initdb')
 
     print_mode: bool = False
     failure_path: str = None
@@ -738,8 +742,10 @@ class ServerApp(Application):
     def __enter__(self) -> ServerApp:
         """Open file if not stdin."""
         self.check_args()
-        if config.database.provider == 'sqlite':
+        if config.database.provider == 'sqlite' or self.auto_initdb:
             initdb()  # Auto-initialize if local sqlite provider
+        elif not self.live_mode:
+            checkdb()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
