@@ -45,8 +45,8 @@ which are not fully formed shell commands. Larger workloads will want to use a d
 for managing tasks and scheduling. In this case, we can run this small example with
 ``--no-db`` to disable the database and submit tasks directly to the shared queue.
 
-.. admonition:: Trivial Example
-    :class: example
+.. admonition:: Hello World
+    :class: note
 
     .. code-block:: shell
 
@@ -70,7 +70,7 @@ Set the :ref:`logging <logging>` level to ``INFO`` to see each task start or ``D
 see additional detail about what is running, where, and when.
 
 .. admonition:: Distributed Cluster over SSH
-    :class: example
+    :class: note
 
     .. code-block:: shell
 
@@ -100,7 +100,7 @@ The server schedules tasks on a distributed queue. It is recommended that you pr
 with a private *key* (``-k/--auth``).
 
 .. admonition:: Server
-    :class: example
+    :class: note
 
     .. code-block:: shell
 
@@ -112,7 +112,7 @@ You can connect with any number of clients from any number of hosts. The separat
 will each pull tasks off the queue asynchronously, balancing the load.
 
 .. admonition:: Client
-    :class: example
+    :class: note
 
     .. code-block:: shell
 
@@ -138,7 +138,7 @@ expansion. Many meta-patterns are supported (see full overview of :ref:`template
 * Lambda expressions in *x* (e.g., ``'{= x + 1 =}'``)
 
 .. admonition:: Templates
-    :class: example
+    :class: note
 
     .. code-block:: shell
 

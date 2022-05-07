@@ -26,6 +26,7 @@ and additional notes and recommendations.
 
 |
 
+
 Basic Usage
 -----------
 
@@ -38,26 +39,37 @@ file, ``tasks.in``, that lists shell commands that you might otherwise
 execute alone (which would run each line in serial), pass that file
 to *hyper-shell* to process those commands in parallel.
 
-.. code-block:: none
+.. admonition:: Basic Usage
+    :class: note
 
-    ➜ hyper-shell cluster tasks.in
+    .. code-block:: shell
+
+        hyper-shell cluster tasks.in
+
 
 To specify the number of tasks to execute simultaneously, use ``--num-cores``
 (or ``-N`` for short).
 
-.. code-block:: none
+.. admonition:: Parallel Workers
+    :class: note
 
-    ➜ hyper-shell cluster tasks.in -N16
+    .. code-block:: shell
+
+        hyper-shell cluster tasks.in -N16
+
 
 Assuming the individual commands run on a single-core (they themselves are
 not parallel applications), you should use the same number as the number
-of cores on your system (*hyper-shell* does this automatically for you if
-left unspecified).
+of physical cores on your system.
 
 Some commands may fail for whatever reason. To track which input commands
 had a non-zero exit status, specify the ``--failed`` (or ``-f`` for short)
 option. This output file will contain lines from the input file that failed.
 
-.. code-block:: none
 
-    ➜ hyper-shell cluster tasks.in -N16 -f tasks.failed
+.. admonition:: Track Failed Tasks
+    :class: note
+
+    .. code-block:: shell
+
+        hyper-shell cluster tasks.in -N16 -f tasks.failed
