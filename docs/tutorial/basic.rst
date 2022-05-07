@@ -14,7 +14,7 @@ With some user program ``bin/code.py``, invoke against each file in ``data/``
 and re-direct outputs to individual files in the project directory.
 
 .. admonition:: Process Data Files
-    :class: example
+    :class: note
 
     .. details:: Setup
 

@@ -25,7 +25,7 @@ from hypershell.client import run_client, ClientThread, ClientApp
 from hypershell.cluster import ClusterApp
 from hypershell.task import TaskGroupApp
 from hypershell.config import ConfigApp
-from hypershell.database import InitDBApp
+from hypershell.database import InitDBApp, DatabaseUninitialized
 
 # public interface
 __all__ = ['config',
@@ -73,9 +73,12 @@ Copyright {__copyright__}
 {__authors__} <{__contact__}>.\
 """
 
+
+# Globally defined exception cases for all applications
 Application.exceptions = {
-    Exception: functools.partial(write_traceback, logger=log, status=exit_status.runtime_error),
     ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
+    DatabaseUninitialized: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+    Exception: functools.partial(write_traceback, logger=log, status=exit_status.runtime_error),
 }
 
 

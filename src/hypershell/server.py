@@ -65,7 +65,7 @@ from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueServer, QueueConfig
 from hypershell.core.heartbeat import Heartbeat, ClientState
 from hypershell.database.model import Task
-from hypershell.database import initdb, DATABASE_ENABLED
+from hypershell.database import initdb, checkdb, DATABASE_ENABLED
 from hypershell.submit import SubmitThread, LiveSubmitThread, DEFAULT_BUNDLEWAIT
 
 # public interface
@@ -613,7 +613,7 @@ def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, redi
 APP_NAME = 'hyper-shell server'
 APP_USAGE = f"""\
 usage: hyper-shell server [-h] [FILE | --forever | --restart] [-b NUM] [-w SEC] [-r NUM [--eager]]
-                          [-H ADDR] [-p PORT] [-k KEY] [--no-db] [--print | -f PATH]\
+                          [-H ADDR] [-p PORT] [-k KEY] [--no-db | --initdb] [--print | -f PATH]\
 """
 
 APP_HELP = f"""\
@@ -633,20 +633,20 @@ Tasks are bundled and clients pull them in these bundles. However, by default th
 is one, meaning that at small scales there is greater responsiveness.
 
 arguments:
-FILE                        Path to task file ("-" for <stdin>).
+FILE                        Path to input task file (default: <stdin>).
 
 options:
 -H, --bind            ADDR  Bind address (default: {QueueConfig.host}).
 -p, --port            NUM   Port number (default: {QueueConfig.port}).
 -k, --auth            KEY   Cryptographic key to secure server.
-    --forever               Do not halt even if all tasks finished.
-    --restart               Restart scheduling from last completed task.
+    --forever               Schedule forever.
+    --restart               Start scheduling from last completed task.
 -b, --bundlesize      NUM   Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
--t, --bundlewait      SEC   Seconds to wait before flushing tasks (with FILE, default: {DEFAULT_BUNDLEWAIT}).
+-w, --bundlewait      SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
 -r, --max-retries     NUM   Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
     --eager                 Schedule failed tasks before new tasks.
-    --no-db                 Run server without database.
-    --restart               Include previously failed or interrupted tasks.
+    --no-db                 Disable database (submit directly to clients).
+    --initdb                Auto-initialize database.
     --print                 Print failed task args to <stdout>.
 -f, --failures        PATH  File path to redirect failed task args.
 -h, --help                  Show this message and exit.\
@@ -689,7 +689,10 @@ class ServerApp(Application):
     interface.add_argument('-k', '--auth', default=auth)
 
     live_mode: bool = False
-    interface.add_argument('--no-db', action='store_true', dest='live_mode')
+    auto_initdb: bool = False
+    db_interface = interface.add_mutually_exclusive_group()
+    db_interface.add_argument('--no-db', action='store_true', dest='live_mode')
+    db_interface.add_argument('--initdb', action='store_true', dest='auto_initdb')
 
     print_mode: bool = False
     failure_path: str = None
@@ -739,8 +742,10 @@ class ServerApp(Application):
     def __enter__(self) -> ServerApp:
         """Open file if not stdin."""
         self.check_args()
-        if config.database.provider == 'sqlite':
+        if config.database.provider == 'sqlite' or self.auto_initdb:
             initdb()  # Auto-initialize if local sqlite provider
+        elif not self.live_mode:
+            checkdb()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:

@@ -33,7 +33,7 @@ from hypershell.core.queue import QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.template import DEFAULT_TEMPLATE
-from hypershell.database import initdb
+from hypershell.database import initdb, checkdb
 from hypershell.client import ClientThread, DEFAULT_NUM_TASKS, DEFAULT_DELAY
 from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 from hypershell.submit import DEFAULT_BUNDLEWAIT
@@ -299,9 +299,10 @@ def run_ssh(**options) -> None:
 
 APP_NAME = 'hyper-shell cluster'
 APP_USAGE = f"""\
-usage: hyper-shell cluster [-h] [FILE | --restart | --forever] [--no-db] [-N NUM] [-t CMD] [-b SIZE] [-w SEC]
-                           [-r NUM [--eager]] [--capture | [-o PATH] [-e PATH]] [-f PATH] [--delay-start SEC] 
-                           [--ssh [HOST... | --ssh-group NAME] [--env] | --mpi | --launcher=ARGS...]\
+usage: hyper-shell cluster [-h] [FILE | --restart | --forever] [-N NUM] [-t CMD] [-b SIZE] [-w SEC]
+                           [-r NUM [--eager]] [-f PATH] [--capture | [-o PATH] [-e PATH]] [--delay-start SEC] 
+                           [--ssh [HOST... | --ssh-group NAME] [--env] | --mpi | --launcher=ARGS...]
+                           [--no-db | --initdb]\
 """
 APP_HELP = f"""\
 {APP_USAGE}
@@ -325,6 +326,7 @@ options:
 -r, --max-retries  NUM      Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
     --eager                 Schedule failed tasks before new tasks.
     --no-db                 Disable database (submit directly to clients).
+    --initdb                Auto-initialize database.
     --forever               Schedule forever.
     --restart               Start scheduling from last completed task.
     --ssh-args     ARGS     Command-line arguments for SSH.
@@ -370,7 +372,10 @@ class ClusterApp(Application):
     interface.add_argument('--eager', action='store_true', dest='eager_mode')
 
     live_mode: bool = False
-    interface.add_argument('--no-db', action='store_true', dest='live_mode')
+    auto_initdb: bool = False
+    db_interface = interface.add_mutually_exclusive_group()
+    db_interface.add_argument('--no-db', action='store_true', dest='live_mode')
+    db_interface.add_argument('--initdb', action='store_true', dest='auto_initdb')
 
     forever_mode: bool = False
     interface.add_argument('--forever', action='store_true', dest='forever_mode')
@@ -519,8 +524,10 @@ class ClusterApp(Application):
     def __enter__(self) -> ClusterApp:
         """Set up resources and attributes."""
         self.check_arguments()
-        if config.database.provider == 'sqlite':
+        if config.database.provider == 'sqlite' or self.auto_initdb:
             initdb()  # Auto-initialize if local sqlite provider
+        elif not self.live_mode:
+            checkdb()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:

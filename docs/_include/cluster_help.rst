@@ -91,6 +91,15 @@ Options
     With ``--no-db`` enabled, there is no scheduler and instead the `submit` thread publishes
     bundles directly to the queue.
 
+``--initdb``
+    Auto-initialize database.
+
+    If a database is configured for use with the workflow (e.g., PostgreSQL), auto-initialize
+    tables if they don't already exist. This is a short-hand for pre-creating tables with the
+    ``hyper-shell initdb`` command. This happens by default with SQLite databases.
+
+    Mutually exclusive to ``--no-db``. See ``hyper-shell initdb`` command.
+
 ``--forever``
     Schedule forever.
 
@@ -131,9 +140,9 @@ Options
 ``-d``, ``--delay-start`` *SEC*
     Delay time in seconds for launching clients (default: 0).
 
-    At larger scales it can be advantageous to uniformly delay the client launch sequences.
-    Hundreds or thousands of clients constitute a DDoS attack on your server.
-    Further, even if the server could handle the load, your throughput would be unbalanced,
+    At larger scales it can be advantageous to uniformly delay the client launch sequence.
+    Hundreds or thousands of clients connecting to the server all at once is a challenge.
+    Even if the server could handle the load, your task throughput would be unbalanced,
     coming in waves.
 
     Use ``--delay-start`` with a negative number to impose a uniform random delay up to the

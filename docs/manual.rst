@@ -47,6 +47,13 @@ Cluster Usage
 Server Usage
 ------------
 
+.. include:: _include/server_usage.rst
+
+.. include:: _include/server_desc.rst
+
+.. include:: _include/server_help.rst
+
+
 Client Usage
 ------------
 
