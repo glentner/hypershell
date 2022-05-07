@@ -1,0 +1,16 @@
+.admonition.note {
+    border-left-color: #ff69b4;
+    /*border-left-color: var(--color-admonition-title--note);*/
+}
+
+.admonition.note > .admonition-title {
+    background-color: rgba(255, 0, 222, 0.1);
+    /*background-color: var(--color-admonition-title-background--note);*/
+}
+
+.admonition.note > .admonition-title:before {
+    background-color: #ff69b4;
+    /*background-color: var(--color-admonition-title--note);*/
+    -webkit-mask-image: var(--icon-admonition-default);
+    mask-image:var(--icon-admonition-default)
+}
