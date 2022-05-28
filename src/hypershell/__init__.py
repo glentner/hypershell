@@ -17,22 +17,17 @@ from cmdkit.config import ConfigurationError
 # internal libs
 from hypershell.__meta__ import __version__, __authors__, __description__, __contact__, __copyright__, __website__
 from hypershell.core.exceptions import write_traceback, handle_exception
-from hypershell.core.config import config
 from hypershell.core.logging import initialize_logging
-from hypershell.submit import submit_from, submit_file, SubmitThread, SubmitApp
-from hypershell.server import serve_from, serve_file, serve_forever, ServerThread, ServerApp
-from hypershell.client import run_client, ClientThread, ClientApp
+from hypershell.submit import SubmitApp
+from hypershell.server import ServerApp
+from hypershell.client import ClientApp
 from hypershell.cluster import ClusterApp
 from hypershell.task import TaskGroupApp
 from hypershell.config import ConfigApp
 from hypershell.database import InitDBApp, DatabaseUninitialized
 
 # public interface
-__all__ = ['config',
-           'submit_from', 'submit_file', 'SubmitThread', 'SubmitApp',
-           'serve_from', 'serve_file', 'serve_forever', 'ServerThread', 'ServerApp',
-           'run_client', 'ClientThread', 'ClientApp', 'ClusterApp',
-           'HyperShellApp', 'main', ]
+__all__ = ['HyperShellApp', 'main', ]
 
 
 # initialize application logger
