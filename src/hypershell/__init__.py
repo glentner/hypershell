@@ -15,7 +15,6 @@ from cmdkit.cli import Interface
 from cmdkit.config import ConfigurationError
 
 # internal libs
-from hypershell.__meta__ import __version__, __authors__, __description__, __contact__, __copyright__, __website__
 from hypershell.core.exceptions import write_traceback, handle_exception
 from hypershell.core.logging import initialize_logging
 from hypershell.submit import SubmitApp
@@ -27,8 +26,17 @@ from hypershell.config import ConfigApp
 from hypershell.database import InitDBApp, DatabaseUninitialized
 
 # public interface
-__all__ = ['HyperShellApp', 'main', ]
+__all__ = ['HyperShellApp', 'main', '__version__', '__license__']
 
+# project metadata
+__version__     = '2.0.0-b9'
+__authors__     = 'Geoffrey Lentner'
+__contact__     = 'glentner@purdue.edu'
+__license__     = 'Apache Software License'
+__copyright__   = '2019-2022. All Rights Reserved.'
+__website__     = 'https://github.com/glentner/hyper-shell'
+__keywords__    = 'distributed-computing command-line-tool shell-scripting high-performance-computing'
+__description__ = 'Process shell commands over a distributed, asynchronous queue.'
 
 # initialize application logger
 log = logging.getLogger('hypershell')

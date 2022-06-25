@@ -16,10 +16,10 @@ with open('README.rst', mode='r') as readme:
 
 
 # package metadata by parsing __meta__ module
-with open('src/hypershell/__meta__.py', mode='r') as source:
+with open('src/hypershell/__init__.py', mode='r') as source:
     content = source.read().strip()
     metadata = {key: re.search(key + r'\s*=\s*[\'"]([^\'"]*)[\'"]', content).group(1)
-                for key in ['__pkgname__', '__version__', '__authors__', '__contact__',
+                for key in ['__version__', '__authors__', '__contact__',
                             '__description__', '__license__', '__keywords__', '__website__']}
 
 
