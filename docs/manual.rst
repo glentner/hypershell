@@ -96,11 +96,7 @@ injected into the execution environment of the tasks with the prefix stripped.
 Exit Status
 -----------
 
-0
-    Success.
-
-1
-    Usage or argument error.
+.. include:: _include/exit_status.rst
 
 
 Examples
