@@ -710,7 +710,7 @@ def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
 APP_NAME = 'hyper-shell client'
 APP_USAGE = f"""\
 usage: hyper-shell client [-h] [-N NUM] [-t TEMPLATE] [-b SIZE] [-w SEC] [-d SEC]
-                          [-H ADDR] [-p PORT] [-k KEY] [-o PATH] [-e PATH]\
+                          [-H ADDR] [-p PORT] [-k KEY] [-c | [-o PATH] [-e PATH]]\
 """
 
 APP_HELP = f"""\
