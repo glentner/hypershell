@@ -14,7 +14,7 @@ import re
 import datetime
 
 # parse version from module source
-with open('../src/hypershell/__meta__.py', mode='r') as stream:
+with open('../src/hypershell/__init__.py', mode='r') as stream:
     __version__ = re.search(r'__version__\s*=\s*[\'"]([^\'"]*)[\'"]', stream.read().strip()).group(1)
 
 
