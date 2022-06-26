@@ -5,7 +5,7 @@
 
 
 # type annotations
-from typing import Union
+from typing import Union, Callable
 
 # standard libraries
 import os
@@ -20,19 +20,27 @@ from cmdkit.app import exit_status
 from cmdkit.config import Namespace
 
 # internal libs
-from hypershell.core.ansi import faint, bold, magenta
+from hypershell.core.ansi import faint, bold, magenta, yellow, red
 from hypershell.core.platform import default_path
 
 # public interface
-__all__ = ['display_critical', 'traceback_filepath', 'write_traceback',
+__all__ = ['display_warning', 'display_error', 'display_critical', 'traceback_filepath', 'write_traceback',
            'handle_exception', 'handle_disconnect', 'handle_address_unknown', 'HostAddressInfo', ]
 
 
-def display_critical(error: Union[Exception, str], module: str = None) -> None:
-    """Apply basic formatting to exceptions (i.e., without logging)."""
+def _display_message(levelname: str, error: Union[Exception, str],
+                     module: str = None, colorized: Callable[[str], str] = None) -> None:
+    """Generic message display for import-time warnings and errors."""
     text = error if isinstance(error, str) else f'{error.__class__.__name__}: {error}'
     name = '' if not module else faint(f'[{module}]')
-    print(f'{bold(magenta("CRITICAL"))} {name} {text}', file=sys.stderr)
+    level = levelname if colorized is None else bold(colorized(levelname))
+    print(f'{level} {name} {text}', file=sys.stderr)
+
+
+# Specialized methods for each severity level
+display_warning = functools.partial(_display_message, 'WARNING', colorized=yellow)
+display_error = functools.partial(_display_message, 'ERROR', colorized=red)
+display_critical = functools.partial(_display_message, 'CRITICAL', colorized=magenta)
 
 
 def traceback_filepath(path: Namespace = None) -> str:
