@@ -84,6 +84,16 @@ Config Get Usage
 .. include:: _include/config_get_help.rst
 
 
+Config Set Usage
+----------------
+
+.. include:: _include/config_set_usage.rst
+
+.. include:: _include/config_set_desc.rst
+
+.. include:: _include/config_set_help.rst
+
+
 Task Usage
 ----------
 

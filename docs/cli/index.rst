@@ -15,5 +15,6 @@ Command-line Interface
     client <client>
     submit <submit>
     config get <config_get>
+    config set <config_set>
     initdb <initdb>
     task <task>
