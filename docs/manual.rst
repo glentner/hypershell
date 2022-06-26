@@ -74,6 +74,16 @@ Submit Usage
 .. include:: _include/submit_help.rst
 
 
+Config Get Usage
+----------------
+
+.. include:: _include/config_get_usage.rst
+
+.. include:: _include/config_get_desc.rst
+
+.. include:: _include/config_get_help.rst
+
+
 Task Usage
 ----------
 
