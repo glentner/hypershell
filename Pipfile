@@ -21,6 +21,7 @@ pymssql = "*"
 
 [packages]
 toml = ">=0.10.2"
+tomlkit = ">=0.11.0"
 cmdkit = ">=2.6.0"
 sqlalchemy = ">=1.4.22"
 pyyaml = ">=6.0"
