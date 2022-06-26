@@ -1,7 +1,7 @@
 .. _cli:
 
-Command-line
-============
+Command-line Interface
+======================
 
 `Under construction` ...
 
@@ -10,10 +10,10 @@ Command-line
     :hidden:
     :maxdepth: 1
 
-    cluster
-    server
-    client
-    submit
-    config
-    initdb
-    task
+    cluster <cluster>
+    server <server>
+    client <client>
+    submit <submit>
+    config <config>
+    initdb <initdb>
+    task <task>

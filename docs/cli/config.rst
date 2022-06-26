@@ -1,27 +1,18 @@
 .. _cli_config:
 
-config
+Config
 ======
 
-`Under construction` ...
+Usage
+-----
 
+.. include:: ../_include/config_usage.rst
 
-.. code-block:: none
+Description
+-----------
 
-    usage: hyper-shell config [-h] <command> [<args>...]
-    Manage configuration.
+.. include:: ../_include/config_desc.rst
 
-    commands:
-    get                      Get configuration option.
-    set                      Set configuration option.
-    edit                     Edit configuration with default editor.
-    which                    Show origin of configuration option.
+|
 
-    options:
-    -h, --help               Show this message and exit.
-
-    files:
-      (system)  /etc/hypershell.toml
-        (user)  ~/.hypershell/config.toml
-
-
+.. include:: ../_include/config_help.rst

@@ -1,6 +1,6 @@
 .. _cli_cluster:
 
-cluster
+Cluster
 =======
 
 Usage

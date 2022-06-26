@@ -1,25 +1,18 @@
 .. _cli_task:
 
-task
+Task
 ====
 
-`Under construction` ...
+Usage
+-----
 
+.. include:: ../_include/task_usage.rst
 
-.. code-block:: none
+Description
+-----------
 
-    usage: hyper-shell task [-h] <command> [<args>...]
-    Search, submit, track, and manage individual tasks.
+.. include:: ../_include/task_desc.rst
 
-    commands:
-    submit                 Submit task to database.
-    info                   Get metadata/status/outputs of task.
-    wait                   Wait for task to complete.
-    run                    Submit task and wait for completion.
-    search                 Search for task(s) in database.
+|
 
-    options:
-    -h, --help             Show this message and exit.
-
-
-
+.. include:: ../_include/task_help.rst

@@ -1,6 +1,6 @@
 .. _cli_server:
 
-server
+Server
 ======
 
 Usage
