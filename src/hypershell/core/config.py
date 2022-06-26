@@ -91,7 +91,7 @@ default = Namespace({
         'config': os.path.join(home, '.ssh', 'config'),
     },
     'console': {
-        'theme': 'solarized-dark',
+        'theme': 'monokai',
     },
     'export': {
         # NOTE: defining HYPERSHELL_EXPORT_XXX defines XXX within task env
