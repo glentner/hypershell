@@ -57,6 +57,13 @@ Server Usage
 Client Usage
 ------------
 
+.. include:: _include/client_usage.rst
+
+.. include:: _include/client_desc.rst
+
+.. include:: _include/client_help.rst
+
+
 Submit Usage
 ------------
 
