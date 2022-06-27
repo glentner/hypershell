@@ -134,6 +134,16 @@ Task Submit Usage
 .. include:: _include/task_submit_help.rst
 
 
+Task Info Usage
+---------------
+
+.. include:: _include/task_info_usage.rst
+
+.. include:: _include/task_info_desc.rst
+
+.. include:: _include/task_info_help.rst
+
+
 Templates
 ---------
 

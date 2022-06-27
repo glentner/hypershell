@@ -20,3 +20,4 @@ Command-line Interface
     config edit <config_edit>
     config which <config_which>
     task submit <task_submit>
+    task info <task_info>
