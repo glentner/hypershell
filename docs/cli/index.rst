@@ -22,3 +22,4 @@ Command-line Interface
     task submit <task_submit>
     task info <task_info>
     task wait <task_wait>
+    task run <task_run>

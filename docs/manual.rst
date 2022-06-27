@@ -154,6 +154,16 @@ Task Wait Usage
 .. include:: _include/task_wait_help.rst
 
 
+Task Run Usage
+--------------
+
+.. include:: _include/task_run_usage.rst
+
+.. include:: _include/task_run_desc.rst
+
+.. include:: _include/task_run_help.rst
+
+
 Templates
 ---------
 
