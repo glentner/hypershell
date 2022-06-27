@@ -95,16 +95,16 @@ def check_uuid(value: str) -> None:
 TASK_INFO_NAME = 'hyper-shell task info'
 TASK_INFO_USAGE = f"""\
 usage: {TASK_INFO_NAME} [-h] ID [--json | --stdout | --stderr | -x FIELD]
-Get metadata/status/outputs of task.\
+Get metadata and/or task outputs.\
 """
 TASK_INFO_HELP = f"""\
 {TASK_INFO_USAGE}
 
 arguments:
-ID                   Unique UUID.
+ID                   Unique task UUID.
 
 options:
-    --json           Format output as JSON.
+    --json           Format as JSON.
 -x, --extract FIELD  Print this field only.
     --stdout         Fetch <stdout> from task.
     --stderr         Fetch <stderr> from task.
@@ -135,6 +135,7 @@ class TaskInfoApp(Application):
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         StatementError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         FileNotFoundError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        RuntimeError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         **Application.exceptions,
     }
 
@@ -148,9 +149,15 @@ class TaskInfoApp(Application):
         elif not (self.print_stdout or self.print_stderr):
             self.write(self.task.to_json())
         elif self.print_stdout:
-            self.write_file(self.outpath, sys.stdout)
+            if self.task.outpath:
+                self.write_file(self.outpath, sys.stdout)
+            else:
+                raise RuntimeError(f'No <stdout> for task ({self.uuid})')
         elif self.print_stderr:
-            self.write_file(self.errpath, sys.stderr)
+            if self.task.errpath:
+                self.write_file(self.errpath, sys.stderr)
+            else:
+                raise RuntimeError(f'No <stderr> file for task ({self.uuid})')
 
     def write_file(self: TaskInfoApp, path: str, dest: IO) -> None:
         """Write content from `path` to other `dest` stream."""
