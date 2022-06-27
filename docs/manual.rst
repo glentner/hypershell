@@ -104,6 +104,16 @@ Config Set Usage
 .. include:: _include/config_set_help.rst
 
 
+Config Edit Usage
+-----------------
+
+.. include:: _include/config_edit_usage.rst
+
+.. include:: _include/config_edit_desc.rst
+
+.. include:: _include/config_edit_help.rst
+
+
 Task Usage
 ----------
 
