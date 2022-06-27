@@ -177,6 +177,8 @@ Task Search Usage
 Templates
 ---------
 
+.. include:: _include/templates.rst
+
 
 Configuration
 -------------
