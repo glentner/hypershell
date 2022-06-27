@@ -332,7 +332,7 @@ usage: hyper-shell task search [-h] [FIELD [FIELD ...]] [--where COND [COND ...]
 TASK_SEARCH_HELP = f"""\
 {TASK_SEARCH_USAGE}
 
-Search for task(s) in database.
+Search for tasks in database.
 
 arguments:
 FIELD                     Select specific named fields.
