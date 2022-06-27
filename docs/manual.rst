@@ -164,6 +164,16 @@ Task Run Usage
 .. include:: _include/task_run_help.rst
 
 
+Task Search Usage
+-----------------
+
+.. include:: _include/task_search_usage.rst
+
+.. include:: _include/task_search_desc.rst
+
+.. include:: _include/task_search_help.rst
+
+
 Templates
 ---------
 

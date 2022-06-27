@@ -23,3 +23,4 @@ Command-line Interface
     task info <task_info>
     task wait <task_wait>
     task run <task_run>
+    task search <task_search>
