@@ -74,6 +74,16 @@ Submit Usage
 .. include:: _include/submit_help.rst
 
 
+Initdb Usage
+------------
+
+.. include:: _include/initdb_usage.rst
+
+.. include:: _include/initdb_desc.rst
+
+.. include:: _include/initdb_help.rst
+
+
 Config Get Usage
 ----------------
 

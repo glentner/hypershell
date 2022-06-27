@@ -1,0 +1,1 @@
+``hyper-shell`` ``initdb`` ``[-h]``
