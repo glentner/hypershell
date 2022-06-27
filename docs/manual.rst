@@ -144,6 +144,16 @@ Task Info Usage
 .. include:: _include/task_info_help.rst
 
 
+Task Wait Usage
+---------------
+
+.. include:: _include/task_wait_usage.rst
+
+.. include:: _include/task_wait_desc.rst
+
+.. include:: _include/task_wait_help.rst
+
+
 Templates
 ---------
 

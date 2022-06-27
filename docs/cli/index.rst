@@ -21,3 +21,4 @@ Command-line Interface
     config which <config_which>
     task submit <task_submit>
     task info <task_info>
+    task wait <task_wait>
