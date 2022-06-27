@@ -219,7 +219,7 @@ DEFAULT_INTERVAL = 5
 
 TASK_WAIT_NAME = 'hyper-shell task wait'
 TASK_WAIT_USAGE = f"""\
-usage: {TASK_WAIT_NAME} [-h] ID [-f] [-n SEC] [--info | --json | --status]
+usage: {TASK_WAIT_NAME} [-h] ID [-n SEC] [--info [--json] | --status]
 Wait for task to complete.\
 """
 TASK_WAIT_HELP = f"""\
