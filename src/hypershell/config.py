@@ -190,7 +190,8 @@ class ConfigGetApp(Application):
                             background_color = 'default')
             Console().print(output)
         else:
-            print(value, file=sys.stdout, flush=True)
+            # NOTE: JSON formatting puts quotations - we don't want these on raw output
+            print(value.strip('"'), file=sys.stdout, flush=True)
 
     def format_output(self, value: Any) -> str:
         """Format `value` as appropriate text."""

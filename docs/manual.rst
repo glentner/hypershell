@@ -57,15 +57,127 @@ Server Usage
 Client Usage
 ------------
 
+.. include:: _include/client_usage.rst
+
+.. include:: _include/client_desc.rst
+
+.. include:: _include/client_help.rst
+
+
 Submit Usage
 ------------
 
-Task Usage
-----------
+.. include:: _include/submit_usage.rst
+
+.. include:: _include/submit_desc.rst
+
+.. include:: _include/submit_help.rst
+
+
+Initdb Usage
+------------
+
+.. include:: _include/initdb_usage.rst
+
+.. include:: _include/initdb_desc.rst
+
+.. include:: _include/initdb_help.rst
+
+
+Config Get Usage
+----------------
+
+.. include:: _include/config_get_usage.rst
+
+.. include:: _include/config_get_desc.rst
+
+.. include:: _include/config_get_help.rst
+
+
+Config Set Usage
+----------------
+
+.. include:: _include/config_set_usage.rst
+
+.. include:: _include/config_set_desc.rst
+
+.. include:: _include/config_set_help.rst
+
+
+Config Edit Usage
+-----------------
+
+.. include:: _include/config_edit_usage.rst
+
+.. include:: _include/config_edit_desc.rst
+
+.. include:: _include/config_edit_help.rst
+
+
+Config Which Usage
+------------------
+
+.. include:: _include/config_which_usage.rst
+
+.. include:: _include/config_which_desc.rst
+
+.. include:: _include/config_which_help.rst
+
+
+Task Submit Usage
+-----------------
+
+.. include:: _include/task_submit_usage.rst
+
+.. include:: _include/task_submit_desc.rst
+
+.. include:: _include/task_submit_help.rst
+
+
+Task Info Usage
+---------------
+
+.. include:: _include/task_info_usage.rst
+
+.. include:: _include/task_info_desc.rst
+
+.. include:: _include/task_info_help.rst
+
+
+Task Wait Usage
+---------------
+
+.. include:: _include/task_wait_usage.rst
+
+.. include:: _include/task_wait_desc.rst
+
+.. include:: _include/task_wait_help.rst
+
+
+Task Run Usage
+--------------
+
+.. include:: _include/task_run_usage.rst
+
+.. include:: _include/task_run_desc.rst
+
+.. include:: _include/task_run_help.rst
+
+
+Task Search Usage
+-----------------
+
+.. include:: _include/task_search_usage.rst
+
+.. include:: _include/task_search_desc.rst
+
+.. include:: _include/task_search_help.rst
 
 
 Templates
 ---------
+
+.. include:: _include/templates.rst
 
 
 Configuration
@@ -89,11 +201,7 @@ injected into the execution environment of the tasks with the prefix stripped.
 Exit Status
 -----------
 
-0
-    Success.
-
-1
-    Usage or argument error.
+.. include:: _include/exit_status.rst
 
 
 Examples

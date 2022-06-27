@@ -10,24 +10,24 @@ import re
 from setuptools import setup, find_packages
 
 
-# long description from README.rst
+# Description from README.rst
 with open('README.rst', mode='r') as readme:
     long_description = readme.read()
 
 
-# package metadata by parsing __meta__ module
-with open('src/hypershell/__meta__.py', mode='r') as source:
+# Metadata by parsing __init__
+with open('src/hypershell/__init__.py', mode='r') as source:
     content = source.read().strip()
     metadata = {key: re.search(key + r'\s*=\s*[\'"]([^\'"]*)[\'"]', content).group(1)
-                for key in ['__pkgname__', '__version__', '__authors__', '__contact__',
+                for key in ['__version__', '__authors__', '__contact__',
                             '__description__', '__license__', '__keywords__', '__website__']}
 
 
-# core dependencies
-DEPS = ['toml>=0.10.2', 'cmdkit>=2.6.0', 'sqlalchemy>=1.4.22',
-        'pyyaml>=6.0', 'rich>=10.16.2', 'paramiko>=2.9.1']
+# Core dependencies
+DEPS = ['cmdkit>=2.6.0', 'toml>=0.10.2', 'tomlkit>=0.11.0', 'pyyaml>=6.0',
+        'sqlalchemy>=1.4.22', 'rich>=10.16.2', 'paramiko>=2.9.1']
 
-# add dependencies for readthedocs.io
+# Dependencies for readthedocs.io
 if os.environ.get('READTHEDOCS') == 'True':
     DEPS.extend([
         'sphinx>=4.1.2',

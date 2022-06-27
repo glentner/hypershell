@@ -159,7 +159,7 @@ class NodeList(list):
         if 'nodelist' not in config.ssh:
             raise ConfigurationError('No `ssh.nodelist` section found in configuration')
 
-        label = blame('ssh', 'nodelist')
+        label = blame(config, 'ssh', 'nodelist')
         if groupname is None:
             if isinstance(config.ssh.nodelist, list):
                 return cls(config.ssh.nodelist)

@@ -3,4 +3,6 @@
 Templates
 =========
 
-`Under construction` ...
+.. include:: _include/templates.rst
+
+|

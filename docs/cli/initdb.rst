@@ -1,16 +1,18 @@
 .. _cli_initdb:
 
-initdb
+Initdb
 ======
 
-`Under construction` ...
+Usage
+-----
 
+.. include:: ../_include/initdb_usage.rst
 
-.. code-block:: none
+Description
+-----------
 
-    usage: hyper-shell initdb [-h]
-    Initialize database schema.
+.. include:: ../_include/initdb_desc.rst
 
-    options:
-    -h, --help           Show this message and exit.
+|
 
+.. include:: ../_include/initdb_help.rst

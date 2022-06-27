@@ -314,7 +314,6 @@ class Task(Model):
         """Count of remaining unfinished tasks."""
         return cls.query().filter(cls.completion_time.is_(None)).count()
 
-
     @classmethod
     def count_interrupted(cls) -> int:
         """Count tasks that were scheduled but not completed."""

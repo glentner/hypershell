@@ -58,7 +58,7 @@ Options
     Using larger bundles is a good idea for large distributed workflows; specifically, it is best
     to coordinate bundle size with the number of executors in use by each client.
 
-    See also ``--num-workers`` and ``--bundlewait``.
+    See also ``--num-tasks`` and ``--bundlewait``.
 
 ``-w``, ``--bundlewait`` *SEC*
     Seconds to wait before flushing tasks (default: 5).

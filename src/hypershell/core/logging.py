@@ -113,7 +113,7 @@ class StreamHandler(logging.StreamHandler):
 
 def level_from_name(name: Any, source: str = 'logging.level') -> int:
     """Get level value from `name`."""
-    label = blame(*source.split('.'))
+    label = blame(config, *source.split('.'))
     if not isinstance(name, str):
         raise ConfigurationError(f'Expected string for logging level, given \'{name}\' ({label})')
     name = name.upper()

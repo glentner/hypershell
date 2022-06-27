@@ -6,13 +6,15 @@
 
 # standard libs
 import os
+import stat
 import ctypes
 
 # external libs
 from cmdkit.config import Namespace
 
 # public interface
-__all__ = ['cwd', 'home', 'is_admin', 'site', 'path', 'default_path']
+__all__ = ['cwd', 'home', 'site', 'path', 'default_path',
+           'file_permissions', 'check_private', 'set_private']
 
 
 cwd = os.getcwd()
@@ -56,9 +58,23 @@ else:
     })
 
 
-# automatically initialize default site directories
+# Automatically initialize default site directories
 default_path = path.system if is_admin else path.user
 os.makedirs(default_path.lib, exist_ok=True)
 os.makedirs(default_path.log, exist_ok=True)
 os.makedirs(os.path.join(default_path.lib, 'task'), exist_ok=True)
 
+
+def file_permissions(filepath: str) -> str:
+    """File permissions mask as a string."""
+    return stat.filemode(os.stat(filepath).st_mode)
+
+
+def check_private(filepath: str) -> bool:
+    """Check that `filepath` has '-rw-------' permissions."""
+    return file_permissions(filepath) == '-rw-------'
+
+
+def set_private(filepath: str) -> None:
+    """Update permissions to make private (i.e., go-rwx)."""
+    os.chmod(filepath, 33152)  # -rw-------
