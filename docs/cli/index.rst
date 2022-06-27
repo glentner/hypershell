@@ -17,5 +17,6 @@ Command-line Interface
     config get <config_get>
     config set <config_set>
     config edit <config_edit>
+    config which <config_which>
     initdb <initdb>
     task <task>

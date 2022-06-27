@@ -114,6 +114,16 @@ Config Edit Usage
 .. include:: _include/config_edit_help.rst
 
 
+Config Which Usage
+------------------
+
+.. include:: _include/config_which_usage.rst
+
+.. include:: _include/config_which_desc.rst
+
+.. include:: _include/config_which_help.rst
+
+
 Task Usage
 ----------
 
