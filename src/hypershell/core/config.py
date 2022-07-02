@@ -251,10 +251,16 @@ def _inplace_update(original: dict, partial: dict) -> dict:
     return original
 
 
+if os.name == 'nt':
+    PATH_DELIMITER = ';'
+else:
+    PATH_DELIMITER = ':'
+
+
 T = TypeVar('T')
 def __collapse_if_list_impl(value: Union[T, List[str]]) -> Union[T, str]:
-    """If `value` is a list, collapse it to a path-like :-delimited list."""
-    return value if not isinstance(value, list) else ':'.join([str(member) for member in value])
+    """If `value` is a list, collapse it to a path-like list (with ':' or ';')."""
+    return value if not isinstance(value, list) else PATH_DELIMITER.join([str(member) for member in value])
 
 
 def __collapse_lists(ns: Namespace) -> Namespace:
