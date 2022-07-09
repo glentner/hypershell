@@ -3,8 +3,6 @@
 
 """
 Run full cluster with server and clients.
-
-TODO: examples and notes
 """
 
 
@@ -237,7 +235,10 @@ class SSHCluster(Thread):
                                    forever_mode=forever_mode, restart_mode=restart_mode,
                                    redirect_failures=redirect_failures)
         launcher_env = '' if not export_env else compile_env()
-        launcher_args = '' if launcher_args is None else ' '.join(launcher_args)
+        if launcher_args is None:
+            launcher_args = config.ssh.get('args', '')
+        else:
+            launcher_args = config.ssh.get('args', '') + ' ' + ' '.join(launcher_args)
         client_args = ''
         if capture is True:
             client_args += ' --capture'
