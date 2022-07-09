@@ -164,12 +164,13 @@ class DatabaseURL(dict):
         return cls(**fields)
 
 
-# allowed database providers
-# mapping translates from name to library/implementation name
+# Allowed database providers
+# Mapping translates from name to library/implementation name
+# NOTE: mysql/mariadb and other providers not yet working
 providers = {
     'sqlite': 'sqlite',
     'mysql': 'mysql',
-    'mariadb': 'mysql',
+    'mariadb': 'mariadb+mariadbconnector',
     'postgres': 'postgresql',
     'postgresql': 'postgresql',
 }

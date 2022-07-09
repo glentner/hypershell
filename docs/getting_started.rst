@@ -14,15 +14,16 @@ and additional notes and recommendations.
 
 .. tab:: pipx
 
-    .. code-block:: bash
+    .. code-block:: shell
 
-        $ pipx install hyper-shell
+        pipx install hyper-shell
 
 .. tab:: homebrew
 
-    .. code-block:: bash
+    .. code-block:: shell
 
-        $ brew install hyper-shell
+        brew tap glentner/hyper-shell
+        brew install hyper-shell
 
 |
 
