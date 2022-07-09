@@ -1,8 +1,5 @@
 .\" Man page generated from reStructuredText.
 .
-.TH "HYPER-SHELL" "1" "Oct 16, 2020" "1.8.3" "hyper-shell"
-.SH NAME
-hyper-shell \- process shell commands in parallel
 .
 .nr rst2man-indent-level 0
 .
@@ -30,521 +27,1363 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
+.TH "HYPER-SHELL" "1" "Jul 09, 2022" "2.0.0-b9" "hyper-shell"
+.SH NAME
+hyper-shell \- Process shell commands over a distributed, asynchronous queue
 .SH SYNOPSIS
 .nf
-hyper\-shell client  [\-h] [\fIargs\fP…]
-hyper\-shell server  [\-h] \fITASKFILE\fP [\fIargs\fP…]
-hyper\-shell cluster [\-h] \fITASKFILE\fP [\fIargs\fP…]
+hyper\-shell [\-h] [\-v] ...
+.fi
+.sp
+.nf
+hyper\-shell cluster [\-h] \fIFILE\fP [\-\-ssh \fIHOST\fP\&... | \-\-mpi | \-\-launcher \fIARGS\fP\&...] ...
+.fi
+.sp
+.nf
+hyper\-shell submit [\-h] \fIFILE\fP ...
+.fi
+.sp
+.nf
+hyper\-shell server [\-h] \fIFILE\fP ...
+.fi
+.sp
+.nf
+hyper\-shell client [\-h] ...
+.fi
+.sp
+.nf
+hyper\-shell config [\-h] {get | set | which | edit } [\-\-user | \-\-system] ...
+.fi
+.sp
+.nf
+hyper\-shell task [\-h] {submit | info | wait | run | search} ...
 .fi
 .sp
 .SH DESCRIPTION
 .sp
-The \fBhyper\-shell\fP utility is a cross\-platform, high performance computing
-utility for processing arbitrary shell commands over a distributed, asynchronous
-queue.
+\fBhyper\-shell\fP is an elegant, cross\-platform, high\-performance computing utility for processing
+shell commands over a distributed, asynchronous queue. It is a highly scalable workflow automation
+tool for many\-task scenarios.
 .sp
-The hyper\-shell server program accepts command lines as input and publishes
-them to a shared queue. Any number of hyper\-shell clients can connect to that
-server either locally or from a remote machine. The clients pull these tasks off
-the queue asynchronously. The hyper\-shell cluster program allows the user to
-automatically launch an appropriate number of clients under various schemes.
+Typically, ad hoc usage or batch jobs will use the \fBcluster\fP workflow. This automatically stands
+up the \fBserver\fP and one or more \fBclient\fP instances on remote servers and processes the commands
+from some input \fIFILE\fP until completion.
 .sp
-The hyper\-shell cluster can also be launched in \fIparsl\fP mode. This loads a
-named configuration from \fB~/.hyper\-shell/parsl_config.py\fP and dispatches
-tasks using the given scheduler (e.g., SLURM, Kubernetes). See
-\fI\%parsl\-project.org\fP
-.SH GLOBAL OPTIONS
-.SS Network Options
-.sp
-When running locally and in \fBcluster\fP mode, nothing need be specified.
-Otherwise, the \fBserver\fP’s bind address may need to be set to allow for
-remote connections. The port number and authkey are arbitrary choices.
+This can function as a pure in\-memory queue; however, one can configure a database in\-the\-loop
+to manage task scheduling and persistence. Stand up the \fBserver\fP on its own and persistent
+\fBclients\fP on the nodes in the cluster, and \fBsubmit\fP tasks independently.
+.SH CLUSTER USAGE
 .INDENT 0.0
 .TP
-.B \-H, –host \fIADDR\fP
-Address for server (default: localhost). For the \fBserver\fP this is
-the bind address to use. For clients to be allowed to connect you will
-need to set this to 0.0.0.0 for the server.
+.B \fBhyper\-shell cluster [\-h]\fP
+\fB[FILE | \-\-restart | \-\-forever]\fP
+\fB[\-\-no\-db | \-\-initdb]\fP \fB[\-N NUM]\fP \fB[\-t CMD]\fP \fB[\-b SIZE]\fP \fB[\-w SEC]\fP
+\fB[\-\-delay\-start SEC]\fP \fB[\-r NUM [\-\-eager]]\fP \fB[\-\-capture | [\-o PATH] [\-e PATH]]\fP
+\fB[\-f PATH]\fP \fB[\-\-ssh [HOST... | \-\-ssh\-group NAME] [\-\-env] | \-\-mpi | \-\-launcher=ARGS...]\fP
 .UNINDENT
-.INDENT 0.0
-.INDENT 3.5
 .sp
-.nf
-.ft C
-user@host\-1 ~$ hyper\-shell server \-H 0.0.0.0
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.INDENT 0.0
-.INDENT 3.5
+Start the cluster either locally or with remote clients over \fIssh\fP or a custom \fIlauncher\fP\&. This
+mode should be the most common entry\-point for general usage. It fully encompasses all of the
+different agents in the system in a concise workflow.
 .sp
-.nf
-.ft C
-user@host\-2 ~$ hyper\-shell client \-H host\-1
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
+The input source for tasks is file\-like, either a local path, or from \fIstdin\fP if no argument is
+given. The command\-line tasks are pulled in and either directly published to a distributed queue
+(see \fB\-\-no\-db\fP) or committed to a database first before being scheduled later.
+.sp
+For large, long running workflows, it might be a good idea to configure a database and run an
+initial \fBsubmit\fP job to populate the database, and then run the cluster with \fB\-\-restart\fP and no
+input \fIFILE\fP\&. If the cluster is interrupted for whatever reason it can gracefully restart where it
+left off.
+.SS Arguments
 .INDENT 0.0
 .TP
-.B \-p, –port \fIPORT\fP
-Port number for server (default: 50001). The port number is an arbitrary
-choice and just needs to be allowed by the server (not blocked or reserved).
-.TP
-.B \-k, –authkey \fIKEY\fP
-Cryptographic key for connection (default: ‘–BADKEY–’). This is set by the
-server and required for clients to connect. The default is intentionally
-meant to suggest you set something more appropriate. In \fBcluster\fP mode, a
-128bit hex\-token is autogenerated if none is explicitly provided.
+.B FILE
+Path to input task file (default: <stdin>).
 .UNINDENT
-.SS Logging Options
-.sp
-All logging messages are written to \fBstderr\fP to allow for command outputs
-to occupy \fBstdout\fP\&. By default, the logging level is set to \fIWARNING\fP, so
-no logging will be done unless there is some kind of issue (e.g., non\-zero
-exit status). Logging messages are colored according to their severity; blue,
-green, yellow, red, and purple for debug, info, warning, error, and critical,
-respectively. If \fBstderr\fP is being redirected, colors will be disabled.
-.sp
-The \fB\-\-logging\fP switch is meant to facilitate job tracking in a distributed
-computing context, including timestamps and hostnames in messages.
+.SS Modes
 .INDENT 0.0
 .TP
-.B \-v\fP,\fB  \-\-verbose
-Include information level messages. (conflicts with \fB\-\-debug\fP).
+.B \fB\-\-ssh\fP \fIHOST\fP\&...
+Launch directly with SSH host(s). This can be a single host, a comma\-separated list of hosts,
+or an expandable pattern, e.g., \(dqcluster\-a[00\-04].xyz\(dq.
+.sp
+See also \fB\-\-ssh\-group\fP and \fB\-\-ssh\-args\fP\&.
 .TP
-.B \-d\fP,\fB  \-\-debug
-Include debugging level messages. (conflicts with \fB\-\-verbose\fP).
+.B \fB\-\-mpi\fP
+Same as \fB\-\-launcher=mpirun\fP\&.
 .TP
-.B \-l\fP,\fB  \-\-logging
-Show detailed syslog style messages. This disables colorized output and
-alters the format of messages to include a timestamp, hostname, and the
-level name.
+.B \fB\-\-launcher\fP \fIARGS\fP\&...
+Use specific launch interface. This can be any program that handles process management on a
+distributed system. For example, on a \fISLURM\fP cluster one might want to use \fBsrun\fP\&. In this
+case you would specify \fB\-\-launcher=srun\fP; however, the \fIARGS\fP are not merely the executable
+but the full listing, e.g., \fB\-\-launcher=\(aqsrun \-\-mpi=pmi2\(aq\fP\&.
+.UNINDENT
+.SS Options
+.INDENT 0.0
+.TP
+.B \fB\-N\fP, \fB\-\-num\-tasks\fP \fINUM\fP
+Number of task executors per client (default: 1).
+.sp
+For example, \fB\-N4\fP would create four workers, but \fB\-N4 \-\-ssh \(aqcluster\-a[00\-01].xyz\(aq\fP
+creates two clients and a total of eight workers.
+.TP
+.B \fB\-t\fP, \fB\-\-template\fP \fICMD\fP
+Command\-line template pattern (default: \(dq{}\(dq).
+.sp
+This is expanded by the client just before execution. With the default \(dq{}\(dq the input
+command\-line will be run verbatim. Specifying a template pattern allows for simple input
+arguments (e.g., file paths) to be transformed into some common form; such as
+\fB\-t \(aq./some_command.py {} >outputs/{/\-}.out\(aq\fP\&.
+.sp
+See section on \fItemplates\fP\&.
+.TP
+.B \fB\-p\fP, \fB\-\-port\fP \fINUM\fP
+Port number (default: 50001).
+.sp
+This is an arbitrary choice and simply must be an available port. The default option chosen
+here is typically available on most platforms and is not expected by any known major software.
+.TP
+.B \fB\-b\fP, \fB\-\-bundlesize\fP \fISIZE\fP
+Size of task bundle (default: 1).
+.sp
+The default value allows for greater concurrency and responsiveness on small scales. This is
+used by the \fIsubmit\fP thread to accumulate bundles for either database commits and/or publishing
+to the queue. If a database is in use, the scheduler thread selects tasks from the database in
+batches of this size.
+.sp
+Using larger bundles is a good idea for large distributed workflows; specifically, it is best
+to coordinate bundle size with the number of executors in use by each client.
+.sp
+See also \fB\-\-num\-tasks\fP and \fB\-\-bundlewait\fP\&.
+.TP
+.B \fB\-w\fP, \fB\-\-bundlewait\fP \fISEC\fP
+Seconds to wait before flushing tasks (default: 5).
+.sp
+This is used by both the \fIsubmit\fP thread and forwarded to each \fIclient\fP\&. The \fIclient\fP collector
+thread that accumulates finished task bundles to return to the \fIserver\fP will push out a bundle
+after this period of time regardless of whether it has reached the preferred bundle size.
+.sp
+See also \fB\-\-bundlesize\fP\&.
+.TP
+.B \fB\-r\fP, \fB\-\-max\-retries\fP \fINUM\fP
+Auto\-retry failed tasks (default: 0).
+.sp
+If a database is in use, then there is an opportunity to automatically retry failed tasks. A
+task is considered to have failed if it has a non\-zero exit status. Setting this value greater
+than zero defines the number of attempts for the task. The original is not over\-written, a new
+task is submitted and later scheduled.
+.sp
+See also \fB\-\-eager\fP\&.
+.TP
+.B \fB\-\-eager\fP
+Schedule failed tasks before new tasks. If \fB\-\-max\-retries\fP is greater than one, this option
+defines the appetite for re\-submitting failed tasks. By default, failed tasks will only be
+scheduled when there are no more remaining novel tasks.
+.TP
+.B \fB\-\-no\-db\fP
+Disable database (submit directly to clients).
+.sp
+By default, a scheduler thread selects tasks from a database that were previously submitted.
+With \fB\-\-no\-db\fP enabled, there is no scheduler and instead the \fIsubmit\fP thread publishes
+bundles directly to the queue.
+.TP
+.B \fB\-\-initdb\fP
+Auto\-initialize database.
+.sp
+If a database is configured for use with the workflow (e.g., PostgreSQL), auto\-initialize
+tables if they don\(aqt already exist. This is a short\-hand for pre\-creating tables with the
+\fBhyper\-shell initdb\fP command. This happens by default with SQLite databases.
+.sp
+Mutually exclusive to \fB\-\-no\-db\fP\&. See \fBhyper\-shell initdb\fP command.
+.TP
+.B \fB\-\-forever\fP
+Schedule forever.
+.sp
+Typically, the \fIcluster\fP will process some finite set of submitted tasks. When there are
+no more tasks left to schedule, the \fIcluster\fP will begin its shutdown procedure. With
+\fB\-\-forever\fP enabled, the scheduler will continue to wait for new tasks indefinitely.
+.sp
+Conflicts with \fB\-\-no\-db\fP and mutually exclusive to \fB\-\-restart\fP\&.
+.TP
+.B \fB\-\-restart\fP
+Start scheduling from last completed task.
+.sp
+Instead of pulling a new list of tasks from some input \fIFILE\fP, with \fB\-\-restart\fP enabled the
+\fIcluster\fP will restart scheduling tasks where it left off. Any task in the database that was
+previously scheduled but not completed will be reverted.
+.sp
+For very large workflows, an effective strategy is to first use the \fBsubmit\fP workflow to
+populate the database, and then to use \fB\-\-restart\fP so that if the \fIcluster\fP is interrupted,
+it can easily continue where it left off, halting if nothing to be done.
+.sp
+Conflicts with \fB\-\-no\-db\fP and mutually exclusive to \fB\-\-forever\fP\&.
+.TP
+.B \fB\-\-ssh\-args\fP \fIARGS\fP\&...
+Command\-line arguments for SSH. For example, \fB\-\-ssh\-args \(aq\-i ~/.ssh/my_key\(aq\fP\&.
+.TP
+.B \fB\-\-ssh\-group\fP \fINAME\fP
+SSH nodelist group in config.
+.sp
+In your configuration under \fB[ssh.nodelist]\fP can be one or more named lists. These lists
+should contain host names to associate with the group name.
+.sp
+See \fIconfiguration\fP section.
+.TP
+.B \fB\-E\fP, \fB\-\-env\fP
+Send environment variables. Only for \fB\-\-ssh\fP mode, all \fBHYPERSHELL_\fP prefixed environment
+variables can be exported to the remote clients.
+.TP
+.B \fB\-d\fP, \fB\-\-delay\-start\fP \fISEC\fP
+Delay time in seconds for launching clients (default: 0).
+.sp
+At larger scales it can be advantageous to uniformly delay the client launch sequence.
+Hundreds or thousands of clients connecting to the server all at once is a challenge.
+Even if the server could handle the load, your task throughput would be unbalanced,
+coming in waves.
+.sp
+Use \fB\-\-delay\-start\fP with a negative number to impose a uniform random delay up to the
+magnitude specified (e.g., \fB\-\-delay\-start=\-600\fP would delay the client up to ten minutes).
+This also has the effect of staggering the workload. If your tasks take on the order of 30
+minutes and you have 1000 nodes, choose \fB\-\-delay\-start=\-1800\fP\&.
+.TP
+.B \fB\-c\fP, \fB\-\-capture\fP
+Capture individual task <stdout> and <stderr>.
+.sp
+By default, the \fIstdout\fP and \fIstderr\fP streams of all tasks are fused with that of the \fIclient\fP
+thread, and in turn the \fIcluster\fP\&. If tasks are producing output that needs to be isolated, the
+tasks need to manage their own output, you can specify a redirect as part of a \fB\-\-template\fP,
+or use \fB\-\-capture\fP to capture these as \fB\&.out\fP and \fB\&.err\fP files.
+.sp
+These are stored local to the \fIclient\fP\&. Task outputs can be automatically retrieved via SFTP,
+see \fItask\fP usage.
+.TP
+.B \fB\-o\fP, \fB\-\-output\fP \fIPATH\fP
+File path for task outputs (default: <stdout>).
+.sp
+If local only (not \fB\-\-ssh\fP, \fB\-\-mpi\fP or \fB\-\-launcher\fP), then the \fIclient\fP can redirect all
+\fIstdout\fP from tasks to some file \fIPATH\fP together.
+.TP
+.B \fB\-e\fP, \fB\-\-errors\fP \fIPATH\fP
+File path for task errors (default: <stderr>).
+.sp
+If local only (not \fB\-\-ssh\fP, \fB\-\-mpi\fP or \fB\-\-launcher\fP), then the \fIclient\fP can redirect all
+\fIstderr\fP from tasks to some file \fIPATH\fP together.
+.TP
+.B \fB\-f\fP, \fB\-\-failures\fP \fIPATH\fP
+File path to write failed task args (default: <none>).
+.sp
+The \fIserver\fP acts like a sieve, reading task args from \fIstdin\fP and redirecting those original
+args to \fIstdout\fP if the task had a non\-zero exit status. The \fIcluster\fP will run the \fIserver\fP
+for you and if \fB\-\-failures\fP is enabled these task args will be sent to a local file \fIPATH\fP\&.
 .UNINDENT
 .SH SERVER USAGE
-.sp
-The hyper\-shell server reads command lines from a file (or \fBstdin\fP). If no
-arguments are given, a usage statement is printed. To avoid this and simply run
-with all defaults, reading from \fBstdin\fP, \fB\-\fP symbolizes standard input.
-.sp
-Any command that returns a non\-zero exit status will have a warning message
-emitted and the original command line will be printed to \fBstdout\fP\&. In this
-way, the server acts like a sieve, consuming commands and emitting failures.
-.SS Server Options
 .INDENT 0.0
 .TP
-.B \-o, –output \fIFILE\fP
-Path to file for failed commands (default: <stdout>).
+.B \fBhyper\-shell\fP \fBserver\fP \fB[\-h]\fP
+\fB[FILE | \-\-forever | \-\-restart]\fP \fB[\-b NUM]\fP \fB[\-w SEC]\fP \fB[\-r NUM [\-\-eager]]\fP
+\fB[\-H ADDR]\fP \fB[\-p PORT]\fP \fB[\-k KEY]\fP \fB[\-\-no\-db | \-\-initdb]\fP \fB[\-\-print | \-f PATH]\fP
+.UNINDENT
+.sp
+Launch server, schedule directly or asynchronously from database.
+.sp
+The server includes a scheduler component that pulls tasks from the database and offers
+them up on a distributed queue to clients. It also has a receiver that collects the results
+of finished tasks. Optionally, the server can submit tasks (\fIFILE\fP). When submitting tasks,
+the \fB\-w\fP/\fB\-\-bundlewait\fP and \fB\-b\fP/\fBbundlesize\fP options are the same as for the
+\fIsubmit\fP workflow.
+.sp
+With \fB\-\-max\-retries\fP greater than zero, the scheduler will check for a non\-zero exit status
+for tasks and re\-submit them if their previous number of attempts is less.
+.sp
+Tasks are bundled and clients pull them in these bundles. However, by default the bundle size
+is one, meaning that at small scales there is greater concurrency.
+.SS Arguments
+.INDENT 0.0
 .TP
-.B \-s, –maxsize \fISIZE\fP
-Maximum size of the queue (default: 10000). To avoid the server queueing up
-too many tasks, this will force the server to block if clients have not yet
-taken enough commands. This is helpful for pipelines.
+.B FILE
+Path to input task file (default: <stdin>).
+.UNINDENT
+.SS Options
+.INDENT 0.0
+.TP
+.B \fB\-H\fP, \fB\-\-bind\fP \fIADDR\fP
+Bind address (default: localhost).
+.sp
+When running locally, the default is recommended. To allow remote \fIclients\fP to connect
+over the network, bind the server to \fI0.0.0.0\fP\&.
+.TP
+.B \fB\-p\fP, \fB\-\-port\fP \fINUM\fP
+Port number (default: 50001).
+.sp
+This is an arbitrary choice and simply must be an available port. The default option chosen
+here is typically available on most platforms and is not expected by any known major software.
+.TP
+.B \fB\-k\fP, \fB\-\-auth\fP \fIKEY\fP
+Cryptographic authorization key to connect with server (default: <not secure>).
+.sp
+The default \fIKEY\fP used by the server and client is not secure and only a place holder.
+It is expected that the user choose a secure \fIKEY\fP\&. The \fIcluster\fP automatically generates
+a secure one\-time \fIKEY\fP\&.
+.TP
+.B \fB\-b\fP, \fB\-\-bundlesize\fP \fISIZE\fP
+Size of task bundle (default: 1).
+.sp
+The default value allows for greater concurrency and responsiveness on small scales. This is
+used by the \fIsubmit\fP thread to accumulate bundles for either database commits and/or publishing
+to the queue. If a database is in use, the scheduler thread selects tasks from the database in
+batches of this size.
+.sp
+Using larger bundles is a good idea for large distributed workflows; specifically, it is best
+to coordinate bundle size with the number of executors in use by each client.
+.sp
+See also \fB\-\-num\-tasks\fP and \fB\-\-bundlewait\fP\&.
+.TP
+.B \fB\-w\fP, \fB\-\-bundlewait\fP \fISEC\fP
+Seconds to wait before flushing tasks (default: 5).
+.sp
+This is used by both the \fIsubmit\fP thread and forwarded to each \fIclient\fP\&. The \fIclient\fP collector
+thread that accumulates finished task bundles to return to the \fIserver\fP will push out a bundle
+after this period of time regardless of whether it has reached the preferred bundle size.
+.sp
+See also \fB\-\-bundlesize\fP\&.
+.TP
+.B \fB\-r\fP, \fB\-\-max\-retries\fP \fINUM\fP
+Auto\-retry failed tasks (default: 0).
+.sp
+If a database is in use, then there is an opportunity to automatically retry failed tasks. A
+task is considered to have failed if it has a non\-zero exit status. Setting this value greater
+than zero defines the number of attempts for the task. The original is not over\-written, a new
+task is submitted and later scheduled.
+.sp
+See also \fB\-\-eager\fP\&.
+.TP
+.B \fB\-\-eager\fP
+Schedule failed tasks before new tasks. If \fB\-\-max\-retries\fP is greater than one, this option
+defines the appetite for re\-submitting failed tasks. By default, failed tasks will only be
+scheduled when there are no more remaining novel tasks.
+.TP
+.B \fB\-\-no\-db\fP
+Disable database (submit directly to clients).
+.sp
+By default, a scheduler thread selects tasks from a database that were previously submitted.
+With \fB\-\-no\-db\fP enabled, there is no scheduler and instead the \fIsubmit\fP thread publishes
+bundles directly to the queue.
+.TP
+.B \fB\-\-initdb\fP
+Auto\-initialize database.
+.sp
+If a database is configured for use with the workflow (e.g., PostgreSQL), auto\-initialize
+tables if they don\(aqt already exist. This is a short\-hand for pre\-creating tables with the
+\fBhyper\-shell initdb\fP command. This happens by default with SQLite databases.
+.sp
+Mutually exclusive to \fB\-\-no\-db\fP\&. See \fBhyper\-shell initdb\fP command.
+.TP
+.B \fB\-\-forever\fP
+Schedule forever.
+.sp
+Typically, the \fIcluster\fP will process some finite set of submitted tasks. When there are
+no more tasks left to schedule, the \fIcluster\fP will begin its shutdown procedure. With
+\fB\-\-forever\fP enabled, the scheduler will continue to wait for new tasks indefinitely.
+.sp
+Conflicts with \fB\-\-no\-db\fP and mutually exclusive to \fB\-\-restart\fP\&.
+.TP
+.B \fB\-\-restart\fP
+Start scheduling from last completed task.
+.sp
+Instead of pulling a new list of tasks from some input \fIFILE\fP, with \fB\-\-restart\fP enabled the
+\fIcluster\fP will restart scheduling tasks where it left off. Any task in the database that was
+previously scheduled but not completed will be reverted.
+.sp
+For very large workflows, an effective strategy is to first use the \fBsubmit\fP workflow to
+populate the database, and then to use \fB\-\-restart\fP so that if the \fIcluster\fP is interrupted,
+it can easily continue where it left off, halting if nothing to be done.
+.sp
+Conflicts with \fB\-\-no\-db\fP and mutually exclusive to \fB\-\-forever\fP\&.
+.TP
+.B \fB\-\-print\fP
+Print failed task args to <stdout>.
+.sp
+Mutually exclusive to \fB\-f\fP/\fB\-\-failures\fP\&.
+.TP
+.B \fB\-f\fP, \fB\-\-failures\fP \fIPATH\fP
+File path to write failed task args (default: <none>).
+.sp
+The \fIserver\fP acts like a sieve, reading task args from some input source. Tasks with a
+non\-zero exit status can have their original command\-line \fIargs\fP printed to an output
+stream. With \fB\-f\fP/\fB\-\-failures\fP, specify a local file \fIPATH\fP\&.
+.sp
+Mutually exclusive to \fB\-\-print\fP\&.
 .UNINDENT
 .SH CLIENT USAGE
+.INDENT 0.0
+.TP
+.B \fBhyper\-shell\fP \fBclient\fP \fB[\-h]\fP
+\fB[\-N NUM]\fP \fB[\-t TEMPLATE]\fP \fB[\-b SIZE]\fP \fB[\-w SEC]\fP \fB[\-d SEC]\fP
+\fB[\-H ADDR]\fP \fB[\-p PORT]\fP \fB[\-k KEY]\fP
+\fB[\-c | [\-o PATH] [\-e PATH]]\fP
+.UNINDENT
 .sp
-The client connects to the server and pulls commands off one at a time,
-executing them on the local shell. The shell and environment inherit from the
-client’s execution environment.
+Launch client directly, run tasks in parallel.
 .sp
-The output of commands are simply redirected to \fBstdout\fP unless otherwise
-specified by \fB\-\-output\fP\&. To isolate output from individual commands, you can
-specify how to redirect from inside the command template; e.g.,
+The client connects to the server and pulls bundles of tasks off the shared queue.
+These tasks are run locally by some number of a parallel task executors.
+.sp
+The environment for tasks are the same as for the client. Standard output and error
+for tasks are forwarded to that of the client, unless \fB\-\-capture\fP is used, in which
+these are directed to individual files for each task.
+.SS Options
+.INDENT 0.0
+.TP
+.B \fB\-N\fP, \fB\-\-num\-tasks\fP \fINUM\fP
+Number of task executors (default: 1).
+.TP
+.B \fB\-t\fP, \fB\-\-template\fP \fICMD\fP
+Command\-line template pattern (default: \(dq{}\(dq).
+.sp
+This is expanded by the client just before execution. With the default \(dq{}\(dq the input
+command\-line will be run verbatim. Specifying a template pattern allows for simple input
+arguments (e.g., file paths) to be transformed into some common form; such as
+\fB\-t \(aq./some_command.py {} >outputs/{/\-}.out\(aq\fP\&.
+.sp
+See section on \fItemplates\fP\&.
+.TP
+.B \fB\-b\fP, \fB\-\-bundlesize\fP \fISIZE\fP
+Size of task bundle (default: 1).
+.sp
+Using larger bundles is a good idea for large distributed workflows; specifically, it is best
+to coordinate bundle size with the number of executors in use by each client.
+.sp
+See also \fB\-\-num\-tasks\fP and \fB\-\-bundlewait\fP\&.
+.TP
+.B \fB\-w\fP, \fB\-\-bundlewait\fP \fISEC\fP
+Seconds to wait before flushing tasks (default: 5).
+.sp
+The \fIclient\fP collector thread that accumulates finished task bundles to return to
+the \fIserver\fP will push out a bundle after this period of time regardless of whether
+it has reached the preferred bundle size.
+.sp
+See also \fB\-\-bundlesize\fP\&.
+.TP
+.B \fB\-H\fP, \fB\-\-host\fP \fIADDR\fP
+Hostname or IP address to connect with server (default: localhost).
+.TP
+.B \fB\-p\fP, \fB\-\-port\fP \fINUM\fP
+Port number to connect with server (default: 50001).
+.TP
+.B \fB\-k\fP, \fB\-\-auth\fP \fIKEY\fP
+Cryptographic authorization key to connect with server (default: <not secure>).
+.sp
+The default \fIKEY\fP used by the server and client is not secure and only a place holder.
+It is expected that the user choose a secure \fIKEY\fP\&. The \fIcluster\fP automatically generates
+a secure one\-time \fIKEY\fP\&.
+.TP
+.B \fB\-d\fP, \fB\-\-delay\-start\fP \fISEC\fP
+Delay time in seconds before connecting to server (default: 0).
+.sp
+At larger scales it can be advantageous to uniformly delay the client launch sequence.
+Hundreds or thousands of clients connecting to the server all at once is a challenge.
+Even if the server could handle the load, your task throughput would be unbalanced,
+coming in waves.
+.sp
+Use \fB\-\-delay\-start\fP with a negative number to impose a uniform random delay up to the
+magnitude specified (e.g., \fB\-\-delay\-start=\-600\fP would delay the client up to ten minutes).
+This also has the effect of staggering the workload. If your tasks take on the order of 30
+minutes and you have 1000 nodes, choose \fB\-\-delay\-start=\-1800\fP\&.
+.TP
+.B \fB\-o\fP, \fB\-\-output\fP \fIPATH\fP
+File path for task outputs (default: <stdout>).
+.TP
+.B \fB\-e\fP, \fB\-\-errors\fP \fIPATH\fP
+File path for task errors (default: <stderr>).
+.TP
+.B \fB\-c\fP, \fB\-\-capture\fP
+Capture individual task <stdout> and <stderr>.
+.sp
+By default, the \fIstdout\fP and \fIstderr\fP streams of all tasks are fused with that of the \fIclient\fP
+thread, and in turn the \fIcluster\fP\&. If tasks are producing output that needs to be isolated, the
+tasks need to manage their own output, you can specify a redirect as part of a \fB\-\-template\fP,
+or use \fB\-\-capture\fP to capture these as \fB\&.out\fP and \fB\&.err\fP files.
+.sp
+These are stored local to the \fIclient\fP under \fI<prefix>/lib/task/<uuid>.[out,err]\fP\&.
+Task outputs can be automatically retrieved via SFTP, see \fItask\fP usage.
+.sp
+Mutually exclusive with both \fB\-\-output\fP and \fB\-\-errors\fP\&.
+.UNINDENT
+.SH SUBMIT USAGE
+.INDENT 0.0
+.TP
+.B \fBhyper\-shell\fP \fBsubmit\fP \fB[\-h]\fP
+\fB[FILE]\fP \fB[\-b NUM]\fP \fB[\-w SEC]\fP \fB[\-t CMD]\fP \fB[\-\-initdb]\fP
+.UNINDENT
+.sp
+Submit tasks from a file.
+.sp
+Tasks are accumulated and published in bundles to the database.
+The \fB\-b\fP/\fB\-\-bundlesize\fP and \fB\-w\fP/\fB\-\-bundlewait\fP options control the
+size of these bundles and how long to wait before flushing tasks regardless of
+how many have accumulated.
+.sp
+Pre\-format tasks at \fIsubmit\fP\-time with template expansion using \fB\-t\fP/\fB\-\-template\fP\&.
+.SS Arguments
+.INDENT 0.0
+.TP
+.B FILE
+Path to input task file (default: <stdin>).
+.UNINDENT
+.SS Options
+.INDENT 0.0
+.TP
+.B \fB\-t\fP, \fB\-\-template\fP \fICMD\fP
+Command\-line template pattern (default: \(dq{}\(dq).
+.sp
+This is expanded at submit\-time before sending to the database.
+With the default \(dq{}\(dq the input command\-line will be run verbatim.
+Specifying a template pattern allows for simple input arguments (e.g., file paths)
+to be transformed into some common form; such as
+\fB\-t \(aq./some_command.py {} >outputs/{/\-}.out\(aq\fP\&.
+.sp
+See section on \fItemplates\fP\&.
+.TP
+.B \fB\-b\fP, \fB\-\-bundlesize\fP \fISIZE\fP
+Size of task bundle (default: 1).
+.sp
+The default value allows for greater concurrency and responsiveness on small scales.
+Using larger bundles is a good idea for large distributed workflows; specifically, it is best
+to coordinate bundle size with the number of executors in use by each client.
+.sp
+See also \fB\-\-bundlewait\fP\&.
+.TP
+.B \fB\-w\fP, \fB\-\-bundlewait\fP \fISEC\fP
+Seconds to wait before flushing tasks (default: 5).
+.sp
+If this period of time expires since the previous bundle was pushed to the database,
+The current bundle will be pushed regardless of how many tasks have been accumulated.
+.sp
+See also \fB\-\-bundlesize\fP\&.
+.TP
+.B \fB\-\-initdb\fP
+Auto\-initialize database.
+.sp
+If a database is configured for use with the workflow (e.g., PostgreSQL), auto\-initialize
+tables if they don\(aqt already exist. This is a short\-hand for pre\-creating tables with the
+\fBhyper\-shell initdb\fP command. This happens by default with SQLite databases.
+.sp
+See \fBhyper\-shell initdb\fP command.
+.UNINDENT
+.SH INITDB USAGE
+.sp
+\fBhyper\-shell\fP \fBinitdb\fP \fB[\-h]\fP
+.sp
+Initialize database schema.
+.sp
+This command uses your current configuration to create the necessary database
+tables. This occurs automatically for SQLite.
+.SH CONFIG GET USAGE
+.INDENT 0.0
+.TP
+.B \fBhyper\-shell\fP \fBconfig\fP \fBget\fP \fB[\-h]\fP
+\fB[\-x]\fP \fBSECTION[...].VAR\fP \fB[\-\-system | \-\-user]\fP
+.UNINDENT
+.sp
+Get configuration option.
+.sp
+If \fB\-\-user\fP/\fB\-\-system\fP not specified, the output is the merged configuration
+from all sources. Use the \fBconfig which\fP command to see where a specific
+option originates from.
+.sp
+Output is pretty\-printed using the configured console theme (default: monokai).
+Colorization is disabled for non\-TTY invocations.
+.SS Arguments
+.INDENT 0.0
+.TP
+.B SECTION[...].VAR
+Path to variable.
+.UNINDENT
+.SS Options
+.INDENT 0.0
+.TP
+.B \fB\-\-system\fP
+Load from system configuration.
+.TP
+.B \fB\-\-user\fP
+Load from user configuration.
+.TP
+.B \fB\-x\fP, \fB\-\-expand\fP
+Expand variable.
+.sp
+If the special \fB_env\fP or \fB_eval\fP variant of the option is
+present in the configuration, it will expand the environment variable
+or shell command, respectively.
+.UNINDENT
+.SH CONFIG SET USAGE
+.INDENT 0.0
+.TP
+.B \fBhyper\-shell\fP \fBconfig\fP \fBset\fP \fB[\-h]\fP
+\fBSECTION[...].VAR\fP \fBVALUE\fP \fB[\-\-system | \-\-user]\fP
+.UNINDENT
+.sp
+Set configuration option.
+.SS Arguments
+.INDENT 0.0
+.TP
+.B SECTION[...].VAR
+Path to variable.
+.TP
+.B VALUE
+Value to be set.
+.UNINDENT
+.SS Options
+.INDENT 0.0
+.TP
+.B \fB\-\-system\fP
+Apply to system configuration.
+.TP
+.B \fB\-\-user\fP
+Apply to user configuration (default).
+.UNINDENT
+.SH CONFIG EDIT USAGE
+.INDENT 0.0
+.TP
+.B \fBhyper\-shell\fP \fBconfig\fP \fBedit\fP \fB[\-h]\fP
+\fB[\-\-system | \-\-user]\fP
+.UNINDENT
+.sp
+Edit configuration with default editor.
+.sp
+The EDITOR/VISUAL environment variable must be set.
+.SS Options
+.INDENT 0.0
+.TP
+.B \fB\-\-system\fP
+Edit system configuration.
+.TP
+.B \fB\-\-user\fP
+Edit user configuration (default).
+.UNINDENT
+.SH CONFIG WHICH USAGE
+.INDENT 0.0
+.TP
+.B \fBhyper\-shell\fP \fBconfig\fP \fBwhich\fP \fB[\-h]\fP
+\fBSECTION[...].VAR\fP
+.UNINDENT
+.sp
+Show origin of configuration option.
+.SS Arguments
+.INDENT 0.0
+.TP
+.B SECTION[...].VAR
+Path to variable.
+.UNINDENT
+.SH TASK SUBMIT USAGE
+.sp
+\fBhyper\-shell\fP \fBtask\fP \fBsubmit\fP \fB[\-h]\fP \fBARGS...\fP
+.sp
+Submit individual task to the database.
+.sp
+A database must be configured. The task will not run until scheduled
+by the server process. The task UUID will be printed to standard out.
+.sp
+See \fBtask info\fP command.
+.SS Arguments
+.INDENT 0.0
+.TP
+.B ARGS...
+Command\-line arguments.
+.sp
+The full command\-line for some shell task.
+To use options, preface with leading \fB\-\-\fP\&.
+.UNINDENT
+.SH TASK INFO USAGE
+.INDENT 0.0
+.TP
+.B \fBhyper\-shell\fP \fBtask\fP \fBinfo\fP \fB[\-h]\fP
+\fBID\fP \fB[\-\-json | \-\-stdout | \-\-stderr | \-\-x FIELD]\fP
+.UNINDENT
+.sp
+Get metadata and/or task outputs.
+.sp
+Query for the full metadata on task by ID.
+Extract a specific field using \fB\-x\fP/\fB\-\-extract\fP\&.
+.sp
+Alternatively, dump the captured standard output or errors
+from the finished task (if captured). These files are written
+on the client host and synced with SFTP if necessary.
+.SS Arguments
+.INDENT 0.0
+.TP
+.B ID
+Unique task UUID.
+.UNINDENT
+.SS Options
+.INDENT 0.0
+.TP
+.B \fB\-\-json\fP
+Format metadata output as JSON.
+.TP
+.B \fB\-x\fP/\fB\-\-extract\fP \fIFIELD\fP
+Print this field only (e.g., \fB\-x submit_time\fP).
+.TP
+.B \fB\-\-stdout\fP
+Print <stdout> of task if captured, fetch from client if necessary.
+.TP
+.B \fB\-\-stderr\fP
+Print <stderr> of task if captured, fetch from client if necessary.
+.UNINDENT
+.SH TASK WAIT USAGE
+.INDENT 0.0
+.TP
+.B \fBhyper\-shell\fP \fBtask\fP \fBwait\fP \fB[\-h]\fP
+\fBID\fP \fB[\-n SEC]\fP \fB[\-\-info [\-\-json] | \-\-status]\fP
+.UNINDENT
+.sp
+Wait for task to complete.
+.sp
+Poll the database periodically for the completion status
+of the task. Block until completed.
+.sp
+Optionally, print task metadata after completion.
+.SS Arguments
+.INDENT 0.0
+.TP
+.B ID
+Unique task UUID.
+.UNINDENT
+.SS Options
+.INDENT 0.0
+.TP
+.B \fB\-n\fP, \fB\-\-interval\fP \fISEC\fP
+Time in seconds to wait between polling (default: 5).
+.TP
+.B \fB\-\-info\fP
+Print task info after completion.
+.sp
+See \fBtask info\fP command.
+.TP
+.B \fB\-\-json\fP
+Format metadata output as JSON.
+.TP
+.B \fB\-\-status\fP
+Print task exit status only.
+.UNINDENT
+.SH TASK RUN USAGE
+.sp
+\fBhyper\-shell\fP \fBtask\fP \fBrun\fP \fB[\-h]\fP \fB[\-n SEC]\fP \fBARGS...\fP
+.sp
+Submit individual task and wait for completion.
+.sp
+A database must be configured. The task will not run until scheduled
+by the server process. The <stdout> and <stderr> are written locally
+as if run locally, requires the client to have \fB\-\-capture\fP enabled.
+.sp
+See \fBtask info\fP and \fBtask wait\fP commands.
+.SS Arguments
+.INDENT 0.0
+.TP
+.B ARGS...
+Command\-line arguments.
+.sp
+The full command\-line for some shell task.
+To use options, preface with leading \fB\-\-\fP\&.
+.UNINDENT
+.SS Options
+.INDENT 0.0
+.TP
+.B \fB\-n\fP, \fB\-\-interval\fP \fISEC\fP
+Time in seconds to wait between polling (default: 5).
+.UNINDENT
+.SH TASK SEARCH USAGE
+.INDENT 0.0
+.TP
+.B \fBhyper\-shell\fP \fBtask\fP \fBsearch\fP \fB[\-h]\fP
+\fB[FIELD [FIELD ...]]\fP \fB[\-\-where COND [COND ...]]\fP
+\fB[\-\-order\-by FIELD [\-\-desc]]\fP \fB[\-x | \-\-json | \-\-csv]\fP
+\fB[\-\-count | \-\-limit NUM]\fP
+.UNINDENT
+.sp
+Search for tasks in database.
+.sp
+A database must be configured.
+Fields will be columns in the output.
+Options relate to SQL concepts.
+For single column output, use \fB\-x\fP/\fB\-\-extract\fP to disable
+formatting and quotations (useful for piping output).
+.SS Arguments
+.INDENT 0.0
+.TP
+.B FIELD
+Select specific named fields to include in output.
+Default is to include all fields.
+.UNINDENT
+.SS Options
+.INDENT 0.0
+.TP
+.B \fB\-w\fP, \fB\-\-where\fP \fICOND...\fP
+List of conditional statements to filter results (e.g., \fB\-w \(aqexit_status != 0\(aq\fP).
+.TP
+.B \fB\-s\fP, \fB\-\-order\-by\fP \fIFIELD\fP
+Order results by field.
+.TP
+.B \fB\-x\fP, \fB\-\-extract\fP
+Disable formatting for single column output.
+.TP
+.B \fB\-\-json\fP
+Format output as JSON.
+.TP
+.B \fB\-\-csv\fP
+Format output as CSV.
+.TP
+.B \fB\-l\fP, \fB\-\-limit\fP \fINUM\fP
+Limit number of returned records.
+.TP
+.B \fB\-c\fP, \fB\-\-count\fP
+Only print number of results that would be returned.
+.UNINDENT
+.SH TEMPLATES
+.sp
+Incoming command\-line arguments are expanded using a template pattern.
+Workloads often have a common form and only a small part of the shell command
+need be different.
+.sp
+Braces, \fB{}\fP, are used in all cases. Empty braces will substitute the full
+incoming argument line. Use one of the below patterns as a shorthand notation
+for many common scenarios.
+.sp
+The \fB\-t\fP/\fB\-\-template\fP argument is used by the \fBclient\fP command to expand
+templates just prior to execution. The \fBcluster\fP command simply forwards this
+argument to all clients.
+.sp
+In some situations it may be useful to expand a template with the \fBsubmit\fP command.
+These are expanded \fIprior\fP to scheduling as the actual \fIargs\fP for the task.
+.SS Filepath Operations
+.sp
+Shell commands often operate on filepaths. In such cases, it may be useful to manipulate
+these paths. Instead of using a shell interpolation (see below), use one of the available
+shorthand notations listed here.
+.INDENT 0.0
+.TP
+.B \fB{.}\fP
+Expand to immediate parent directory of given file.
+E.g., \fB/some/path/to/file.h5\fP translates to \fB/some/path/to\fP\&.
+.TP
+.B \fB{..}\fP
+Expand to second parent directory of given file.
+E.g., \fB/some/path/to/file.h5\fP translates to \fB/some/path\fP\&.
+.TP
+.B \fB{/}\fP
+The basename of the given file.
+E.g., \fB/some/path/to/file.h5\fP translates to \fBfile.h5\fP\&.
+.TP
+.B \fB{/\-}\fP
+The basename of the given file without its file type extension.
+E.g., \fB/some/path/to/file.h5\fP translates to \fBfile\fP\&.
+.TP
+.B \fB{\-}\fP
+The full path of the given file without the extension.
+This is useful for targeting adjacent files with a different extension.
+E.g., \fB/some/path/to/file.h5\fP translates to \fB/some/path/to/file\fP\&.
+.TP
+.B \fB{+}\fP
+The file type extension for the given file.
+E.g., \fB/some/path/to/file.h5\fP translates to \fB\&.h5\fP\&.
+.TP
+.B \fB{++}\fP
+The file type extension for the given file without the leading dot.
+E.g., \fB/some/path/to/file.h5\fP translates to \fBh5\fP\&.
+.UNINDENT
+.SS Argument Slicing
+.sp
+Command\-line inputs are understood as individual arguments delimited by whitespace.
+Slice into the argument vector using the \fB{[]}\fP notation. Arguments follow zero\-based
+indexing. Negative index values are counting backwards from the end.
+.sp
+Select with a singular value.
+.INDENT 0.0
+.TP
+.B \fB{[0]}\fP
+The first argument.
+.TP
+.B \fB{[1]}\fP
+The second argument.
+.TP
+.B \fB{[\-1]}\fP
+The last argument.
+.UNINDENT
+.sp
+Select a range with a \fIstart\fP and \fIstop\fP value, non\-inclusive of the \fIstop\fP value.
+Including a leading or trailing colon implies the default value (inclusive).
+.INDENT 0.0
+.TP
+.B \fB{[1:3]}\fP
+The second and third argument.
+.TP
+.B \fB{[:4]}\fP
+The first four arguments.
+.TP
+.B \fB{[\-2:]}\fP
+The last two arguments.
+.UNINDENT
+.sp
+Include a third value as a \fIstep\fP (or sometimes referred to as \fIstride\fP).
+Leaving out the \fIstart\fP and \fIstep\fP value implies starting from the first element (inclusive).
+.INDENT 0.0
+.TP
+.B \fB{[::2]}\fP
+Every second argument starting from the first.
+.TP
+.B \fB{[1::2]}\fP
+Every odd argument.
+.UNINDENT
+.SS Shell Expansion
+.sp
+General purpose shell commands can be expanded with the \fB{% %}\fP notation.
+The incoming command\-line args can be substituted with an \fB@\fP\&.
+.INDENT 0.0
+.TP
+.B \fB{% basename @ %}\fP
+Equivalent to \fB{/}\fP\&.
+.TP
+.B \fB{% mktemp \-d %}\fP
+Create temporary directory and insert its path.
+.UNINDENT
+.SS Lambda Expressions
+.sp
+Arbitrary Python expressions can be expanded with the \fB{= =}\fP notation.
+The input argument can be used within the expression with the variable \fBx\fP\&.
+.sp
+Exposed standard library modules include \fBos\fP, \fBos.path\fP as \fBpath\fP,
+\fBmath\fP and \fBdatetime\fP as \fBdt\fP\&.
+.sp
+Incoming arguments are intelligently coerced into the expected type.
+E.g., \fB2\fP will be an integer, \fB4.67\fP a float, \fBnull\fP and \fBnone\fP
+will be a Python \fBNone\fP, and \fBtrue\fP/\fBfalse\fP will be the appropriate
+boolean value.
+.INDENT 0.0
+.TP
+.B \fB{= x * math.pi =}\fP
+Multiply the incoming argument (expected to be a float) by Pi.
+.TP
+.B \fB{= dt.datetime.fromtimestamp(x) =}\fP
+Convert incoming POSIX timestamp to ISO format.
+.UNINDENT
+.SH CONFIGURATION
+.sp
+Most of the choices that \fIHyperShell\fP makes about timing, task bundling, coordination, logging,
+and such are configurable by the user. This configuration is loaded when \fIHyperShell\fP starts
+and is constructed from several sources including an ordered merger of files, environment variables,
+and command\-line options.
+.sp
+In order of precedence (lowest to highest), three files are loaded:
+.TS
+center;
+|l|l|.
+_
+T{
+Level
+T}	T{
+Path
+T}
+_
+T{
+System
+T}	T{
+\fB/etc/hypershell.toml\fP
+T}
+_
+T{
+User
+T}	T{
+\fB~/.hypershell/config.toml\fP
+T}
+_
+T{
+Local
+T}	T{
+\fB\&./.hypershell/config.toml\fP
+T}
+_
+.TE
+.sp
+The \fI\%TOML\fP format is modern and minimal.
+.sp
+Every configurable option can be set in one of these files. Further, every option can
+also be set by an environment variable, where the name aligns to the path
+to that option, delimited by underscores.
+.sp
+For example, set the logging level at the user level with a command:
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
-$ hyper\-shell client ... \-t \(aq{} >$TASK_ID.out\(aq
+$ hyper\-shell config set logging.level info \-\-user
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
 .sp
-With no arguments, the client will just print a usage statement and exit.
-To prompt the client to run with all default arguments, a \fB\-\-\fP is
-interpreted as a simple noarg.
+The file should now look something like this:
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
-$ hyper\-shell client \-\-
+# File automatically created on 2022\-07\-02 11:57:29.332993
+# Settings here are merged automatically with defaults and environment variables
+
+[logging]
+level = \(dqinfo\(dq
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
-.SS Client Options
+.sp
+Alternatively, you can set an environment variable and the runtime configuration
+would be equivalent:
 .INDENT 0.0
-.TP
-.B \-x, –timeout \fISEC\fP
-Length of time in seconds before disconnecting (default: 0). If finished
-with previous command and no other commands are published by the server
-after this period of time, automatically disconnect and shutdown. A
-timeout of 0 is special and means never timeout.
-.TP
-.B \-t, –template \fICMD\fP
-Template command (default: “{}”). Any valid command can be a template.
-All “{}” are substituted (if present) as the input task argument.
-.TP
-.B \-o, –output \fIFILE\fP
-Path to file for command outputs (default: <stdout>).
+.INDENT 3.5
+.sp
+.nf
+.ft C
+$ export HYPERSHELL_LOGGING_LEVEL=INFO
+.ft P
+.fi
 .UNINDENT
-.SS Parsl Mode
-.sp
-These options are pass to the client by the cluster program to trigger a single
-client to launch \fIparsl\fP\&. Running more than one client instance in parsl
-mode will invoke more than one parsl cluster.
-.INDENT 0.0
-.TP
-.B –parsl [–profile \fINAME\fP]
-Hand\-off tasks to Parsl (default profile: “local”). The “local” profile just
-uses threads and really only works as a placeholder for testing purposes.
-Running the cluster in \fB\-\-local\fP mode is to be preferred.
 .UNINDENT
-.SH CLUSTER USAGE
 .sp
-The program offers a concise means to launch a workflow. In all cases, a
-server is started. Depending on the launch scheme selected, one or more
-clients will be launched locally or remotely for you.
-.SS Cluster Modes
-.sp
-Each mode is mutually exclusive. The associated partner options are only
-valid if given with their launcher option.
+Finally, any option defined within a configuration file that ends with \fB_env\fP or \fB_eval\fP
+is automatically expanded by the given environment variable or shell expression,
+respectively. This is useful as both a dynamic feature but also as a means to
+obfuscate sensitive information, such as database connection details.
 .INDENT 0.0
-.TP
-.B –local [\-N | –num\-cores \fINUM\fP]
-Launch clients locally. A new client process will be started for each “core”
-requested. By default, it will launch as many clients as there are cores on
-the machine. These clients will launch using the exact path to the current
-executable.
-.TP
-.B –ssh [–nodefile \fIFILE\fP]
-Launch clients with SSH. The \fInodefile\fP should enumerate the hosts to be
-used. An SSH session will be created for every line in this file.
-SSH\-keys should be setup to allow password\-less connections. If not given,
-a global ~/.hyper\-shell/nodefile can be used.
-.TP
-.B –mpi [–nodefile \fIFILE\fP]
-Launch clients with MPI. The \fIFILE\fP is passed to the \fB\-machinefile\fP option
-for \fBmpiexec\fP\&. If not given, rely on \fBmpiexec\fP to know what to do.
-.TP
-.B –parsl [–profile \fINAME\fP]
-Launch a single client to run in \fIparsl\fP mode. This loads a
-\fBparsl.config.Config\fP object from \fB~/.hyper\-shell/parsl_config.py\fP\&. If
-not specified, the profile defaults to “local”, which just uses some number
-of threads locally.
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# File automatically created on 2022\-07\-02 11:57:29.332993
+# Settings here are merged automatically with defaults and environment variables
+
+[logging]
+level = \(dqinfo\(dq
+
+[database]
+provider = \(dqpostgres\(dq
+database = \(dqhypershell\(dq
+host = \(dqmy.instance.university.edu\(dq
+user = \(dqme\(dq
+password_eval = \(dqpass hypershell/database/password\(dq  # Decrypt using GNU Pass
+.ft P
+.fi
 .UNINDENT
-.SS Cluster Options
-.sp
-Some of these options are merely passed through to the server or the client.
+.UNINDENT
+.SS Parameter Reference
 .INDENT 0.0
 .TP
-.B \-f, –failed \fIFILE\fP
-A file path to write commands which exited with a non\-zero status. If not
-specified, nothing will be written.
+.B \fB[logging]\fP
+Logging configuration. See also \fI\%logging\fP section.
+.INDENT 7.0
 .TP
-.B \-o, –output \fIFILE\fP
-A file path to write the output of commands. By default, if this option is
-not specified, all command outputs will be redirected to \fBstdout\fP .
+.B \fB\&.level\fP
+One of \fBDEVEL\fP, \fBTRACE\fP, \fBDEBUG\fP, \fBINFO\fP, \fBWARNING\fP,
+\fBERROR\fP, or \fBCRITICAL\fP (default: \fIWARNING\fP)
 .TP
-.B \-s, –maxsize \fISIZE\fP
-Maximum size of the queue (default: 10000). To avoid the server queueing up
-too many tasks, this will force the server to block if clients have not yet
-taken enough commands. This is helpful for pipelines.
+.B \fB\&.datefmt\fP
+Date/time format, standard codes apply (default: \fI\(aq%Y\-%m\-%d %H:%M:%S\(aq\fP)
 .TP
-.B \-t, –template \fICMD\fP
-Template command (default: “{}”).
+.B \fB\&.format\fP
+Log message format. Default set by the \fIdefault\fP \fBlogging.style\fP\&.
+See the \fI\%available attributes\fP
+defined by the underlying Python logging interface.
+.TP
+.B \fB\&.style\fP
+Presets for \fBlogging.format\fP which can be difficult to define correctly.
+Options are \fIdefault\fP, \fIdetailed\fP, and \fIsystem\fP\&.
+.UNINDENT
+.TP
+.B \fB[database]\fP
+Database configuration and connection details.
+See also \fI\%database\fP section.
+.INDENT 7.0
+.TP
+.B \fB\&.provider\fP
+Database provider (default: \(aqsqlite\(aq). Supported alternatives include
+\(aqpostgres\(aq (or compatible). Support for other providers may be considered in
+the future.
+.TP
+.B \fB\&.file\fP
+Only applicable for SQLite provider.
+SQLite does not understand any other connection detail.
+.TP
+.B \fB\&.database\fP
+Name for database. Not applicable for SQLite.
+.TP
+.B \fB\&.schema\fP
+Not applicable for all RDMS providers.
+For PostgreSQL the default schema is \fBpublic\fP\&.
+Specifying the schema may be useful for having multiple instances within the same database.
+.TP
+.B \fB\&.host\fP
+Hostname or address of database server (default: \fIlocalhost\fP).
+.TP
+.B \fB\&.port\fP
+Port number to connect with database server.
+The default value depends on the provider, e.g., 5432 for PostgreSQL.
+.TP
+.B \fB\&.user\fP
+Username for databaser server account.
+If provided a \fBpassword\fP must also be provided.
+Default is the local account.
+.TP
+.B \fB\&.password\fP
+Password for database server account.
+If provided a \fBuser\fP must also be provided.
+Default is the local account.
+.sp
+See also note on \fB_env\fP and \fB_eval\fP\&.
+.TP
+.B \fB\&.echo\fP
+Special parameter enables verbose logging of all database transactions.
+.TP
+.B \fB[connection_args]\fP
+Specify additional connection details for the underlying SQL dialect provider,
+e.g., \fBsqlite3\fP or \fBpsycopg2\fP\&.
+.TP
+.B \fB*\fP
+Any additional arguments are forwarded to the provider, e.g., \fBencoding = \(aqutf\-8\(aq\fP\&.
+.UNINDENT
+.TP
+.B \fB[server]\fP
+Section for \fIserver\fP workflow parameters.
+.INDENT 7.0
+.TP
+.B \fB\&.bind\fP
+Bind address (default: \fIlocalhost\fP).
+.sp
+When running locally, the default is recommended. To allow remote \fIclients\fP to connect
+over the network, bind the server to \fI0.0.0.0\fP\&.
+.TP
+.B \fB\&.port\fP
+Port number (default: \fI50001\fP).
+.sp
+This is an arbitrary choice and simply must be an available port. The default option chosen
+here is typically available on most platforms and is not expected by any known major software.
+.TP
+.B \fB\&.auth\fP
+Cryptographic authorization key to connect with server (default: \fI<not secure>\fP).
+.sp
+The default \fIKEY\fP used by the server and client is not secure and only a place holder.
+It is expected that the user choose a secure \fIKEY\fP\&. The \fIcluster\fP automatically generates
+a secure one\-time \fIKEY\fP\&.
+.TP
+.B \fB\&.queuesize\fP
+Maximum number of task bundles on the shared queue (default: \fI1\fP).
+.sp
+This blocks the next bundle from being published by the scheduler until a client
+has taken the current prepared bundle. On smaller scales this is probably best and
+is only of modest performance impact, limiting the scheduler from getting so far ahead
+of the currently running tasks.
+.sp
+On large scale workflows with many clients (e.g., 100) it may be advantageous to allow
+the scheduler to work ahead in selecting new tasks.
+.TP
+.B \fB\&.bundlesize\fP
+Size of task bundle (default: \fI1\fP).
+.sp
+The default value allows for greater concurrency and responsiveness on small scales. This is
+used by the \fIsubmit\fP thread to accumulate bundles for either database commits and/or publishing
+to the queue. If a database is in use, the scheduler thread selects tasks from the database in
+batches of this size.
+.sp
+Using larger bundles is a good idea for large distributed workflows; specifically, it is best
+to coordinate bundle size with the number of executors in use by each client.
+.sp
+See also \fB\-b\fP/\fB\-\-bundlesize\fP command\-line option.
+.TP
+.B \fB\&.attempts\fP
+Attempts for auto\-retry on failed tasks (default: \fI1\fP).
+.sp
+If a database is in use, then there is an opportunity to automatically retry failed tasks. A
+task is considered to have failed if it has a non\-zero exit status. The original is not over\-written,
+a new task is submitted and later scheduled.
+.sp
+Counterpart to the \fB\-r\fP/\fB\-\-max\-retries\fP command\-line option. Setting \fB\-\-max\-retries 1\fP
+is equivalent to setting \fB\&.attempts\fP to 2.
+.sp
+See also \fB\&.eager\fP\&.
+.TP
+.B \fB\&.eager\fP
+Schedule failed tasks before new tasks (default: \fIfalse\fP).
+.sp
+If \fB\&.attempts\fP is greater than one, this option defines the appetite for re\-submitting
+failed tasks. By default, failed tasks will only be scheduled when there are no more
+remaining novel tasks.
+.TP
+.B \fB\&.wait\fP
+Polling interval in seconds for database queries during scheduling (default: \fI5\fP).
+This waiting only occurs when no tasks are returned by the query.
+.TP
+.B \fB\&.evict\fP
+Eviction period in seconds for clients (default: \fI600\fP).
+.sp
+If a client fails to register a heartbeat after this period of time it is considered
+defunct and is evicted. When there are no more tasks to schedule the server sends a
+disconnect request to all registered clients, and waits until a confirmation is
+returned for each. If a client is defunct, this will hang the shutdown process.
+.UNINDENT
+.TP
+.B \fB[client]\fP
+Section for \fIclient\fP workflow parameters.
+.INDENT 7.0
+.TP
+.B \fB\&.bundlesize\fP
+Size of task bundle (default: \fI1\fP).
+.sp
+The default value allows for greater concurrency and responsiveness on small scales.
+.sp
+Using larger bundles is a good idea for larger distributed workflows; specifically, it is best
+to coordinate bundle size with the number of executors in use by each client. It is also a good
+idea to coordinate bundle size between the client and server so that the client returns the
+same sized bundles that it receives.
+.sp
+See also \fB\-b\fP/\fB\-\-bundlesize\fP command\-line option.
+.TP
+.B \fB\&.bundlewait\fP
+Seconds to wait before flushing task bundle (default: \fI5\fP).
+.sp
+If this period of time expires since the previous bundle was returned to the server,
+the current group of finished tasks will be pushed regardless of \fIbundlesize\fP\&.
+.sp
+For larger distributed workflows it is a good idea to make this waiting period sufficiently
+long so that most bundles are returned whole.
+.sp
+See also \fB\-w\fP/\fB\-\-bundlewait\fP command\-line option.
+.TP
+.B \fB\&.heartrate\fP
+Interval in seconds between heartbeats sent to server (default \fI10\fP).
+.sp
+Even on the largest scales the default interval should be fine.
+.UNINDENT
+.TP
+.B \fB[submit]\fP
+Section for \fIsubmit\fP workflow parameters.
+.INDENT 7.0
+.TP
+.B \fB\&.bundlesize\fP
+Size of task bundle (default: \fI1\fP).
+.sp
+The default value allows for greater concurrency and responsiveness on small scales.
+Using larger bundles is a good idea for large distributed workflows; specifically, it is best
+to coordinate bundle size with the number of executors in use by each client.
+.sp
+See also \fB\-b\fP/\fB\-\-bundlesize\fP command\-line option.
+.TP
+.B \fB\&.bundlewait\fP
+Seconds to wait before flushing tasks (default: \fI5\fP).
+.sp
+If this period of time expires since the previous bundle was pushed to the database,
+the current bundle will be pushed regardless of how many tasks have been accumulated.
+.sp
+See also \fB\-w\fP/\fB\-\-bundlewait\fP command\-line option.
+.UNINDENT
+.TP
+.B \fB[task]\fP
+Section for task runtime settings.
+.INDENT 7.0
+.TP
+.B \fB\&.cwd\fP
+Explicitly set the working directory for all tasks.
+.UNINDENT
+.TP
+.B \fB[ssh]\fP
+SSH configuration section.
+.INDENT 7.0
+.TP
+.B \fB\&.args\fP
+SSH connection arguments; e.g., \fB\-i ~/.ssh/some.key\fP\&.
+It is preferable to configure SSH directly however, in \fB~/.ssh/config\fP\&.
+.TP
+.B \fB[group]\fP
+Setting a \fIlist\fP for the \fB\&.group\fP allows for a global list of available client hosts.
+Or, set one or more named groups and reference them by name with \fB\-\-ssh\-group\fP\&.
+.sp
+\fB\&.<name> = [\(aqhost\-01\(aq, \(aqhost\-02\(aq, \(aqhost\-03\(aq]\fP
+.UNINDENT
 .UNINDENT
 .SH ENVIRONMENT VARIABLES
 .sp
-All environment variables that start with the \fBHYPERSHELL_\fP prefix will be
-injected into the execution environment of the tasks with the prefix stripped.
+A few common environment variables are defined for every task.
+.INDENT 0.0
+.TP
+.B \fBTASK_ID\fP
+Universal identifier (UUID) for the current task.
+.TP
+.B \fBTASK_ARGS\fP
+Original input command\-line argument line.
+Equivalent to \fB{}\fP, see \fI\%templates\fP section.
+.TP
+.B \fBTASK_CWD\fP
+Current working directory for the current task.
+.TP
+.B \fBTASK_OUTPATH\fP
+Absolute file path where standard output is directed (if defined).
+.TP
+.B \fBTASK_ERRPATH\fP
+Absolute file path where standard error is directed (if defined).
+.UNINDENT
 .sp
-Example:
+Further, any environment variable starting with \fBHYPERSHELL_EXPORT_\fP will be injected
+into the task environment sans prefix; e.g., \fBHYPERSHELL_EXPORT_FOO\fP would define
+\fBFOO\fP in the task environment. You can also define such variables in the \fBexport\fP
+section of your configuration file(s); e.g.,
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
-$ export HYPERSHELL_PATH=/other/bin:$PATH
-$ export HYPERSHELL_OTHER=FOO
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-All tasks will then have \fBPATH=/other/bin:$PATH\fP defined for the task as well
-as a new variable, \fBOTHER\fP\&.
-.sp
-\fBHYPERSHELL_EXE\fP
-.INDENT 0.0
-.INDENT 3.5
-When running the hyper\-shell cluster with \fB\-\-ssh\fP (or similar) it is
-not uncommon for the hyper\-shell on the remote system to either be in a
-different location or not necessarily available on the \fIPATH\fP\&. Using the
-\fBHYPERSHELL_EXE\fP environment variable, set an explicit path to use.
-.UNINDENT
-.UNINDENT
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-$ export HYPERSHELL_EXE=/other/bin/hyper\-shell
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-\fBHYPERSHELL_CWD\fP
-.INDENT 0.0
-.INDENT 3.5
-When executed directly, the hyper\-shell client will run tasks in the same
-directory as the client is running in. This can be changed by specifying the
-\fBHYPERSHELL_CWD\fP\&.
-.UNINDENT
-.UNINDENT
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-$ export HYPERSHELL_CWD=$HOME/other
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-\fBHYPERSHELL_LOGGING_LEVEL\fP
-.INDENT 0.0
-.INDENT 3.5
-You can specify what logging level to use without the need for a command line
-switch by defining this variable. Both numbered and named values are allowed;
-e.g., 0\-4 or one of DEBUG, INFO, WARNING, ERROR, and CRITICAL.
-.UNINDENT
-.UNINDENT
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-$ export HYPERSHELL_LOGGING_LEVEL=DEBUG
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-\fBHYPERSHELL_LOGGING_HANDLER\fP
-.INDENT 0.0
-.INDENT 3.5
-You can specify what logging style to use without the need for a command line
-switch by defining this variable. Allowed values are STANDARD or DETAILED,
-corresponding to the basic colorized messages and the syslog style detailed
-messages, respectively.
-.UNINDENT
-.UNINDENT
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-$ export HYPERSHELL_LOGGING_HANDLER=DETAILED
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-All tasks will also have special variables defined within their environment
-that are specific to that instance.
-.sp
-\fBTASK_ID\fP
-.INDENT 0.0
-.INDENT 3.5
-The unique integer identifier for this task. The value of \fBTASK_ID\fP is
-a count starting from zero set by the server.
-.UNINDENT
-.UNINDENT
-.sp
-\fBTASK_ARG\fP
-.INDENT 0.0
-.INDENT 3.5
-The input argument for this command. This  the  variable equivalent of ‘{}’
-and can be substituted as such. This may be useful for shell\-isms in
-the command template.
-.UNINDENT
-.UNINDENT
-.SH EXAMPLES
-.SS Simple Cluster
-.sp
-Process an existing list of commands from some \fBtaskfile\fP\&. Presumably, one
-could execute \fBtaskfile\fP directly and the lines would be executed in serial.
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-$ hyper\-shell cluster taskfile \-f taskfile.failed
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.SS Dynamic Pipeline
-.sp
-Await tasks and dispatch them as they arrive. It is common practice to use
-all\-caps to mark files as being transient in nature. In this case, \fBTASKFILE\fP
-is like a queue unto itself. Enable verbose logging with \fB\-vl\fP, redirect
-outputs and view logging messages but also append them to a file using \fBtee\fP\&.
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-$ tail \-f TASKFILE | hyper\-shell cluster \-vl \-N4 \-f FAILED \e
-    2>&1 1>OUTPUTS | tee \-a hyper\-shell.log
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.SS Server and Clients
-.sp
-Start a server manually to publish tasks. Define an access key using \fB\-k\fP
-and set the bind address for the server so clients can connect remotely.
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-$ hyper\-shell server \-dlk \(aqsome\-key\(aq \-H 0.0.0.0 < taskfile > taskfile.failed
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-On different machines launch one or more clients. This can be done manually,
-or in an automated fashion.
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-$ hyper\-shell client \-dlk \(aqsome\-key\(aq \-H \(aqserver\-hostname\(aq > local.out
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.SS HPC Job (Direct)
-.sp
-Schedule tasks on a computing cluster using a job scheduler, such as
-\fI\%SLURM\fP\&. A basic job script might be:
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-#!/bin/bash
-#SBATCH \-\-nodes=2
-#SBATCH \-\-tasks\-per\-node=12
-#SBATCH \-\-account=ACCOUNT
+# File automatically created on 2022\-07\-02 11:57:29.332993
+# Settings here are merged automatically with defaults and environment variables
 
-# launch server
-hyper\-shell server \-dlH 0.0.0.0 < TASKFILE > FAILED \e
-    2>>hyper\-shell.log
+[logging]
+level = \(dqinfo\(dq
 
-# launch clients
-srun hyper\-shell client \-dlH \(gahostname\(ga > OUTPUTS \e
-    2>>hyper\-shell.log
+# Options defined as a list will be joined with a \(dq:\(dq on BSD/Linux or \(dq;\(dq on Windows
+# Environment variables will be in all\-caps (e.g., FOO and PATH).
+[export]
+foo = \(dqvalue\(dq
+path = [\(dq/some/bin\(dq, \(dq/some/other/bin\(dq]
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
-.SS HPC Job (Elastic)
-.sp
-Instead of scheduling a job with a fixed size, allow for a continuous pipeline
-to exist and elastically scale the required backend\-nodes according to the task
-load.
-.sp
-On a login\-node on the cluster:
+.SH EXIT STATUS
 .INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-$ hyper\-shell cluster \-dl \-\-parsl \-\-profile=myconfig < TASKFILE \e
-    >OUTPUTS 2>>hyper\-shell.log
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-This will create a server and a single client which launches \fIparsl\fP using the
-named configuration. In \fB~/.hyper\-shell/parsl_config.py\fP:
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-# see parsl.readthedocs.io
-from parsl.config import Config
-
-myconfig = Config(
-    # implement your custom configuration
-)
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.SS Elastic Cloud Computing
-.sp
-On a small persistent compute instance, run the server in a pipeline
-configuration. Then, setup your \fIparsl\fP configuration to use \fIKubernetes\fP
-(or similar) to elastically scale compute as necessary. Be sure to include
-both \fIhyper\-shell\fP and \fIparsl\fP in your compute image.
-.SS Hybrid Makefile and Hyper\-Shell
-.sp
-Using a \fIMakefile\fP to define a directed acyclic graph (DAG) for your
-computations, whether in a local or HPC context is robust and to be encouraged.
-In fact, \fIGNU Make\fP offers a parallel execution mode (using the \fB\-j\fP flag). On
-a single compute node this will not only execute tasks in parallel but uses the
-filesystem to track successful and failed commands, facilitating the re\-execution
-of incomplete tasks without needlessly executing tasks that have succeeded.
-.sp
-In the context of tasks such as these, the dependency graph has branches that do
-not connect for independent tasks. Example, issuing \fBmake outputs/task\-1.out\fP
-may be completely isolated from \fBmake outputs/task\-2.out\fP\&. Let \fIMake\fP retain
-the DAG and execution formulae; if one defines a top\-level target that simply
-prints all the final targets of the tasks, you can pipe that into something like
-\fIhyper\-shell\fP to run in a distributed context when necessary.
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-$ make list | hyper\-shell cluster \-t \(aqmake {}\(aq \-\-mpi \-\-nodefile $NODEFILE
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-You might even embed that in the \fIMakefile\fP itself to run in a distributed mode.
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-cluster:
-    $(make) list | hyper\-shell cluster \-t \(aq$(make) {}\(aq \-\-mpi \-\-nodefile $(NODEFILE)
-.ft P
-.fi
-.UNINDENT
+.TP
+.B 0
+Success
+.TP
+.B 1
+Usage statement printed
+.TP
+.B 2
+Bad argument
+.TP
+.B 3
+Bad configuration
+.TP
+.B 4
+Signal interrupt (keyboard interrupt)
+.TP
+.B 5
+Generic runtime error (non\-specific)
+.TP
+.B 6
+Internal error (unexpected)
 .UNINDENT
 .SH SEE ALSO
 .sp
-ssh(1), mpiexec(1), tail(1), tee(1), make(1)
+ssh(1), mpirun(1)
 .SH AUTHOR
 Geoffrey Lentner <glentner@purdue.edu>.
 .SH COPYRIGHT
-2019-2020 Geoffrey Lentner
+2019-2022 Geoffrey Lentner
 .\" Generated by docutils manpage writer.
 .
