@@ -177,35 +177,31 @@ Task Search Usage
 Templates
 ---------
 
-.. include:: _include/templates.rst
+.. include:: _include/templates_alt.rst
 
 
 Configuration
 -------------
 
+.. include:: _include/config_intro_alt.rst
+
+
+Parameter Reference
+^^^^^^^^^^^^^^^^^^^
+
+.. include:: _include/config_param_ref.rst
+
 
 Environment Variables
 ---------------------
 
-All environment variables that start with the ``HYPERSHELL_`` prefix will be
-injected into the execution environment of the tasks with the prefix stripped.
+.. include:: _include/config_task_env_alt.rst
 
-``TASK_ID``
-
-    Unique task UUID.
-
-``TASK_ARGS``
-
-    Original input command-line argument(s) for the current task.
 
 Exit Status
 -----------
 
 .. include:: _include/exit_status.rst
-
-
-Examples
---------
 
 
 See Also
