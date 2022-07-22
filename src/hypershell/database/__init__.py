@@ -44,7 +44,7 @@ class DatabaseUninitialized(Exception):
 INITDB_PROGRAM = 'hyper-shell initdb'
 INITDB_USAGE = f"""\
 usage: {INITDB_PROGRAM} [-h]
-{initdb.__doc__}\
+Initialize database (not needed for SQLite).\
 """
 
 INITDB_HELP = f"""\
@@ -56,7 +56,7 @@ options:
 
 
 class InitDBApp(Application):
-    """Application class for database initializer."""
+    """Initialize database (not needed for SQLite)."""
 
     interface = Interface(INITDB_PROGRAM, INITDB_USAGE, INITDB_HELP)
     ALLOW_NOARGS = True

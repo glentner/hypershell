@@ -29,7 +29,7 @@ from hypershell.database import InitDBApp, DatabaseUninitialized
 __all__ = ['HyperShellApp', 'main', '__version__', '__license__']
 
 # project metadata
-__version__     = '2.0.0'
+__version__     = '2.0.1'
 __authors__     = 'Geoffrey Lentner'
 __contact__     = 'glentner@purdue.edu'
 __license__     = 'Apache Software License'
