@@ -145,7 +145,7 @@ class TaskInfoApp(Application):
         if self.extract_field and (self.print_stdout or self.print_stderr or self.format_json):
             raise ArgumentError('Cannot use -x/--extract with other output formats')
         if self.extract_field:
-            print(json.dumps(getattr(self.task, self.extract_field)))
+            print(json.dumps(getattr(self.task, self.extract_field)).strip('"'))
         elif not (self.print_stdout or self.print_stderr):
             self.write(self.task.to_json())
         elif self.print_stdout:
