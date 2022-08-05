@@ -27,8 +27,15 @@ Release v\ |release| (:ref:`Getting Started <getting_started>`)
 
 .. include:: _include/desc.rst
 
-The software is pure Python and has been tested on Linux, macOS, and Windows 10.
-The server and clients don't even need to use the same platform.
+Several tools offer similar functionality but not all together in a single tool with
+the user ergonomics we provide. Novel design elements include but are not limited to
+(1) cross-platform, (2) client-server design, (3) staggered launch for large scales,
+(4) persistent hosting of the server, and optionally (5) a database in-the-loop for
+persisting task metadata and automated retries.
+
+*HyperShell* is pure Python and is tested on Linux, macOS, and Windows 10 in
+Python 3.9 and 3.10 environments. The server and client don't even need to use the same
+platform simultaneously.
 
 -------------------
 
@@ -183,3 +190,8 @@ See the full documentation for environment variables under :ref:`configuration <
     contributing
     license
 
+.. toctree::
+    :hidden:
+    :caption: Supplemental
+
+    citation

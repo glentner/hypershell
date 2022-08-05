@@ -291,8 +291,8 @@ class Task(Model):
 
         Example:
             >>> Task.update_all([
-            ...     {'id': '0b1944e8-a4dd-4964-80a8-3383e187b908', 'scheduled': True},
-            ...     {'id': '85075d9a-267d-4e0c-bbf2-7b0919de4cf0', 'scheduled': True}])
+            ...     {'id': '0b1944e8-a4dd-4964-80a8-3383e187b908', ... },
+            ...     {'id': '85075d9a-267d-4e0c-bbf2-7b0919de4cf0', ... }])
         """
         if changes:
             Session.bulk_update_mappings(cls, changes)
