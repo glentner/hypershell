@@ -190,3 +190,8 @@ See the full documentation for environment variables under :ref:`configuration <
     contributing
     license
 
+.. toctree::
+    :hidden:
+    :caption: Supplemental
+
+    citation

@@ -37,6 +37,21 @@ __copyright__   = '2019-2022. All Rights Reserved.'
 __website__     = 'https://github.com/glentner/hyper-shell'
 __keywords__    = 'distributed-computing command-line-tool shell-scripting high-performance-computing'
 __description__ = 'Process shell commands over a distributed, asynchronous queue.'
+__citation__    = """\
+@inproceedings{lentner_2022,
+    author = {Lentner, Geoffrey and Gorenstein, Lev},
+    title = {HyperShell v2: Distributed Task Execution for HPC},
+    year = {2022},
+    isbn = {9781450391610},
+    publisher = {Association for Computing Machinery},
+    url = {https://doi.org/10.1145/3491418.3535138},
+    doi = {10.1145/3491418.3535138},
+    booktitle = {Practice and Experience in Advanced Research Computing},
+    articleno = {80},
+    numpages = {3},
+    series = {PEARC '22}
+}\
+"""
 
 # initialize application logger
 log = logging.getLogger('hypershell')
@@ -68,12 +83,16 @@ initdb                 {InitDBApp.__doc__}
 options:
 -h, --help             Show this message and exit.
 -v, --version          Show the version and exit.
+    --citation         Show citation info and exit.
 
-Documentation and issue tracking at:
+Issue tracking at:
 {__website__}
 
 Copyright {__copyright__}
-{__authors__} <{__contact__}>.\
+{__authors__} <{__contact__}>.
+
+If this software has helped in your research please consider
+citing us (see `hyper-shell --citation`).\
 """
 
 
@@ -90,6 +109,7 @@ class HyperShellApp(ApplicationGroup):
 
     interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
     interface.add_argument('-v', '--version', action='version', version=__version__)
+    interface.add_argument('--citation', action='version', version=__citation__)
     interface.add_argument('command')
 
     command = None
