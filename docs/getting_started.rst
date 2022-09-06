@@ -22,7 +22,7 @@ and additional notes and recommendations.
 
     .. code-block:: shell
 
-        brew tap glentner/hyper-shell
+        brew tap glentner/tap
         brew install hyper-shell
 
 |
