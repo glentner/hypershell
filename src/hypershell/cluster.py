@@ -37,7 +37,7 @@ from hypershell.submit import DEFAULT_BUNDLEWAIT
 
 # public interface
 __all__ = ['run_local', 'run_cluster', 'run_ssh',
-           'LocalCluster', 'RemoteCluster', 'ClusterApp', ]
+           'LocalCluster', 'RemoteCluster', 'SSHCluster', 'ClusterApp', ]
 
 # initialize logger
 log = Logger.with_name(__name__)
