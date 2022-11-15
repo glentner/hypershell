@@ -1,4 +1,5 @@
-Initialize database schema.
+Initialize database.
 
-This command uses your current configuration to create the necessary database
-tables. This occurs automatically for SQLite.
+Create the necessary database tables given your current configuration.
+This occurs automatically for SQLite.
+To clear out all metadata for an existing database use ``--truncate``.

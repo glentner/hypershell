@@ -53,9 +53,10 @@ class DatabaseUninitialized(Exception):
 INITDB_PROGRAM = 'hyper-shell initdb'
 INITDB_USAGE = f"""\
 Usage:
-{INITDB_PROGRAM} [-h]
+{INITDB_PROGRAM} [-h] [--truncate [--yes]]
 
-Initialize database (not needed for SQLite).\
+Initialize database (not needed for SQLite).
+Use --truncate to zero out the task metadata.\
 """
 
 INITDB_HELP = f"""\

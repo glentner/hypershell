@@ -27,36 +27,36 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "HYPER-SHELL" "1" "Aug 04, 2022" "2.0.2" "hyper-shell"
+.TH "HYPER-SHELL" "1" "Nov 15, 2022" "2.0.2" "hyper-shell"
 .SH NAME
 hyper-shell \- Process shell commands over a distributed, asynchronous queue
 .SH SYNOPSIS
 .nf
-hyper\-shell [\-h] [\-v] …
+hyper\-shell [\-h] [\-v] ...
 .fi
 .sp
 .nf
-hyper\-shell cluster [\-h] \fIFILE\fP [–ssh \fIHOST\fP… | –mpi | –launcher \fIARGS\fP…] …
+hyper\-shell cluster [\-h] \fIFILE\fP [\-\-ssh \fIHOST\fP\&... | \-\-mpi | \-\-launcher \fIARGS\fP\&...] ...
 .fi
 .sp
 .nf
-hyper\-shell submit [\-h] \fIFILE\fP …
+hyper\-shell submit [\-h] \fIFILE\fP ...
 .fi
 .sp
 .nf
-hyper\-shell server [\-h] \fIFILE\fP …
+hyper\-shell server [\-h] \fIFILE\fP ...
 .fi
 .sp
 .nf
-hyper\-shell client [\-h] …
+hyper\-shell client [\-h] ...
 .fi
 .sp
 .nf
-hyper\-shell config [\-h] {get | set | which | edit } [–user | –system] …
+hyper\-shell config [\-h] {get | set | which | edit } [\-\-user | \-\-system] ...
 .fi
 .sp
 .nf
-hyper\-shell task [\-h] {submit | info | wait | run | search} …
+hyper\-shell task [\-h] {submit | info | wait | run | search} ...
 .fi
 .sp
 .SH DESCRIPTION
@@ -103,16 +103,16 @@ Path to input task file (default: <stdin>).
 .SS Modes
 .INDENT 0.0
 .TP
-.B \fB\-\-ssh\fP \fIHOST\fP…
+.B \fB\-\-ssh\fP \fIHOST\fP\&...
 Launch directly with SSH host(s). This can be a single host, a comma\-separated list of hosts,
-or an expandable pattern, e.g., “cluster\-a[00\-04].xyz”.
+or an expandable pattern, e.g., \(dqcluster\-a[00\-04].xyz\(dq.
 .sp
 See also \fB\-\-ssh\-group\fP and \fB\-\-ssh\-args\fP\&.
 .TP
 .B \fB\-\-mpi\fP
 Same as \fB\-\-launcher=mpirun\fP\&.
 .TP
-.B \fB\-\-launcher\fP \fIARGS\fP…
+.B \fB\-\-launcher\fP \fIARGS\fP\&...
 Use specific launch interface. This can be any program that handles process management on a
 distributed system. For example, on a \fISLURM\fP cluster one might want to use \fBsrun\fP\&. In this
 case you would specify \fB\-\-launcher=srun\fP; however, the \fIARGS\fP are not merely the executable
@@ -128,9 +128,9 @@ For example, \fB\-N4\fP would create four workers, but \fB\-N4 \-\-ssh \(aqclust
 creates two clients and a total of eight workers.
 .TP
 .B \fB\-t\fP, \fB\-\-template\fP \fICMD\fP
-Command\-line template pattern (default: “{}”).
+Command\-line template pattern (default: \(dq{}\(dq).
 .sp
-This is expanded by the client just before execution. With the default “{}” the input
+This is expanded by the client just before execution. With the default \(dq{}\(dq the input
 command\-line will be run verbatim. Specifying a template pattern allows for simple input
 arguments (e.g., file paths) to be transformed into some common form; such as
 \fB\-t \(aq./some_command.py {} >outputs/{/\-}.out\(aq\fP\&.
@@ -191,7 +191,7 @@ bundles directly to the queue.
 Auto\-initialize database.
 .sp
 If a database is configured for use with the workflow (e.g., PostgreSQL), auto\-initialize
-tables if they don’t already exist. This is a short\-hand for pre\-creating tables with the
+tables if they don\(aqt already exist. This is a short\-hand for pre\-creating tables with the
 \fBhyper\-shell initdb\fP command. This happens by default with SQLite databases.
 .sp
 Mutually exclusive to \fB\-\-no\-db\fP\&. See \fBhyper\-shell initdb\fP command.
@@ -218,7 +218,7 @@ it can easily continue where it left off, halting if nothing to be done.
 .sp
 Conflicts with \fB\-\-no\-db\fP and mutually exclusive to \fB\-\-forever\fP\&.
 .TP
-.B \fB\-\-ssh\-args\fP \fIARGS\fP…
+.B \fB\-\-ssh\-args\fP \fIARGS\fP\&...
 Command\-line arguments for SSH. For example, \fB\-\-ssh\-args \(aq\-i ~/.ssh/my_key\(aq\fP\&.
 .TP
 .B \fB\-\-ssh\-group\fP \fINAME\fP
@@ -373,7 +373,7 @@ bundles directly to the queue.
 Auto\-initialize database.
 .sp
 If a database is configured for use with the workflow (e.g., PostgreSQL), auto\-initialize
-tables if they don’t already exist. This is a short\-hand for pre\-creating tables with the
+tables if they don\(aqt already exist. This is a short\-hand for pre\-creating tables with the
 \fBhyper\-shell initdb\fP command. This happens by default with SQLite databases.
 .sp
 Mutually exclusive to \fB\-\-no\-db\fP\&. See \fBhyper\-shell initdb\fP command.
@@ -438,9 +438,9 @@ these are directed to individual files for each task.
 Number of task executors (default: 1).
 .TP
 .B \fB\-t\fP, \fB\-\-template\fP \fICMD\fP
-Command\-line template pattern (default: “{}”).
+Command\-line template pattern (default: \(dq{}\(dq).
 .sp
-This is expanded by the client just before execution. With the default “{}” the input
+This is expanded by the client just before execution. With the default \(dq{}\(dq the input
 command\-line will be run verbatim. Specifying a template pattern allows for simple input
 arguments (e.g., file paths) to be transformed into some common form; such as
 \fB\-t \(aq./some_command.py {} >outputs/{/\-}.out\(aq\fP\&.
@@ -534,10 +534,10 @@ Path to input task file (default: <stdin>).
 .INDENT 0.0
 .TP
 .B \fB\-t\fP, \fB\-\-template\fP \fICMD\fP
-Command\-line template pattern (default: “{}”).
+Command\-line template pattern (default: \(dq{}\(dq).
 .sp
 This is expanded at submit\-time before sending to the database.
-With the default “{}” the input command\-line will be run verbatim.
+With the default \(dq{}\(dq the input command\-line will be run verbatim.
 Specifying a template pattern allows for simple input arguments (e.g., file paths)
 to be transformed into some common form; such as
 \fB\-t \(aq./some_command.py {} >outputs/{/\-}.out\(aq\fP\&.
@@ -565,19 +565,29 @@ See also \fB\-\-bundlesize\fP\&.
 Auto\-initialize database.
 .sp
 If a database is configured for use with the workflow (e.g., PostgreSQL), auto\-initialize
-tables if they don’t already exist. This is a short\-hand for pre\-creating tables with the
+tables if they don\(aqt already exist. This is a short\-hand for pre\-creating tables with the
 \fBhyper\-shell initdb\fP command. This happens by default with SQLite databases.
 .sp
 See \fBhyper\-shell initdb\fP command.
 .UNINDENT
 .SH INITDB USAGE
 .sp
-\fBhyper\-shell\fP \fBinitdb\fP \fB[\-h]\fP
+\fBhyper\-shell\fP \fBinitdb\fP \fB[\-h]\fP \fB[\-\-truncate [\-\-yes]]\fP
 .sp
-Initialize database schema.
+Initialize database.
 .sp
-This command uses your current configuration to create the necessary database
-tables. This occurs automatically for SQLite.
+Create the necessary database tables given your current configuration.
+This occurs automatically for SQLite.
+To clear out all metadata for an existing database use \fB\-\-truncate\fP\&.
+.SS Options
+.INDENT 0.0
+.TP
+.B \fB\-t\fP, \fB\-\-truncate\fP
+Truncate database (task metadata will be lost).
+.TP
+.B \fB\-y\fP, \fB\-\-yes\fP
+Auto\-confirm truncation (default will prompt).
+.UNINDENT
 .SH CONFIG GET USAGE
 .INDENT 0.0
 .TP
@@ -596,7 +606,7 @@ Colorization is disabled for non\-TTY invocations.
 .SS Arguments
 .INDENT 0.0
 .TP
-.B SECTION[…].VAR
+.B SECTION[...].VAR
 Path to variable.
 .UNINDENT
 .SS Options
@@ -626,7 +636,7 @@ Set configuration option.
 .SS Arguments
 .INDENT 0.0
 .TP
-.B SECTION[…].VAR
+.B SECTION[...].VAR
 Path to variable.
 .TP
 .B VALUE
@@ -671,7 +681,7 @@ Show origin of configuration option.
 .SS Arguments
 .INDENT 0.0
 .TP
-.B SECTION[…].VAR
+.B SECTION[...].VAR
 Path to variable.
 .UNINDENT
 .SH TASK SUBMIT USAGE
@@ -687,7 +697,7 @@ See \fBtask info\fP command.
 .SS Arguments
 .INDENT 0.0
 .TP
-.B ARGS…
+.B ARGS...
 Command\-line arguments.
 .sp
 The full command\-line for some shell task.
@@ -779,7 +789,7 @@ See \fBtask info\fP and \fBtask wait\fP commands.
 .SS Arguments
 .INDENT 0.0
 .TP
-.B ARGS…
+.B ARGS...
 Command\-line arguments.
 .sp
 The full command\-line for some shell task.
@@ -817,7 +827,7 @@ Default is to include all fields.
 .SS Options
 .INDENT 0.0
 .TP
-.B \fB\-w\fP, \fB\-\-where\fP \fICOND…\fP
+.B \fB\-w\fP, \fB\-\-where\fP \fICOND...\fP
 List of conditional statements to filter results (e.g., \fB\-w \(aqexit_status != 0\(aq\fP).
 .TP
 .B \fB\-s\fP, \fB\-\-order\-by\fP \fIFIELD\fP
@@ -1087,7 +1097,7 @@ One of \fBDEVEL\fP, \fBTRACE\fP, \fBDEBUG\fP, \fBINFO\fP, \fBWARNING\fP,
 \fBERROR\fP, or \fBCRITICAL\fP (default: \fIWARNING\fP)
 .TP
 .B \fB\&.datefmt\fP
-Date/time format, standard codes apply (default: \fI‘%Y\-%m\-%d %H:%M:%S’\fP)
+Date/time format, standard codes apply (default: \fI\(aq%Y\-%m\-%d %H:%M:%S\(aq\fP)
 .TP
 .B \fB\&.format\fP
 Log message format. Default set by the \fIdefault\fP \fBlogging.style\fP\&.
@@ -1105,8 +1115,8 @@ See also \fI\%database\fP section.
 .INDENT 7.0
 .TP
 .B \fB\&.provider\fP
-Database provider (default: ‘sqlite’). Supported alternatives include
-‘postgres’ (or compatible). Support for other providers may be considered in
+Database provider (default: \(aqsqlite\(aq). Supported alternatives include
+\(aqpostgres\(aq (or compatible). Support for other providers may be considered in
 the future.
 .TP
 .B \fB\&.file\fP
