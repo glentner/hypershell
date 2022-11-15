@@ -25,6 +25,7 @@ from cmdkit.cli import Interface, ArgumentError
 from cmdkit.config import ConfigurationError, Namespace
 
 # internal libs
+from hypershell.core.ansi import colorize_usage
 from hypershell.core.config import config, load_task_env, blame
 from hypershell.core.queue import QueueConfig
 from hypershell.core.thread import Thread
@@ -299,45 +300,47 @@ def run_ssh(**options) -> None:
 
 APP_NAME = 'hyper-shell cluster'
 APP_USAGE = f"""\
-usage: hyper-shell cluster [-h] [FILE | --restart | --forever] [-N NUM] [-t CMD] [-b SIZE] [-w SEC]
-                           [-r NUM [--eager]] [-f PATH] [--capture | [-o PATH] [-e PATH]] [--delay-start SEC] 
-                           [--ssh [HOST... | --ssh-group NAME] [--env] | --mpi | --launcher=ARGS...]
-                           [--no-db | --initdb]\
+Usage:
+hyper-shell cluster [-h] [FILE | --restart | --forever] [-N NUM] [-t CMD] [-b SIZE] [-w SEC]
+                    [-r NUM [--eager]] [-f PATH] [--capture | [-o PATH] [-e PATH]] [--delay-start SEC] 
+                    [--ssh [HOST... | --ssh-group NAME] [--env] | --mpi | --launcher=ARGS...]
+                    [--no-db | --initdb]
+
+Start cluster locally, over SSH, or with a custom launcher.\
 """
+
 APP_HELP = f"""\
 {APP_USAGE}
 
-Start cluster locally, over SSH, or with a custom launcher.
+Arguments:
+  FILE                        Path to input task file (default: <stdin>).
 
-arguments:
-FILE                        Path to input task file (default: <stdin>).
+Modes:
+  --ssh              HOST...  Launch directly with SSH host(s).
+  --mpi                       Same as --launcher=mpirun.
+  --launcher         ARGS...  Use specific launch interface.
 
-modes:
---ssh              HOST...  Launch directly with SSH host(s).
---mpi                       Same as '--launcher=mpirun'
---launcher         ARGS...  Use specific launch interface.
-
-options:
--N, --num-tasks    NUM      Number of task executors per client (default: {DEFAULT_NUM_TASKS}).
--t, --template     CMD      Command-line template pattern (default: "{DEFAULT_TEMPLATE}").
--p, --port         NUM      Port number (default: {QueueConfig.port}).
--b, --bundlesize   SIZE     Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
--w, --bundlewait   SEC      Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
--r, --max-retries  NUM      Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
-    --eager                 Schedule failed tasks before new tasks.
-    --no-db                 Disable database (submit directly to clients).
-    --initdb                Auto-initialize database.
-    --forever               Schedule forever.
-    --restart               Start scheduling from last completed task.
-    --ssh-args     ARGS     Command-line arguments for SSH.
-    --ssh-group    NAME     SSH nodelist group in config.
--E, --env                   Send environment variables.
--d, --delay-start  SEC      Delay time for launching clients (default: {DEFAULT_DELAY}).
--c, --capture               Capture individual task <stdout> and <stderr>.         
--o, --output       PATH     File path for task outputs (default: <stdout>).
--e, --errors       PATH     File path for task errors (default: <stderr>).
--f, --failures     PATH     File path to write failed task args (default: <none>).
--h, --help                  Show this message and exit.\
+Options:
+  -N, --num-tasks    NUM      Number of task executors per client (default: {DEFAULT_NUM_TASKS}).
+  -t, --template     CMD      Command-line template pattern (default: "{DEFAULT_TEMPLATE}").
+  -p, --port         NUM      Port number (default: {QueueConfig.port}).
+  -b, --bundlesize   SIZE     Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
+  -w, --bundlewait   SEC      Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
+  -r, --max-retries  NUM      Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
+      --eager                 Schedule failed tasks before new tasks.
+      --no-db                 Disable database (submit directly to clients).
+      --initdb                Auto-initialize database.
+      --forever               Schedule forever.
+      --restart               Start scheduling from last completed task.
+      --ssh-args     ARGS     Command-line arguments for SSH.
+      --ssh-group    NAME     SSH nodelist group in config.
+  -E, --env                   Send environment variables.
+  -d, --delay-start  SEC      Delay time for launching clients (default: {DEFAULT_DELAY}).
+  -c, --capture               Capture individual task <stdout> and <stderr>.         
+  -o, --output       PATH     File path for task outputs (default: <stdout>).
+  -e, --errors       PATH     File path for task errors (default: <stderr>).
+  -f, --failures     PATH     File path to write failed task args (default: <none>).
+  -h, --help                  Show this message and exit.\
 """
 
 
@@ -345,7 +348,9 @@ class ClusterApp(Application):
     """Run managed cluster."""
 
     name = APP_NAME
-    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
+    interface = Interface(APP_NAME,
+                          colorize_usage(APP_USAGE),
+                          colorize_usage(APP_HELP))
 
     filepath: str
     source: Optional[IO] = None

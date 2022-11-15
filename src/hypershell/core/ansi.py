@@ -5,9 +5,11 @@
 
 # type annotations
 from __future__ import annotations
+from typing import Callable
 
 # standard libs
 import os
+import re
 import sys
 import functools
 from enum import Enum
@@ -15,7 +17,8 @@ from enum import Enum
 # public interface
 __all__ = ['NO_TTY', 'Ansi', 'format_ansi',
            'bold', 'faint', 'italic', 'underline',
-           'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
+           'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
+           'colorize_usage', ]
 
 
 # Automatically disable colors if necessary
@@ -67,3 +70,79 @@ blue = functools.partial(format_ansi, Ansi.BLUE)
 magenta = functools.partial(format_ansi, Ansi.MAGENTA)
 cyan = functools.partial(format_ansi, Ansi.CYAN)
 white = functools.partial(format_ansi, Ansi.WHITE)
+
+
+def colorize_usage(text: str) -> str:
+    """Apply rich ANSI formatting to usage and help text if TTY-mode."""
+    if not sys.stdout.isatty():  # NOTE: usage is on stdout not stderr
+        return text
+    else:
+        return _apply_formatters(text,
+                                 _format_headers,
+                                 _format_options,
+                                 _format_special_args,
+                                 _format_special_marker,
+                                 _format_single_quoted_string,
+                                 _format_double_quoted_string,
+                                 _format_backtick_string,
+                                 _format_digit,
+                                 _format_external_commands,
+                                 )
+
+
+def _apply_formatters(text: str, *formatters: Callable[[str], str]) -> str:
+    """Apply all usage text formatters."""
+    if formatters:
+        return formatters[0](_apply_formatters(text, *formatters[1:]))
+    else:
+        return text
+
+
+def _format_headers(text: str) -> str:
+    """Add rich ANSI formatting to section headers."""
+    names = ['Usage', 'Commands', 'Arguments', 'Modes', 'Options', 'Files']
+    return re.sub(r'(?P<name>' + '|'.join(names) + r'):', bold(r'\g<name>:'), text)
+
+
+def _format_options(text: str) -> str:
+    """Add rich ANSI formatting to option syntax."""
+    return re.sub(r'(?P<leader>[ /\[,])(?P<option>-[a-zA-Z]|--[a-z]+(-[a-z]+)?)\b',
+                  r'\g<leader>' + cyan(r'\g<option>'), text)
+
+
+def _format_special_args(text: str) -> str:
+    """Add rich ANSI formatting to special argument syntax."""
+    args = ['FILE', 'PATH', 'ARGS', 'ID', 'NUM', 'CMD', 'SIZE', 'SEC', 'NAME', 'TEMPLATE',
+            'ADDR', 'HOST', 'PORT', 'KEY', 'SECTION', 'VAR', 'VALUE', 'FIELD', 'COND', ]
+    return re.sub(r'\b(?P<arg>' + '|'.join(args) + r')\b', italic(r'\g<arg>'), text)
+
+
+def _format_special_marker(text: str) -> str:
+    """Add rich ANSI formatting to special markers (e.g., '<stdout>')."""
+    args = ['<stdout>', '<stderr>', '<stdin>', '<devnull>', '<none>', '<command>', '<args>', ]
+    return re.sub(r'(?P<arg>' + '|'.join(args) + r')', italic(r'\g<arg>'), text)
+
+
+def _format_single_quoted_string(text: str) -> str:
+    """Add rich ANSI formatting to quoted strings."""
+    return re.sub(r"'(?P<subtext>.*)'", yellow(r"'\g<subtext>'"), text)
+
+
+def _format_double_quoted_string(text: str) -> str:
+    """Add rich ANSI formatting to quoted strings."""
+    return re.sub(r'"(?P<subtext>.*)"', yellow(r'"\g<subtext>"'), text)
+
+
+def _format_backtick_string(text: str) -> str:
+    """Add rich ANSI formatting to quoted strings."""
+    return re.sub(r'`(?P<subtext>.*)`', yellow(r'`\g<subtext>`'), text)
+
+def _format_digit(text: str) -> str:
+    """Add rich ANSI formatting to numerical digits."""
+    return re.sub(r'\b(?P<num>\d+)\b', green(r'\g<num>'), text)
+
+
+def _format_external_commands(text: str) -> str:
+    """Add rich ANSI formatting to external command mentions."""
+    names = ['mpirun', 'mpiexec', 'srun', 'brun', 'jsrun', ]
+    return re.sub(r'\b(?P<name>' + '|'.join(names) + r')\b', italic(r'\g<name>'), text)

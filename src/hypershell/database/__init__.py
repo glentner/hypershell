@@ -13,6 +13,7 @@ from cmdkit.cli import Interface
 from sqlalchemy import inspect
 
 # internal libs
+from hypershell.core.ansi import colorize_usage
 from hypershell.core.logging import Logger
 from hypershell.core.exceptions import write_traceback
 from hypershell.database.core import engine, in_memory
@@ -42,22 +43,26 @@ class DatabaseUninitialized(Exception):
 
 INITDB_PROGRAM = 'hyper-shell initdb'
 INITDB_USAGE = f"""\
-usage: {INITDB_PROGRAM} [-h]
+Usage:
+{INITDB_PROGRAM} [-h]
+
 Initialize database (not needed for SQLite).\
 """
 
 INITDB_HELP = f"""\
 {INITDB_USAGE}
 
-options:
--h, --help           Show this message and exit.\
+Options:
+  -h, --help           Show this message and exit.\
 """
 
 
 class InitDBApp(Application):
     """Initialize database (not needed for SQLite)."""
 
-    interface = Interface(INITDB_PROGRAM, INITDB_USAGE, INITDB_HELP)
+    interface = Interface(INITDB_PROGRAM,
+                          colorize_usage(INITDB_USAGE),
+                          colorize_usage(INITDB_HELP))
     ALLOW_NOARGS = True
 
     def run(self) -> None:

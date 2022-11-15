@@ -53,6 +53,7 @@ from cmdkit.config import Namespace
 
 # internal libs
 from hypershell.database.model import Task
+from hypershell.core.ansi import colorize_usage
 from hypershell.core.heartbeat import Heartbeat, ClientState
 from hypershell.core.platform import default_path
 from hypershell.core.config import default, config, load_task_env
@@ -708,28 +709,34 @@ def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
 
 APP_NAME = 'hyper-shell client'
 APP_USAGE = f"""\
-usage: hyper-shell client [-h] [-N NUM] [-t TEMPLATE] [-b SIZE] [-w SEC] [-d SEC]
-                          [-H ADDR] [-p PORT] [-k KEY] [-c | [-o PATH] [-e PATH]]\
+Usage:
+hyper-shell client [-h] [-N NUM] [-t TEMPLATE] [-b SIZE] [-w SEC] [-d SEC]
+                   [-H ADDR] [-p PORT] [-k KEY] [-c | [-o PATH] [-e PATH]]
+
+Launch client directly, run tasks in parallel.\
 """
 
 APP_HELP = f"""\
 {APP_USAGE}
 
-Launch client directly, run tasks in parallel.
+Tasks are pulled off of the shared queue in bundles from the server and run
+locally within the same shell as the client. By default the bundle size is one, 
+meaning that at small scales there is greater responsiveness. It is recommended
+to coordinate these parameters to be the same as the server.
 
-options:
--N, --num-tasks   NUM   Number of tasks to run in parallel (default: {DEFAULT_NUM_TASKS}).
--t, --template    CMD   Command-line template pattern (default: "{DEFAULT_TEMPLATE}").
--b, --bundlesize  SIZE  Bundle size for finished tasks (default: {DEFAULT_BUNDLESIZE}).
--w, --bundlewait  SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
--H, --host        ADDR  Hostname for server.
--p, --port        NUM   Port number for server.
--k, --auth        KEY   Cryptographic key to connect to server.
--d, --delay-start SEC   Seconds to wait before start-up (default: {DEFAULT_DELAY}).   
--o, --output      PATH  Redirect task output (default: <stdout>).
--e, --errors      PATH  Redirect task errors (default: <stderr>).
--c, --capture           Capture individual task <stdout> and <stderr>.
--h, --help              Show this message and exit.\
+Options:
+  -N, --num-tasks    NUM   Number of tasks to run in parallel (default: {DEFAULT_NUM_TASKS}).
+  -t, --template     CMD   Command-line template pattern (default: "{DEFAULT_TEMPLATE}").
+  -b, --bundlesize   SIZE  Bundle size for finished tasks (default: {DEFAULT_BUNDLESIZE}).
+  -w, --bundlewait   SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
+  -H, --host         ADDR  Hostname for server.
+  -p, --port         NUM   Port number for server.
+  -k, --auth         KEY   Cryptographic key to connect to server.
+  -d, --delay-start  SEC   Seconds to wait before start-up (default: {DEFAULT_DELAY}).   
+  -o, --output       PATH  Redirect task output (default: <stdout>).
+  -e, --errors       PATH  Redirect task errors (default: <stderr>).
+  -c, --capture            Capture individual task <stdout> and <stderr>.
+  -h, --help               Show this message and exit.\
 """
 
 
@@ -737,7 +744,9 @@ class ClientApp(Application):
     """Run individual client directly."""
 
     name = APP_NAME
-    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
+    interface = Interface(APP_NAME,
+                          colorize_usage(APP_USAGE),
+                          colorize_usage(APP_HELP))
 
     num_tasks: int = DEFAULT_NUM_TASKS
     interface.add_argument('-N', '--num-tasks', type=int, default=num_tasks)
