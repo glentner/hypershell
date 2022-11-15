@@ -97,6 +97,7 @@ citing us (see --citation).\
 
 # Globally defined exception cases for all applications
 Application.exceptions = {
+    RuntimeError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
     ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
     DatabaseUninitialized: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
     Exception: functools.partial(write_traceback, logger=log, status=exit_status.runtime_error),
