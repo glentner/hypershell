@@ -6,7 +6,6 @@
 
 # standard libs
 import sys
-import logging
 import functools
 
 # external libs
@@ -15,8 +14,9 @@ from cmdkit.cli import Interface
 from cmdkit.config import ConfigurationError
 
 # internal libs
+from hypershell.core.ansi import colorize_usage
 from hypershell.core.exceptions import write_traceback, handle_exception
-from hypershell.core.logging import initialize_logging
+from hypershell.core.logging import Logger, initialize_logging
 from hypershell.submit import SubmitApp
 from hypershell.server import ServerApp
 from hypershell.client import ClientApp
@@ -29,7 +29,7 @@ from hypershell.database import InitDBApp, DatabaseUninitialized
 __all__ = ['HyperShellApp', 'main', '__version__', '__license__']
 
 # project metadata
-__version__     = '2.0.2'
+__version__     = '2.1.0'
 __authors__     = 'Geoffrey Lentner'
 __contact__     = 'glentner@purdue.edu'
 __license__     = 'Apache Software License'
@@ -53,8 +53,8 @@ __citation__    = """\
 }\
 """
 
-# initialize application logger
-log = logging.getLogger('hypershell')
+# initialize logger
+log = Logger.with_name('hypershell')
 
 
 # inject logger setup into command-line framework
@@ -64,40 +64,40 @@ Application.log_exception = log.exception
 
 APP_NAME = 'hyper-shell'
 APP_USAGE = f"""\
-usage: {APP_NAME} [-h] [-v] <command> [<args>...]
+Usage: 
+{APP_NAME} [-h] [-v] <command> [<args>...]
+
 {__description__}\
 """
 
 APP_HELP = f"""\
 {APP_USAGE}
 
-commands:
-config                 {ConfigApp.__doc__}
-submit                 {SubmitApp.__doc__}
-server                 {ServerApp.__doc__}
-client                 {ClientApp.__doc__}
-cluster                {ClusterApp.__doc__} (recommended)
-task                   {TaskGroupApp.__doc__}
-initdb                 {InitDBApp.__doc__}
+Commands:
+  config                 {ConfigApp.__doc__}
+  submit                 {SubmitApp.__doc__}
+  server                 {ServerApp.__doc__}
+  client                 {ClientApp.__doc__}
+  cluster                {ClusterApp.__doc__} (recommended)
+  task                   {TaskGroupApp.__doc__}
+  initdb                 {InitDBApp.__doc__}
 
-options:
--h, --help             Show this message and exit.
--v, --version          Show the version and exit.
-    --citation         Show citation info and exit.
+Options:
+  -h, --help             Show this message and exit.
+  -v, --version          Show the version and exit.
+      --citation         Show citation info and exit.
 
 Issue tracking at:
 {__website__}
 
-Copyright {__copyright__}
-{__authors__} <{__contact__}>.
-
 If this software has helped in your research please consider
-citing us (see `hyper-shell --citation`).\
+citing us (see --citation).\
 """
 
 
 # Globally defined exception cases for all applications
 Application.exceptions = {
+    RuntimeError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
     ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
     DatabaseUninitialized: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
     Exception: functools.partial(write_traceback, logger=log, status=exit_status.runtime_error),
@@ -107,7 +107,10 @@ Application.exceptions = {
 class HyperShellApp(ApplicationGroup):
     """Top-level application class for console application."""
 
-    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
+    interface = Interface(APP_NAME,
+                          colorize_usage(APP_USAGE),
+                          colorize_usage(APP_HELP))
+
     interface.add_argument('-v', '--version', action='version', version=__version__)
     interface.add_argument('--citation', action='version', version=__citation__)
     interface.add_argument('command')

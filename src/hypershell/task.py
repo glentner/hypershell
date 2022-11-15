@@ -15,7 +15,6 @@ import sys
 import csv
 import json
 import time
-import logging
 import functools
 from dataclasses import dataclass
 from shutil import copyfileobj
@@ -34,6 +33,7 @@ from sqlalchemy.orm import Query
 from sqlalchemy.sql.elements import BinaryExpression
 
 # internal libs
+from hypershell.core.ansi import colorize_usage
 from hypershell.core.platform import default_path
 from hypershell.core.config import config
 from hypershell.core.exceptions import handle_exception
@@ -46,29 +46,35 @@ from hypershell.database import initdb, checkdb, DatabaseUninitialized
 # public interface
 __all__ = ['TaskGroupApp', ]
 
+# initialize logger
+log = Logger.with_name(__name__)
 
-log: Logger = logging.getLogger(__name__)
 
+SUBMIT_PROGRAM = 'hyper-shell task submit'
+SUBMIT_USAGE = f"""\
+Usage:
+{SUBMIT_PROGRAM} [-h] ARGS...
 
-TASK_SUBMIT_USAGE = f"""\
-usage: hyper-shell task submit [-h] ARGS...
-Submit task to database.\
+Submit individual task to database.\
 """
-TASK_SUBMIT_HELP = f"""\
-{TASK_SUBMIT_USAGE}
 
-arguments:
-ARGS                   Command-line arguments.
+SUBMIT_HELP = f"""\
+{SUBMIT_USAGE}
 
-options:
--h, --help             Show this message and exit.\
+Arguments:
+  ARGS...                Command-line arguments.
+
+Options:
+  -h, --help             Show this message and exit.\
 """
 
 
 class TaskSubmitApp(Application):
     """Submit task to database."""
 
-    interface = Interface('hyper-shell task submit', TASK_SUBMIT_USAGE, TASK_SUBMIT_HELP)
+    interface = Interface(SUBMIT_PROGRAM,
+                          colorize_usage(SUBMIT_USAGE),
+                          colorize_usage(SUBMIT_HELP))
 
     argv: List[str] = []
     interface.add_argument('argv', nargs='+')
@@ -92,30 +98,35 @@ def check_uuid(value: str) -> None:
         raise ArgumentError(f'Bad UUID: \'{value}\'')
 
 
-TASK_INFO_NAME = 'hyper-shell task info'
-TASK_INFO_USAGE = f"""\
-usage: {TASK_INFO_NAME} [-h] ID [--json | --stdout | --stderr | -x FIELD]
+INFO_PROGRAM = 'hyper-shell task info'
+INFO_USAGE = f"""\
+Usage: 
+{INFO_PROGRAM} [-h] ID [--json | --stdout | --stderr | -x FIELD]
+
 Get metadata and/or task outputs.\
 """
-TASK_INFO_HELP = f"""\
-{TASK_INFO_USAGE}
 
-arguments:
-ID                   Unique task UUID.
+INFO_HELP = f"""\
+{INFO_USAGE}
 
-options:
-    --json           Format as JSON.
--x, --extract FIELD  Print this field only.
-    --stdout         Fetch <stdout> from task.
-    --stderr         Fetch <stderr> from task.
--h, --help           Show this message and exit.\
+Arguments:
+  ID                    Unique task UUID.
+
+Options:
+      --json            Format as JSON.
+  -x, --extract  FIELD  Print this field only.
+      --stdout          Fetch <stdout> from task.
+      --stderr          Fetch <stderr> from task.
+  -h, --help            Show this message and exit.\
 """
 
 
 class TaskInfoApp(Application):
     """Get metadata/status/outputs of task."""
 
-    interface = Interface(TASK_INFO_NAME, TASK_INFO_USAGE, TASK_INFO_HELP)
+    interface = Interface(INFO_PROGRAM,
+                          colorize_usage(INFO_USAGE),
+                          colorize_usage(INFO_HELP))
 
     uuid: str
     interface.add_argument('uuid')
@@ -217,30 +228,35 @@ class TaskInfoApp(Application):
 DEFAULT_INTERVAL = 5
 
 
-TASK_WAIT_NAME = 'hyper-shell task wait'
-TASK_WAIT_USAGE = f"""\
-usage: {TASK_WAIT_NAME} [-h] ID [-n SEC] [--info [--json] | --status]
+WAIT_PROGRAM = 'hyper-shell task wait'
+WAIT_USAGE = f"""\
+Usage: 
+{WAIT_PROGRAM} [-h] ID [-n SEC] [--info [--json] | --status]
+
 Wait for task to complete.\
 """
-TASK_WAIT_HELP = f"""\
-{TASK_WAIT_USAGE}
 
-arguments:
-ID                    Unique UUID.
+WAIT_HELP = f"""\
+{WAIT_USAGE}
 
-options:
--n, --interval  SEC   Time to wait between polling (default: {DEFAULT_INTERVAL}).
-    --info            Print info on task.
-    --json            Format info as JSON.
-    --status          Print exit status for task.
--h, --help            Show this message and exit.\
+Arguments:
+  ID                    Unique UUID.
+
+Options:
+  -n, --interval  SEC   Time to wait between polling (default: {DEFAULT_INTERVAL}).
+      --info            Print info on task.
+      --json            Format info as JSON.
+      --status          Print exit status for task.
+  -h, --help            Show this message and exit.\
 """
 
 
 class TaskWaitApp(Application):
     """Wait for task to complete."""
 
-    interface = Interface(TASK_WAIT_NAME, TASK_WAIT_USAGE, TASK_WAIT_HELP)
+    interface = Interface(WAIT_PROGRAM,
+                          colorize_usage(WAIT_USAGE),
+                          colorize_usage(WAIT_HELP))
 
     uuid: str
     interface.add_argument('uuid')
@@ -286,27 +302,32 @@ class TaskWaitApp(Application):
             break
 
 
-TASK_RUN_NAME = 'hyper-shell task run'
-TASK_RUN_USAGE = f"""\
-usage: {TASK_RUN_NAME} [-h] [-n SEC] ARGS... 
-Submit task and wait for completion.\
+RUN_PROGRAM = 'hyper-shell task run'
+RUN_USAGE = f"""\
+Usage: 
+{RUN_PROGRAM} [-h] [-n SEC] ARGS... 
+
+Submit individual task and wait for completion.\
 """
-TASK_RUN_HELP = f"""\
-{TASK_RUN_USAGE}
 
-arguments:
-ARGS                  Command-line arguments.
+RUN_HELP = f"""\
+{RUN_USAGE}
 
-options:
--n, --interval  SEC   Time to wait between polling (default: {DEFAULT_INTERVAL}).
--h, --help            Show this message and exit.\
+Arguments:
+  ARGS                  Command-line arguments.
+
+Options:
+  -n, --interval  SEC   Time to wait between polling (default: {DEFAULT_INTERVAL}).
+  -h, --help            Show this message and exit.\
 """
 
 
 class TaskRunApp(Application):
     """Submit task and wait for completion."""
 
-    interface = Interface(TASK_RUN_NAME, TASK_RUN_USAGE, TASK_RUN_HELP)
+    interface = Interface(RUN_PROGRAM,
+                          colorize_usage(RUN_USAGE),
+                          colorize_usage(RUN_HELP))
 
     argv: List[str] = []
     interface.add_argument('argv', nargs='+')
@@ -323,36 +344,40 @@ class TaskRunApp(Application):
         TaskInfoApp(uuid=task.id, print_stderr=True).run()
 
 
-TASK_SEARCH_NAME = 'hyper-shell task search'
-TASK_SEARCH_USAGE = f"""\
-usage: hyper-shell task search [-h] [FIELD [FIELD ...]] [--where COND [COND ...]] 
-                               [--order-by FIELD [--desc]] [-x | --json | --csv] 
-                               [--count | --limit NUM]\
+SEARCH_PROGRAM = 'hyper-shell task search'
+SEARCH_USAGE = f"""\
+Usage:
+hyper-shell task search [-h] [FIELD [FIELD ...]] [--where COND [COND ...]] 
+                        [--order-by FIELD [--desc]] [-x | --json | --csv] 
+                        [--count | --limit NUM]
+
+Search for tasks in the database.\
 """
-TASK_SEARCH_HELP = f"""\
-{TASK_SEARCH_USAGE}
 
-Search for tasks in database.
+SEARCH_HELP = f"""\
+{SEARCH_USAGE}
 
-arguments:
-FIELD                     Select specific named fields.
+Arguments:
+  FIELD                     Select specific named fields.
 
-options:
--w, --where     COND...   List of conditional statements.
--s, --order-by  FIELD     Order output by field.
--x, --extract             Disable formatting for single column output.
-    --json                Format output as JSON.
-    --csv                 Format output as CSV.
--l, --limit     NUM       Limit the number of rows.
--c, --count               Show count of results.
--h, --help                Show this message and exit.\
+Options:
+  -w, --where     COND...   List of conditional statements.
+  -s, --order-by  FIELD     Order output by field.
+  -x, --extract             Disable formatting for single column output.
+      --json                Format output as JSON.
+      --csv                 Format output as CSV.
+  -l, --limit     NUM       Limit the number of rows.
+  -c, --count               Show count of results.
+  -h, --help                Show this message and exit.\
 """
 
 
 class TaskSearchApp(Application):
     """Search for task(s) in database."""
 
-    interface = Interface(TASK_SEARCH_NAME, TASK_SEARCH_USAGE, TASK_SEARCH_HELP)
+    interface = Interface(SEARCH_PROGRAM,
+                          colorize_usage(SEARCH_USAGE),
+                          colorize_usage(SEARCH_HELP))
 
     field_names: List[str] = list(Task.columns)
     interface.add_argument('field_names', nargs='*', default=field_names)
@@ -462,31 +487,36 @@ class TaskSearchApp(Application):
                 raise ArgumentError(f'Invalid field name \'{name}\'')
 
 
-TASK_GROUP_NAME = 'hyper-shell task'
-TASK_GROUP_USAGE = f"""\
-usage: {TASK_GROUP_NAME} [-h] <command> [<args>...]
+TASK_PROGRAM = 'hyper-shell task'
+TASK_USAGE = f"""\
+Usage: 
+{TASK_PROGRAM} [-h] <command> [<args>...]
+
 Search, submit, track, and manage individual tasks.\
 """
 
-TASK_GROUP_HELP = f"""\
-{TASK_GROUP_USAGE}
+TASK_HELP = f"""\
+{TASK_USAGE}
 
-commands:
-submit                 {TaskSubmitApp.__doc__}
-info                   {TaskInfoApp.__doc__}
-wait                   {TaskWaitApp.__doc__}
-run                    {TaskRunApp.__doc__}
-search                 {TaskSearchApp.__doc__}
+Commands:
+  submit                 {TaskSubmitApp.__doc__}
+  info                   {TaskInfoApp.__doc__}
+  wait                   {TaskWaitApp.__doc__}
+  run                    {TaskRunApp.__doc__}
+  search                 {TaskSearchApp.__doc__}
 
-options:
--h, --help             Show this message and exit.\
+Options:
+  -h, --help             Show this message and exit.\
 """
 
 
 class TaskGroupApp(ApplicationGroup):
     """Search, submit, track, and manage individual tasks."""
 
-    interface = Interface(TASK_GROUP_NAME, TASK_GROUP_USAGE, TASK_GROUP_HELP)
+    interface = Interface(TASK_PROGRAM,
+                          colorize_usage(TASK_USAGE),
+                          colorize_usage(TASK_HELP))
+
     interface.add_argument('command')
 
     command = None

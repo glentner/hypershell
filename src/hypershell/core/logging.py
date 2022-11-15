@@ -5,7 +5,8 @@
 
 
 # type annotations
-from typing import Dict, Any
+from __future__ import annotations
+from typing import Dict, Any, Type
 
 # standard libraries
 import sys
@@ -68,6 +69,11 @@ class Logger(logging.Logger):
         """Log 'msg % args' with severity 'DEVEL'."""
         if self.isEnabledFor(DEVEL):
             self._log(DEVEL, msg, args, **kwargs)
+
+    @classmethod
+    def with_name(cls: Type[Logger], name: str) -> Logger:
+        """Shorthand for `log: Logger = logging.getLogger(name)`."""
+        return logging.getLogger(name)
 
 
 # inject class back into logging library

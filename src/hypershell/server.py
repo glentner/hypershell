@@ -47,7 +47,6 @@ from typing import List, Dict, Tuple, Iterable, IO, Optional, Callable
 # standard libs
 import sys
 import time
-import logging
 from enum import Enum
 from datetime import datetime, timedelta
 from functools import cached_property
@@ -58,6 +57,7 @@ from cmdkit.app import Application
 from cmdkit.cli import Interface, ArgumentError
 
 # internal libs
+from hypershell.core.ansi import colorize_usage
 from hypershell.core.config import config, default
 from hypershell.core.logging import Logger
 from hypershell.core.fsm import State, StateMachine
@@ -72,8 +72,8 @@ from hypershell.submit import SubmitThread, LiveSubmitThread, DEFAULT_BUNDLEWAIT
 __all__ = ['serve_from', 'serve_file', 'serve_forever', 'ServerThread', 'ServerApp',
            'DEFAULT_BUNDLESIZE', 'DEFAULT_ATTEMPTS', ]
 
-
-log: Logger = logging.getLogger(__name__)
+# initialize logger
+log = Logger.with_name(__name__)
 
 
 class SchedulerState(State, Enum):
@@ -612,45 +612,46 @@ def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, redi
 
 APP_NAME = 'hyper-shell server'
 APP_USAGE = f"""\
-usage: hyper-shell server [-h] [FILE | --forever | --restart] [-b NUM] [-w SEC] [-r NUM [--eager]]
-                          [-H ADDR] [-p PORT] [-k KEY] [--no-db | --initdb] [--print | -f PATH]\
+Usage:
+hyper-shell server [-h] [FILE | --forever | --restart] [-b NUM] [-w SEC] [-r NUM [--eager]]
+                   [-H ADDR] [-p PORT] [-k KEY] [--no-db | --initdb] [--print | -f PATH]
+
+Launch server, schedule directly or asynchronously from database.\
 """
 
 APP_HELP = f"""\
 {APP_USAGE}
 
-Launch server, schedule directly or asynchronously from database.
-
 The server includes a scheduler component that pulls tasks from the database and offers
 them up on a distributed queue to clients. It also has a receiver that collects the results
 of finished tasks. Optionally, the server can submit tasks (FILE). When submitting tasks,
-the -w/--bundlewait and -b/--bundlesize options are the same as for 'hypershell submit'.
+the -w/--bundlewait and -b/--bundlesize options are the same as for 'hyper-shell submit'.
 
 With --max-retries greater than zero and with the database configured, the scheduler will 
 check for a non-zero exit status for tasks and re-submit them if their previous number of 
 attempts is less.
 
-Tasks are bundled and clients pull them in these bundles. However, by default the bundle size 
-is one, meaning that at small scales there is greater responsiveness.
+Tasks are bundled and clients pull them in these bundles. However, by default the bundle
+size is one, meaning that at small scales there is greater responsiveness.
 
-arguments:
-FILE                        Path to input task file (default: <stdin>).
+Arguments:
+  FILE                        Path to input task file (default: <stdin>).
 
-options:
--H, --bind            ADDR  Bind address (default: {QueueConfig.host}).
--p, --port            NUM   Port number (default: {QueueConfig.port}).
--k, --auth            KEY   Cryptographic key to secure server.
-    --forever               Schedule forever.
-    --restart               Start scheduling from last completed task.
--b, --bundlesize      NUM   Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
--w, --bundlewait      SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
--r, --max-retries     NUM   Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
-    --eager                 Schedule failed tasks before new tasks.
-    --no-db                 Disable database (submit directly to clients).
-    --initdb                Auto-initialize database.
-    --print                 Print failed task args to <stdout>.
--f, --failures        PATH  File path to redirect failed task args.
--h, --help                  Show this message and exit.\
+Options:
+  -H, --bind            ADDR  Bind address (default: {QueueConfig.host}).
+  -p, --port            NUM   Port number (default: {QueueConfig.port}).
+  -k, --auth            KEY   Cryptographic key to secure server.
+      --forever               Schedule forever.
+      --restart               Start scheduling from last completed task.
+  -b, --bundlesize      NUM   Size of task bundle (default: {DEFAULT_BUNDLESIZE}).
+  -w, --bundlewait      SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
+  -r, --max-retries     NUM   Auto-retry failed tasks (default: {DEFAULT_ATTEMPTS - 1}).
+      --eager                 Schedule failed tasks before new tasks.
+      --no-db                 Disable database (submit directly to clients).
+      --initdb                Auto-initialize database.
+      --print                 Print failed task args to <stdout>.
+  -f, --failures        PATH  File path to redirect failed task args.
+  -h, --help                  Show this message and exit.\
 """
 
 
@@ -658,7 +659,9 @@ class ServerApp(Application):
     """Run server in stand-alone mode."""
 
     name = APP_NAME
-    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
+    interface = Interface(APP_NAME,
+                          colorize_usage(APP_USAGE),
+                          colorize_usage(APP_HELP))
 
     filepath: str
     interface.add_argument('filepath', nargs='?', default=None)

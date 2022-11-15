@@ -21,7 +21,7 @@ from hypershell.core.logging import Logger
 __all__ = ['State', 'StateMachine', ]
 
 
-log: Logger = logging.getLogger(__name__)
+log = Logger.with_name(__name__)
 
 
 class State(Enum):

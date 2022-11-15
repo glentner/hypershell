@@ -10,7 +10,6 @@ from typing import List, Dict, Any, Type, TypeVar, Union
 
 # standard libs
 import json
-import logging
 from uuid import uuid4 as gen_uuid
 from datetime import datetime
 
@@ -29,8 +28,8 @@ from hypershell.database.core import schema, Session
 # public interface
 __all__ = ['Task', 'to_json_type', 'from_json_type', 'Model', ]
 
-# module level logger
-log: Logger = logging.getLogger(__name__)
+# initialize logger
+log = Logger.with_name(__name__)
 
 
 class DatabaseError(Exception):

@@ -45,7 +45,6 @@ from typing import List, Iterable, Iterator, IO, Optional, Dict, Callable
 import io
 import sys
 import functools
-import logging
 from enum import Enum
 from datetime import datetime
 from queue import Queue, Empty as QueueEmpty, Full as QueueFull
@@ -56,6 +55,7 @@ from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
 
 # internal libs
+from hypershell.core.ansi import colorize_usage
 from hypershell.core.logging import Logger
 from hypershell.core.config import config, default
 from hypershell.core.fsm import State, StateMachine
@@ -70,8 +70,8 @@ from hypershell.database import initdb, checkdb
 __all__ = ['submit_from', 'submit_file', 'SubmitThread', 'LiveSubmitThread',
            'SubmitApp', 'DEFAULT_BUNDLESIZE', 'DEFAULT_BUNDLEWAIT']
 
-
-log: Logger = logging.getLogger(__name__)
+# initialize logger
+log = Logger.with_name(__name__)
 
 
 class LoaderState(State, Enum):
@@ -518,22 +518,24 @@ def submit_file(path: str, queue_config: QueueConfig = None,
 
 APP_NAME = 'hyper-shell submit'
 APP_USAGE = f"""\
-usage: {APP_NAME} [-h] [FILE] [-b NUM] [-w SEC] [-t CMD] [--initdb]
+Usage:
+{APP_NAME} [-h] [FILE] [-b NUM] [-w SEC] [-t CMD] [--initdb]
+
 Submit tasks from a file.\
 """
 
 APP_HELP = f"""\
 {APP_USAGE}
 
-arguments:
-FILE                   Path to task file ("-" for <stdin>).
+Arguments:
+  FILE                    Path to task file ("-" for <stdin>).
 
-options:
--t, --template    CMD  Submit-time template expansion (default: "{DEFAULT_TEMPLATE}").
--b, --bundlesize  NUM  Number of lines to buffer (default: {DEFAULT_BUNDLESIZE}).
--w, --bundlewait  SEC  Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
-    --initdb           Auto-initialize database.
--h, --help             Show this message and exit.\
+Options:
+  -t, --template     CMD  Submit-time template expansion (default: "{DEFAULT_TEMPLATE}").
+  -b, --bundlesize   NUM  Number of lines to buffer (default: {DEFAULT_BUNDLESIZE}).
+  -w, --bundlewait   SEC  Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
+      --initdb            Auto-initialize database.
+  -h, --help              Show this message and exit.\
 """
 
 
@@ -541,7 +543,9 @@ class SubmitApp(Application):
     """Submit tasks to the database."""
 
     name = APP_NAME
-    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
+    interface = Interface(APP_NAME,
+                          colorize_usage(APP_USAGE),
+                          colorize_usage(APP_HELP))
 
     source: IO
     filepath: str

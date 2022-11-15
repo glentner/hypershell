@@ -6,28 +6,37 @@
 
 # standard libs
 import sys
-import logging
 
 # external libs
 from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
+from cmdkit.config import ConfigurationError
 from sqlalchemy import inspect
 
 # internal libs
+from hypershell.core.ansi import colorize_usage
 from hypershell.core.logging import Logger
+from hypershell.core.config import config
 from hypershell.core.exceptions import write_traceback
 from hypershell.database.core import engine, in_memory
 from hypershell.database.model import Model
 
 # public interface
-__all__ = ['InitDBApp', 'initdb', 'checkdb', 'DatabaseUninitialized', 'DATABASE_ENABLED', ]
+__all__ = ['InitDBApp', 'initdb', 'truncatedb', 'checkdb', 'DatabaseUninitialized', 'DATABASE_ENABLED', ]
 
-# module level logger
-log: Logger = logging.getLogger(__name__)
+# initialize logger
+log = Logger.with_name(__name__)
 
 
 def initdb() -> None:
-    """Initialize database schema."""
+    """Initialize database tables."""
+    Model.metadata.create_all(engine)
+
+
+def truncatedb() -> None:
+    """Truncate database tables."""
+    log.warning('Truncating database')
+    Model.metadata.drop_all(engine)
     Model.metadata.create_all(engine)
 
 
@@ -43,27 +52,61 @@ class DatabaseUninitialized(Exception):
 
 INITDB_PROGRAM = 'hyper-shell initdb'
 INITDB_USAGE = f"""\
-usage: {INITDB_PROGRAM} [-h]
-Initialize database (not needed for SQLite).\
+Usage:
+{INITDB_PROGRAM} [-h] [--truncate [--yes]]
+
+Initialize database (not needed for SQLite).
+Use --truncate to zero out the task metadata.\
 """
 
 INITDB_HELP = f"""\
 {INITDB_USAGE}
 
-options:
--h, --help           Show this message and exit.\
+Options:
+  -t, --truncate       Truncate database (task metadata will be lost).
+  -y, --yes            Auto-confirm truncation (default will prompt).
+  -h, --help           Show this message and exit.\
 """
 
 
 class InitDBApp(Application):
     """Initialize database (not needed for SQLite)."""
 
-    interface = Interface(INITDB_PROGRAM, INITDB_USAGE, INITDB_HELP)
+    interface = Interface(INITDB_PROGRAM,
+                          colorize_usage(INITDB_USAGE),
+                          colorize_usage(INITDB_HELP))
+
     ALLOW_NOARGS = True
+
+    truncate: bool = False
+    interface.add_argument('-t', '--truncate', action='store_true')
+
+    auto_confirm: bool = False
+    interface.add_argument('-y', '--yes', action='store_true', dest='auto_confirm')
 
     def run(self) -> None:
         """Business logic for `initdb`."""
-        initdb()
+        if not DATABASE_ENABLED:
+            raise ConfigurationError('No database configured')
+        elif not self.truncate:
+            initdb()
+        elif self.auto_confirm:
+            truncatedb()
+        elif not sys.stdout.isatty():
+            raise RuntimeError('Non-interactive prompt cannot confirm --truncate (see --yes).')
+        else:
+            if config.database.provider == 'sqlite':
+                site = config.database.file
+            else:
+                site = config.database.get('host', 'localhost')
+            print(f'Connected to: {config.database.provider} ({site})')
+            response = input(f'Truncate database? [Y]es/no: ').strip()
+            if response.lower() in ['', 'y', 'yes']:
+                truncatedb()
+            elif response.lower() in ['n', 'no']:
+                print('Stopping')
+            else:
+                raise RuntimeError(f'Stopping (invalid response: "{response}")')
 
 
 try:

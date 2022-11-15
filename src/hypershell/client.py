@@ -37,7 +37,6 @@ import os
 import sys
 import time
 import random
-import logging
 import functools
 from uuid import uuid4 as gen_uuid
 from enum import Enum
@@ -50,9 +49,11 @@ from multiprocessing import AuthenticationError
 # external libs
 from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface, ArgumentError
+from cmdkit.config import Namespace
 
 # internal libs
 from hypershell.database.model import Task
+from hypershell.core.ansi import colorize_usage
 from hypershell.core.heartbeat import Heartbeat, ClientState
 from hypershell.core.platform import default_path
 from hypershell.core.config import default, config, load_task_env
@@ -67,8 +68,8 @@ from hypershell.core.exceptions import (handle_exception, handle_disconnect,
 # public interface
 __all__ = ['run_client', 'ClientThread', 'ClientApp', 'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY', ]
 
-
-log: Logger = logging.getLogger(__name__)
+# initialize logger
+log = Logger.with_name(__name__)
 
 
 class SchedulerState(State, Enum):
@@ -313,8 +314,7 @@ def task_env(task: Task) -> Dict[str, str]:
     return {
         **os.environ,
         **load_task_env(),
-        'TASK_ID': task.id,
-        'TASK_ARGS': task.args,
+        **Namespace.from_dict(task.to_json()).to_env().flatten(prefix='TASK'),
         'TASK_CWD': config.task.cwd,
         'TASK_OUTPATH': os.path.join(default_path.lib, 'task', f'{task.id}.out'),
         'TASK_ERRPATH': os.path.join(default_path.lib, 'task', f'{task.id}.err'),
@@ -709,28 +709,34 @@ def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
 
 APP_NAME = 'hyper-shell client'
 APP_USAGE = f"""\
-usage: hyper-shell client [-h] [-N NUM] [-t TEMPLATE] [-b SIZE] [-w SEC] [-d SEC]
-                          [-H ADDR] [-p PORT] [-k KEY] [-c | [-o PATH] [-e PATH]]\
+Usage:
+hyper-shell client [-h] [-N NUM] [-t TEMPLATE] [-b SIZE] [-w SEC] [-d SEC]
+                   [-H ADDR] [-p PORT] [-k KEY] [-c | [-o PATH] [-e PATH]]
+
+Launch client directly, run tasks in parallel.\
 """
 
 APP_HELP = f"""\
 {APP_USAGE}
 
-Launch client directly, run tasks in parallel.
+Tasks are pulled off of the shared queue in bundles from the server and run
+locally within the same shell as the client. By default the bundle size is one, 
+meaning that at small scales there is greater responsiveness. It is recommended
+to coordinate these parameters to be the same as the server.
 
-options:
--N, --num-tasks   NUM   Number of tasks to run in parallel (default: {DEFAULT_NUM_TASKS}).
--t, --template    CMD   Command-line template pattern (default: "{DEFAULT_TEMPLATE}").
--b, --bundlesize  SIZE  Bundle size for finished tasks (default: {DEFAULT_BUNDLESIZE}).
--w, --bundlewait  SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
--H, --host        ADDR  Hostname for server.
--p, --port        NUM   Port number for server.
--k, --auth        KEY   Cryptographic key to connect to server.
--d, --delay-start SEC   Seconds to wait before start-up (default: {DEFAULT_DELAY}).   
--o, --output      PATH  Redirect task output (default: <stdout>).
--e, --errors      PATH  Redirect task errors (default: <stderr>).
--c, --capture           Capture individual task <stdout> and <stderr>.
--h, --help              Show this message and exit.\
+Options:
+  -N, --num-tasks    NUM   Number of tasks to run in parallel (default: {DEFAULT_NUM_TASKS}).
+  -t, --template     CMD   Command-line template pattern (default: "{DEFAULT_TEMPLATE}").
+  -b, --bundlesize   SIZE  Bundle size for finished tasks (default: {DEFAULT_BUNDLESIZE}).
+  -w, --bundlewait   SEC   Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
+  -H, --host         ADDR  Hostname for server.
+  -p, --port         NUM   Port number for server.
+  -k, --auth         KEY   Cryptographic key to connect to server.
+  -d, --delay-start  SEC   Seconds to wait before start-up (default: {DEFAULT_DELAY}).   
+  -o, --output       PATH  Redirect task output (default: <stdout>).
+  -e, --errors       PATH  Redirect task errors (default: <stderr>).
+  -c, --capture            Capture individual task <stdout> and <stderr>.
+  -h, --help               Show this message and exit.\
 """
 
 
@@ -738,7 +744,9 @@ class ClientApp(Application):
     """Run individual client directly."""
 
     name = APP_NAME
-    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
+    interface = Interface(APP_NAME,
+                          colorize_usage(APP_USAGE),
+                          colorize_usage(APP_HELP))
 
     num_tasks: int = DEFAULT_NUM_TASKS
     interface.add_argument('-N', '--num-tasks', type=int, default=num_tasks)
