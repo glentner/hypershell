@@ -152,7 +152,7 @@ def partial_reload(**preload: Namespace) -> Configuration:
 
 
 def blame(base: Configuration, *varpath: str) -> Optional[str]:
-    """Construct filename or variable assignment string based on precedent of `varpath`"""
+    """Construct filename or variable assignment string based on precedent of `varpath`."""
     source = base.which(*varpath)
     if not source:
         return None
