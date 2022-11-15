@@ -45,7 +45,6 @@ from typing import List, Iterable, Iterator, IO, Optional, Dict, Callable
 import io
 import sys
 import functools
-import logging
 from enum import Enum
 from datetime import datetime
 from queue import Queue, Empty as QueueEmpty, Full as QueueFull
@@ -70,8 +69,8 @@ from hypershell.database import initdb, checkdb
 __all__ = ['submit_from', 'submit_file', 'SubmitThread', 'LiveSubmitThread',
            'SubmitApp', 'DEFAULT_BUNDLESIZE', 'DEFAULT_BUNDLEWAIT']
 
-
-log: Logger = logging.getLogger(__name__)
+# initialize logger
+log = Logger.with_name(__name__)
 
 
 class LoaderState(State, Enum):

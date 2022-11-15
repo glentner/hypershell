@@ -11,7 +11,6 @@ from types import TracebackType
 
 # standard libs
 import sys
-import logging
 from dataclasses import dataclass
 
 # external libs
@@ -26,8 +25,8 @@ from hypershell.core.thread import Thread
 # public interface
 __all__ = ['SSHConfig', 'SSHConnection', 'RemoteProcess', ]
 
-# module level logger
-log: Logger = logging.getLogger(__name__)
+# initialize logger
+log = Logger.with_name(__name__)
 
 
 # Default file path to ssh configuration

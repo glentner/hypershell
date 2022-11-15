@@ -6,7 +6,6 @@
 
 # standard libs
 import sys
-import logging
 import functools
 
 # external libs
@@ -16,7 +15,7 @@ from cmdkit.config import ConfigurationError
 
 # internal libs
 from hypershell.core.exceptions import write_traceback, handle_exception
-from hypershell.core.logging import initialize_logging
+from hypershell.core.logging import Logger, initialize_logging
 from hypershell.submit import SubmitApp
 from hypershell.server import ServerApp
 from hypershell.client import ClientApp
@@ -53,8 +52,8 @@ __citation__    = """\
 }\
 """
 
-# initialize application logger
-log = logging.getLogger('hypershell')
+# initialize logger
+log = Logger.with_name('hypershell')
 
 
 # inject logger setup into command-line framework

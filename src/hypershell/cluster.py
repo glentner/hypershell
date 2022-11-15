@@ -15,7 +15,6 @@ import os
 import re
 import sys
 import time
-import logging
 import secrets
 from subprocess import Popen
 from functools import cached_property
@@ -40,8 +39,8 @@ from hypershell.submit import DEFAULT_BUNDLEWAIT
 __all__ = ['run_local', 'run_cluster', 'run_ssh',
            'LocalCluster', 'RemoteCluster', 'ClusterApp', ]
 
-
-log: Logger = logging.getLogger(__name__)
+# initialize logger
+log = Logger.with_name(__name__)
 
 
 class LocalCluster(Thread):

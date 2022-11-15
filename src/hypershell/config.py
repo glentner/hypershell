@@ -12,7 +12,6 @@ from typing import Any
 import os
 import sys
 import json
-import logging
 import functools
 import subprocess
 
@@ -28,13 +27,14 @@ from rich.syntax import Syntax
 from hypershell.core.platform import path
 from hypershell.core.types import smart_coerce
 from hypershell.core.config import load_file, update, config as full_config
+from hypershell.core.logging import Logger
 from hypershell.core.exceptions import handle_exception
 
 # public interface
 __all__ = ['ConfigApp', ]
 
-# module level logger
-log = logging.getLogger(__name__)
+# initialize logger
+log = Logger.with_name(__name__)
 
 
 EDIT_PROGRAM = 'hyper-shell config edit'

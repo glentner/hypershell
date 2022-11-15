@@ -6,7 +6,6 @@
 
 # standard libs
 import sys
-import logging
 
 # external libs
 from cmdkit.app import Application, exit_status
@@ -22,8 +21,8 @@ from hypershell.database.model import Model
 # public interface
 __all__ = ['InitDBApp', 'initdb', 'checkdb', 'DatabaseUninitialized', 'DATABASE_ENABLED', ]
 
-# module level logger
-log: Logger = logging.getLogger(__name__)
+# initialize logger
+log = Logger.with_name(__name__)
 
 
 def initdb() -> None:

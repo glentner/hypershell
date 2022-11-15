@@ -37,7 +37,6 @@ import os
 import sys
 import time
 import random
-import logging
 import functools
 from uuid import uuid4 as gen_uuid
 from enum import Enum
@@ -67,8 +66,8 @@ from hypershell.core.exceptions import (handle_exception, handle_disconnect,
 # public interface
 __all__ = ['run_client', 'ClientThread', 'ClientApp', 'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY', ]
 
-
-log: Logger = logging.getLogger(__name__)
+# initialize logger
+log = Logger.with_name(__name__)
 
 
 class SchedulerState(State, Enum):

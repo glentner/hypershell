@@ -47,7 +47,6 @@ from typing import List, Dict, Tuple, Iterable, IO, Optional, Callable
 # standard libs
 import sys
 import time
-import logging
 from enum import Enum
 from datetime import datetime, timedelta
 from functools import cached_property
@@ -72,8 +71,8 @@ from hypershell.submit import SubmitThread, LiveSubmitThread, DEFAULT_BUNDLEWAIT
 __all__ = ['serve_from', 'serve_file', 'serve_forever', 'ServerThread', 'ServerApp',
            'DEFAULT_BUNDLESIZE', 'DEFAULT_ATTEMPTS', ]
 
-
-log: Logger = logging.getLogger(__name__)
+# initialize logger
+log = Logger.with_name(__name__)
 
 
 class SchedulerState(State, Enum):

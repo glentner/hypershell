@@ -15,7 +15,6 @@ import sys
 import csv
 import json
 import time
-import logging
 import functools
 from dataclasses import dataclass
 from shutil import copyfileobj
@@ -46,8 +45,8 @@ from hypershell.database import initdb, checkdb, DatabaseUninitialized
 # public interface
 __all__ = ['TaskGroupApp', ]
 
-
-log: Logger = logging.getLogger(__name__)
+# initialize logger
+log = Logger.with_name(__name__)
 
 
 TASK_SUBMIT_USAGE = f"""\
