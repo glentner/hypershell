@@ -49,6 +49,7 @@ from multiprocessing import AuthenticationError
 # external libs
 from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface, ArgumentError
+from cmdkit.config import Namespace
 
 # internal libs
 from hypershell.database.model import Task
@@ -312,8 +313,7 @@ def task_env(task: Task) -> Dict[str, str]:
     return {
         **os.environ,
         **load_task_env(),
-        'TASK_ID': task.id,
-        'TASK_ARGS': task.args,
+        **Namespace.from_dict(task.to_json()).to_env().flatten(prefix='TASK'),
         'TASK_CWD': config.task.cwd,
         'TASK_OUTPATH': os.path.join(default_path.lib, 'task', f'{task.id}.out'),
         'TASK_ERRPATH': os.path.join(default_path.lib, 'task', f'{task.id}.err'),
