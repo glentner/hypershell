@@ -9,6 +9,39 @@ A few common environment variables are defined for every task.
     Original input command-line argument line.
     Equivalent to ``{}``, see :ref:`templates <templates>` section.
 
+``TASK_SUBMIT_ID``
+    Universal identifier (UUID) for *submitting* application instance.
+
+``TASK_SUBMIT_HOST``
+    Hostname of *submitting* application instance.
+
+``TASK_SUBMIT_TIME``
+    Timestamp task was submitted.
+
+``TASK_SERVER_ID``
+    Universal identifier (UUID) for *server* application instance.
+
+``TASK_SERVER_HOST``
+    Hostname of *server* application instance.
+
+``TASK_SCHEDULE_TIME``
+    Timestamp task was scheduled by server.
+
+``TASK_CLIENT_ID``
+    Universal identifier (UUID) for *client* application instance.
+
+``TASK_CLIENT_HOST``
+    Hostname of *client* application instance.
+
+``TASK_COMMAND``
+    Final command line for task.
+
+``TASK_ATTEMPT``
+    Integer number of attempts for current task (starts at 1).
+
+``TASK_PREVIOUS_ID``
+    Universal identifier (UUID) for previous attempt (if any).
+
 ``TASK_CWD``
     Current working directory for the current task.
 
