@@ -493,7 +493,7 @@ UPDATE_USAGE = f"""\
 Usage: 
 {UPDATE_PROGRAM} [-h] ID FIELD VALUE 
 
-Update individual task metadata directly.\
+Update individual task metadata.\
 """
 
 UPDATE_HELP = f"""\
