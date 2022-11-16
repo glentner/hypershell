@@ -30,6 +30,7 @@ from cmdkit.cli import Interface, ArgumentError
 from sqlalchemy import Column
 from sqlalchemy.exc import StatementError
 from sqlalchemy.orm import Query
+from sqlalchemy.orm.exc import StaleDataError
 from sqlalchemy.sql.elements import BinaryExpression
 
 # internal libs
@@ -487,6 +488,52 @@ class TaskSearchApp(Application):
                 raise ArgumentError(f'Invalid field name \'{name}\'')
 
 
+UPDATE_PROGRAM = 'hyper-shell task update'
+UPDATE_USAGE = f"""\
+Usage: 
+{UPDATE_PROGRAM} [-h] ID FIELD VALUE 
+
+Update individual task metadata directly.\
+"""
+
+UPDATE_HELP = f"""\
+{UPDATE_USAGE}
+
+Arguments:
+  ID                    Unique UUID.
+  FIELD                 Task metadata field name.
+  VALUE                 New value.
+
+Options:
+  -h, --help            Show this message and exit.\
+"""
+
+
+class TaskUpdateApp(Application):
+    """Update individual task attribute directly."""
+
+    interface = Interface(UPDATE_PROGRAM,
+                          colorize_usage(UPDATE_USAGE),
+                          colorize_usage(UPDATE_HELP))
+
+    uuid: str
+    interface.add_argument('uuid')
+
+    field: str
+    interface.add_argument('field', choices=list(Task.columns)[1:])  # NOTE: not ID!
+
+    value: str
+    interface.add_argument('value', type=smart_coerce)
+
+    def run(self) -> None:
+        """Update individual task attribute directly."""
+        check_uuid(self.uuid)
+        try:
+            Task.update(self.uuid, **{self.field: self.value, })
+        except StaleDataError as err:
+            raise Task.NotFound(str(err)) from err
+
+
 TASK_PROGRAM = 'hyper-shell task'
 TASK_USAGE = f"""\
 Usage: 
@@ -504,6 +551,7 @@ Commands:
   wait                   {TaskWaitApp.__doc__}
   run                    {TaskRunApp.__doc__}
   search                 {TaskSearchApp.__doc__}
+  update                 {TaskUpdateApp.__doc__}
 
 Options:
   -h, --help             Show this message and exit.\
@@ -526,6 +574,7 @@ class TaskGroupApp(ApplicationGroup):
         'wait': TaskWaitApp,
         'run': TaskRunApp,
         'search': TaskSearchApp,
+        'update': TaskUpdateApp,
     }
 
     # NOTE: ApplicationGroup only defines the CompletedCommand mechanism.

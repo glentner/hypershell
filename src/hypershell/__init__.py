@@ -24,6 +24,7 @@ from hypershell.cluster import ClusterApp
 from hypershell.task import TaskGroupApp
 from hypershell.config import ConfigApp
 from hypershell.database import InitDBApp, DatabaseUninitialized
+from hypershell.database.model import Task
 
 # public interface
 __all__ = ['HyperShellApp', 'main', '__version__', '__license__']
@@ -100,6 +101,7 @@ Application.exceptions = {
     RuntimeError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
     ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
     DatabaseUninitialized: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+    Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
     Exception: functools.partial(write_traceback, logger=log, status=exit_status.runtime_error),
 }
 
