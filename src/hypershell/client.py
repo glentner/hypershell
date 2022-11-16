@@ -130,7 +130,7 @@ class ClientScheduler(StateMachine):
                 return SchedulerState.UNPACK
             else:
                 log.debug('Disconnect received')
-                return SchedulerState.HALT
+                return SchedulerState.FINAL
         except QueueEmpty:
             return SchedulerState.GET_REMOTE
 
