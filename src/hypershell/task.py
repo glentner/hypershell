@@ -80,7 +80,7 @@ class TaskSubmitApp(Application):
     interface.add_argument('argv', nargs='+')
 
     def run(self) -> None:
-        """Run submit thread."""
+        """Submit task to database."""
         task = Task.new(args=' '.join(self.argv))
         Task.add(task)
         print(task.id)
@@ -151,7 +151,7 @@ class TaskInfoApp(Application):
     }
 
     def run(self) -> None:
-        """Run submit thread."""
+        """Get metadata/status/outputs of task."""
         check_uuid(self.uuid)
         if self.extract_field and (self.print_stdout or self.print_stderr or self.format_json):
             raise ArgumentError('Cannot use -x/--extract with other output formats')
@@ -279,7 +279,7 @@ class TaskWaitApp(Application):
     }
 
     def run(self) -> None:
-        """Run submit thread."""
+        """Wait for task to complete."""
         check_uuid(self.uuid)
         self.wait_task()
         if self.print_info or self.format_json:
@@ -336,7 +336,7 @@ class TaskRunApp(Application):
     interface.add_argument('-n', '--interval', type=int, default=interval)
 
     def run(self) -> None:
-        """Run submit thread."""
+        """Submit task and wait for completion."""
         task = Task.new(args=' '.join(self.argv))
         Task.add(task)
         TaskWaitApp(uuid=task.id, interval=self.interval).run()
@@ -373,7 +373,7 @@ Options:
 
 
 class TaskSearchApp(Application):
-    """Search for task(s) in database."""
+    """Search for tasks in database."""
 
     interface = Interface(SEARCH_PROGRAM,
                           colorize_usage(SEARCH_USAGE),
@@ -405,7 +405,7 @@ class TaskSearchApp(Application):
     output_interface.add_argument('-x', '--extract', action='store_const', const='extract', dest='output_format')
 
     def run(self) -> None:
-        """Run search application."""
+        """Search for tasks in database."""
         self.check_field_names()
         if self.count:
             print(self.build_query().count())
