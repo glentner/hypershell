@@ -60,7 +60,7 @@ from hypershell.core.config import default, config, load_task_env
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueClient, QueueConfig
-from hypershell.core.logging import HOSTNAME, Logger
+from hypershell.core.logging import HOSTNAME, INSTANCE, Logger
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
 from hypershell.core.exceptions import (handle_exception, handle_disconnect,
                                         handle_address_unknown, HostAddressInfo)
@@ -391,6 +391,7 @@ class TaskExecutor(StateMachine):
     def create_task(self) -> TaskState:
         """Expand template and initialize task command-line."""
         try:
+            self.task.client_id = INSTANCE
             self.task.client_host = HOSTNAME
             self.task.command = self.template.expand(self.task.args)
             return TaskState.START_TASK

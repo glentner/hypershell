@@ -25,7 +25,7 @@ from hypershell.core.config import config, blame
 from hypershell.core.exceptions import write_traceback
 
 # public interface
-__all__ = ['Logger', 'HOSTNAME', 'handler', 'initialize_logging', ]
+__all__ = ['Logger', 'HOSTNAME', 'INSTANCE', 'handler', 'initialize_logging', ]
 
 
 # Cached for later use
