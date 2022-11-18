@@ -19,7 +19,7 @@ from hypershell.core.logging import Logger
 from hypershell.core.config import config
 from hypershell.core.exceptions import write_traceback
 from hypershell.database.core import engine, in_memory
-from hypershell.database.model import Model
+from hypershell.database.model import Model, Task
 
 # public interface
 __all__ = ['InitDBApp', 'initdb', 'truncatedb', 'checkdb', 'DatabaseUninitialized', 'DATABASE_ENABLED', ]
@@ -35,9 +35,9 @@ def initdb() -> None:
 
 def truncatedb() -> None:
     """Truncate database tables."""
-    log.warning('Truncating database')
     Model.metadata.drop_all(engine)
     Model.metadata.create_all(engine)
+    log.warning(f'Truncated database')
 
 
 def checkdb() -> None:
@@ -100,7 +100,7 @@ class InitDBApp(Application):
             else:
                 site = config.database.get('host', 'localhost')
             print(f'Connected to: {config.database.provider} ({site})')
-            response = input(f'Truncate database? [Y]es/no: ').strip()
+            response = input(f'Truncate database ({Task.count()} tasks)? [Y]es/no: ').strip()
             if response.lower() in ['', 'y', 'yes']:
                 truncatedb()
             elif response.lower() in ['n', 'no']:
