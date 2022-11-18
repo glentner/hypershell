@@ -9,7 +9,6 @@ from __future__ import annotations
 from typing import Dict, Callable, Type
 
 # standard libs
-import logging
 from enum import Enum
 from abc import ABC
 
