@@ -38,7 +38,6 @@ import sys
 import time
 import random
 import functools
-from uuid import uuid4 as gen_uuid
 from enum import Enum
 from datetime import datetime, timedelta
 from queue import Queue, Empty as QueueEmpty, Full as QueueFull
@@ -488,7 +487,6 @@ DEFAULT_HEARTRATE: int = default.client.heartrate
 class ClientHeartbeat(StateMachine):
     """Register heartbeats with remote server."""
 
-    uuid: str
     queue: QueueClient
     heartrate: timedelta
     previous: datetime = None
@@ -499,9 +497,8 @@ class ClientHeartbeat(StateMachine):
     state = HeartbeatState.START
     states = HeartbeatState
 
-    def __init__(self, uuid: str, queue: QueueClient, heartrate: int = DEFAULT_HEARTRATE) -> None:
+    def __init__(self, queue: QueueClient, heartrate: int = DEFAULT_HEARTRATE) -> None:
         """Initialize heartbeat machine."""
-        self.uuid = uuid
         self.queue = queue
         self.previous = datetime.now()
         self.heartrate = timedelta(seconds=heartrate)
@@ -525,7 +522,7 @@ class ClientHeartbeat(StateMachine):
         """Publish new heartbeat to remote queue."""
         try:
             client_state = self.client_state  # atomic
-            heartbeat = Heartbeat.new(uuid=self.uuid, state=client_state)
+            heartbeat = Heartbeat.new(state=client_state)
             self.queue.heartbeat.put(heartbeat.pack(), timeout=2)
             if client_state is ClientState.RUNNING:
                 log.trace(f'Heartbeat - running ({heartbeat.host}: {heartbeat.uuid})')
@@ -558,10 +555,10 @@ class ClientHeartbeat(StateMachine):
 class ClientHeartbeatThread(Thread):
     """Run heartbeat machine within dedicated thread."""
 
-    def __init__(self, uuid: str, queue: QueueClient, heartrate: int = DEFAULT_HEARTRATE) -> None:
+    def __init__(self, queue: QueueClient, heartrate: int = DEFAULT_HEARTRATE) -> None:
         """Initialize heartbeat machine."""
         super().__init__(name=f'hypershell-heartbeat')
-        self.machine = ClientHeartbeat(uuid=uuid, queue=queue, heartrate=heartrate)
+        self.machine = ClientHeartbeat(queue=queue, heartrate=heartrate)
 
     def run_with_exceptions(self) -> None:
         """Run machine."""
@@ -589,7 +586,6 @@ DEFAULT_DELAY = 0
 class ClientThread(Thread):
     """Manage asynchronous task bundle scheduling and receiving."""
 
-    uuid: str
     client: QueueClient
     num_tasks: int
     delay_start: float
@@ -609,14 +605,13 @@ class ClientThread(Thread):
                  heartrate: int = DEFAULT_HEARTRATE, delay_start: float = DEFAULT_DELAY) -> None:
         """Initialize queue manager and child threads."""
         super().__init__(name='hypershell-client')
-        self.uuid = str(gen_uuid())
         self.num_tasks = num_tasks
         self.delay_start = delay_start
         self.client = QueueClient(config=QueueConfig(host=address[0], port=address[1], auth=auth))
         self.inbound = Queue(maxsize=bundlesize)
         self.outbound = Queue(maxsize=bundlesize)
         self.scheduler = ClientSchedulerThread(queue=self.client, local=self.inbound)
-        self.heartbeat = ClientHeartbeatThread(uuid=self.uuid, queue=self.client, heartrate=heartrate)
+        self.heartbeat = ClientHeartbeatThread(queue=self.client, heartrate=heartrate)
         self.collector = ClientCollectorThread(queue=self.client, local=self.outbound,
                                                bundlesize=bundlesize, bundlewait=bundlewait)
         self.executors = [TaskThread(id=count+1,

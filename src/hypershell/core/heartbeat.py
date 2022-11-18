@@ -11,12 +11,11 @@ from typing import Type
 # standard libs
 import json
 from enum import Enum
-from uuid import uuid4 as gen_uuid
 from datetime import datetime
 from dataclasses import dataclass
 
 # internal libs
-from hypershell.core.logging import HOSTNAME
+from hypershell.core.logging import HOSTNAME, INSTANCE
 
 
 class ClientState(Enum):
@@ -47,7 +46,7 @@ class Heartbeat:
             time: datetime = None,
             state: ClientState = None) -> Heartbeat:
         """Create new instance."""
-        return cls(uuid=(uuid or str(gen_uuid())),
+        return cls(uuid=(uuid or INSTANCE),
                    host=(host or HOSTNAME),
                    time=(time or datetime.now()),
                    state=(state or ClientState.RUNNING))
