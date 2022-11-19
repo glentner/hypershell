@@ -12,6 +12,7 @@ from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
 from cmdkit.config import ConfigurationError
 from sqlalchemy import inspect
+from sqlalchemy.orm import close_all_sessions
 
 # internal libs
 from hypershell.core.ansi import colorize_usage
@@ -35,7 +36,11 @@ def initdb() -> None:
 
 def truncatedb() -> None:
     """Truncate database tables."""
+    # NOTE: We still might hang here if other sessions exist outside this app instance
+    close_all_sessions()
+    log.trace('Dropping all tables')
     Model.metadata.drop_all(engine)
+    log.trace('Creating all tables')
     Model.metadata.create_all(engine)
     log.warning(f'Truncated database')
 
