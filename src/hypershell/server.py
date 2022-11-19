@@ -450,8 +450,8 @@ class HeartMonitorThread(Thread):
 
     def __init__(self, queue: QueueServer, evict_after: int = DEFAULT_EVICT) -> None:
         """Initialize machine."""
-        super().__init__(name='hypershell-server-heartbeat')
-        self.machine = HeartMonitor(queue=queue, evict_after=evict_after)
+        super().__init__(name='hypershell-heartmonitor')
+        self.machine = HeartMonitor(queue=queue, evict_after=evict_after, live=live)
 
     def run_with_exceptions(self) -> None:
         """Run machine."""
