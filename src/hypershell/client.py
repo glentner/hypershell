@@ -125,7 +125,7 @@ class ClientScheduler(StateMachine):
             self.bundle = self.queue.scheduled.get(timeout=2)
             self.queue.scheduled.task_done()
             if self.bundle is not None:
-                log.debug(f'Received {len(self.bundle)} task(s)')
+                log.debug(f'Received {len(self.bundle)} tasks ({HOSTNAME}: {INSTANCE})')
                 return SchedulerState.UNPACK
             else:
                 log.debug('Disconnect received')
@@ -273,7 +273,7 @@ class ClientCollector(StateMachine):
         """Push out bundle of completed tasks."""
         if self.bundle:
             self.queue.completed.put(self.bundle)
-            log.trace(f'Returned bundle of {len(self.bundle)} task(s)')
+            log.trace(f'Returned bundle of {len(self.bundle)} tasks')
             self.tasks.clear()
             self.bundle.clear()
             self.previous_send = datetime.now()

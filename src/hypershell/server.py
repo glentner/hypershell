@@ -177,6 +177,7 @@ class Scheduler(StateMachine):
         """Put bundle on outbound queue."""
         try:
             self.queue.scheduled.put(self.bundle, timeout=2)
+            log.debug(f'Scheduled {len(self.tasks)} tasks')
             for task in self.tasks:
                 log.debug(f'Scheduled task ({task.id})')
             return SchedulerState.LOAD
@@ -265,6 +266,7 @@ class Receiver(StateMachine):
             self.queue.completed.task_done()
             return ReceiverState.UNPACK if self.bundle else ReceiverState.FINAL
         except QueueEmpty:
+            log.trace('No completed tasks returned - waiting')
             return ReceiverState.UNLOAD
 
     def unpack_bundle(self) -> ReceiverState:
