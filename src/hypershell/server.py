@@ -262,7 +262,7 @@ class Receiver(StateMachine):
     def unload_bundle(self) -> ReceiverState:
         """Get the next bundle from the completed task queue."""
         try:
-            self.bundle = self.queue.completed.get(timeout=1)
+            self.bundle = self.queue.completed.get(timeout=2)
             self.queue.completed.task_done()
             return ReceiverState.UNPACK if self.bundle else ReceiverState.FINAL
         except QueueEmpty:
