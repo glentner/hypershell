@@ -313,7 +313,7 @@ class ReceiverThread(Thread):
 
 
 class HeartbeatState(State, Enum):
-    """Finite states of the terminator machine."""
+    """Finite states of the heartbeat machine."""
     START = 0
     NEXT = 1
     UPDATE = 2
@@ -328,7 +328,7 @@ DEFAULT_EVICT: int = default.server.evict
 
 
 class HeartMonitor(StateMachine):
-    """Await final task signals."""
+    """Collect heartbeat messages from connected clients."""
 
     queue: QueueServer
     beats: Dict[str, Heartbeat]
@@ -369,7 +369,7 @@ class HeartMonitor(StateMachine):
 
     @staticmethod
     def start() -> HeartbeatState:
-        """Jump to WAIT_INITIAL state."""
+        """Jump to NEXT state."""
         log.debug('Started (heartbeat)')
         return HeartbeatState.NEXT
 
