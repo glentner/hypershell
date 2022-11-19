@@ -314,7 +314,7 @@ class Task(Model):
         if changes:
             Session.bulk_update_mappings(cls, changes)
             Session.commit()  # NOTE: why is this necessary?
-            log.trace(f'Updated {len(changes)} task(s)')
+            log.trace(f'Updated {len(changes)} tasks')
 
     @classmethod
     def update(cls, id: str, **changes) -> None:
@@ -360,6 +360,36 @@ class Task(Model):
             for task in tasks:
                 task.schedule_time = None
                 task.server_host = None
+                task.server_id = None
+                task.client_host = None
+                task.client_id = None
+            Session.commit()
+            for task in tasks:
+                log.trace(f'Reverted previous task ({task.id})')
+
+    @classmethod
+    def select_orphaned(cls, client_id: str, limit: int) -> List[Task]:
+        """Select tasks that were orphaned from an evicted client."""
+        return (
+            cls.query()
+            .order_by(cls.schedule_time)
+            .filter(cls.schedule_time.isnot(None))
+            .filter(cls.completion_time.is_(None))
+            .filter(cls.client_id == client_id)
+            .limit(limit)
+            .all()
+        )
+
+    @classmethod
+    def revert_orphaned(cls, client_id: str) -> None:
+        """Revert orphaned tasks from an evicted client to un-scheduled state."""
+        while tasks := cls.select_orphaned(client_id, 100):
+            for task in tasks:
+                task.schedule_time = None
+                task.server_host = None
+                task.server_id = None
+                task.client_host = None
+                task.client_id = None
             Session.commit()
             for task in tasks:
                 log.trace(f'Reverted previous task ({task.id})')

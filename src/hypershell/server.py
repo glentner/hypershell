@@ -67,6 +67,7 @@ from hypershell.core.heartbeat import Heartbeat, ClientState
 from hypershell.database.model import Task
 from hypershell.database import initdb, checkdb, DATABASE_ENABLED
 from hypershell.submit import SubmitThread, LiveSubmitThread, DEFAULT_BUNDLEWAIT
+from hypershell.client import ClientInfo
 
 # public interface
 __all__ = ['serve_from', 'serve_file', 'serve_forever', 'ServerThread', 'ServerApp',
@@ -213,6 +214,101 @@ class SchedulerThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
+class ConfirmState(State, Enum):
+    """Finite states for Claim machine."""
+    START = 0
+    UNLOAD = 1
+    UNPACK = 2
+    UPDATE = 3
+    FINAL = 4
+    HALT = 5
+
+
+class Confirm(StateMachine):
+    """Collect task bundle confirmations from clients and update database."""
+
+    live: bool
+    queue: QueueServer
+    client_data: Optional[bytes]
+    client_info: Optional[ClientInfo]
+
+    state = ConfirmState.START
+    states = ConfirmState
+
+    def __init__(self, queue: QueueServer, live: bool = False) -> None:
+        """Initialize machine."""
+        self.live = live
+        self.queue = queue
+        self.client_data = None
+        self.client_info = None
+
+    @cached_property
+    def actions(self) -> Dict[ConfirmState, Callable[[], ConfirmState]]:
+        return {
+            ConfirmState.START: self.start,
+            ConfirmState.UNLOAD: self.unload_info,
+            ConfirmState.UNPACK: self.unpack_info,
+            ConfirmState.UPDATE: self.update_info,
+            ConfirmState.FINAL: self.finalize,
+        }
+
+    @staticmethod
+    def start() -> ConfirmState:
+        """Jump to UNLOAD state."""
+        log.debug('Started (confirm)')
+        return ConfirmState.UNLOAD
+
+    def unload_info(self) -> ConfirmState:
+        """Get the next task bundle confirmation from shared queue."""
+        try:
+            self.client_data = self.queue.confirmed.get(timeout=2)
+            self.queue.confirmed.task_done()
+            return ConfirmState.UNPACK if self.client_data else ConfirmState.FINAL
+        except QueueEmpty:
+            return ConfirmState.UNLOAD
+
+    def unpack_info(self) -> ConfirmState:
+        """Unpack received client info."""
+        self.client_info = ClientInfo.unpack(self.client_data)
+        log.debug(f'Confirmed {len(self.client_info.task_ids)} tasks '
+                  f'({self.client_info.client_host}: {self.client_info.client_id})')
+        return ConfirmState.UPDATE
+
+    def update_info(self) -> ConfirmState:
+        """Update client info in database for confirmed task bundle."""
+        if not self.live:
+            Task.update_all([
+                {'id': task_id, 'client_id': self.client_info.client_id, 'client_host': self.client_info.client_host}
+                for task_id in self.client_info.task_ids
+            ])
+        return ConfirmState.UNLOAD
+
+    @staticmethod
+    def finalize() -> ConfirmState:
+        """Return HALT."""
+        log.debug('Done (confirm)')
+        return ConfirmState.HALT
+
+
+class ConfirmThread(Thread):
+    """Run Confirm machine within dedicated thread."""
+
+    def __init__(self, queue: QueueServer, live: bool = False) -> None:
+        """Initialize machine."""
+        super().__init__(name='hypershell-confirm')
+        self.machine = Confirm(queue=queue, live=live)
+
+    def run_with_exceptions(self) -> None:
+        """Run machine."""
+        self.machine.run()
+
+    def stop(self, wait: bool = False, timeout: int = None) -> None:
+        """Stop machine."""
+        log.warning('Stopping (confirm)')
+        self.machine.halt()
+        super().stop(wait=wait, timeout=timeout)
+
+
 class ReceiverState(State, Enum):
     """Finite states for receiver."""
     START = 0
@@ -330,6 +426,7 @@ DEFAULT_EVICT: int = default.server.evict
 class HeartMonitor(StateMachine):
     """Collect heartbeat messages from connected clients."""
 
+    live: bool
     queue: QueueServer
     beats: Dict[str, Heartbeat]
     last_check: datetime
@@ -344,8 +441,9 @@ class HeartMonitor(StateMachine):
     state = HeartbeatState.START
     states = HeartbeatState
 
-    def __init__(self, queue: QueueServer, evict_after: int = DEFAULT_EVICT) -> None:
+    def __init__(self, queue: QueueServer, evict_after: int = DEFAULT_EVICT, live: bool = False) -> None:
         """Initialize with queue server."""
+        self.live = live
         self.queue = queue
         self.last_check = datetime.now()
         self.beats = {}
@@ -427,6 +525,9 @@ class HeartMonitor(StateMachine):
             if age > self.evict_after:
                 log.warning(f'Evicting client ({hb.host}: {uuid})')
                 self.beats.pop(uuid)
+                if not self.live:
+                    log.warning(f'Reverting orphaned tasks ({hb.host}: {uuid})')
+                    Task.revert_orphaned(uuid)
         return HeartbeatState.SWITCH
 
     def signal_clients(self) -> HeartbeatState:
@@ -448,7 +549,7 @@ class HeartMonitor(StateMachine):
 class HeartMonitorThread(Thread):
     """Run heart monitor within dedicated thread."""
 
-    def __init__(self, queue: QueueServer, evict_after: int = DEFAULT_EVICT) -> None:
+    def __init__(self, queue: QueueServer, evict_after: int = DEFAULT_EVICT, live: bool = False) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-heartmonitor')
         self.machine = HeartMonitor(queue=queue, evict_after=evict_after, live=live)
@@ -478,6 +579,7 @@ class ServerThread(Thread):
     queue: QueueServer
     submitter: Optional[SubmitThread]
     scheduler: Optional[SchedulerThread]
+    confirm: ConfirmThread
     receiver: ReceiverThread
     heartmonitor: HeartMonitorThread
     live_mode: bool
@@ -506,8 +608,9 @@ class ServerThread(Thread):
             self.submitter = None if not source else SubmitThread(source, bundlesize=bundlesize, bundlewait=bundlewait)
             self.scheduler = SchedulerThread(queue=self.queue, bundlesize=bundlesize, attempts=max_retries + 1,
                                              eager=eager, forever_mode=forever_mode, restart_mode=restart_mode)
+        self.confirm = ConfirmThread(queue=self.queue, live=live)
         self.receiver = ReceiverThread(queue=self.queue, live=self.live_mode, redirect_failures=redirect_failures)
-        self.heartmonitor = HeartMonitorThread(queue=self.queue, evict_after=evict_after)
+        self.heartmonitor = HeartMonitorThread(queue=self.queue, evict_after=evict_after, live=live)
         super().__init__(name='hypershell-server')
 
     def run_with_exceptions(self) -> None:
@@ -519,6 +622,7 @@ class ServerThread(Thread):
             self.wait_scheduler()
             self.wait_heartbeat()
             self.wait_receiver()
+            self.wait_confirm()
         log.debug('Done')
 
     def start_threads(self) -> None:
@@ -529,6 +633,7 @@ class ServerThread(Thread):
             self.scheduler.start()
         self.heartmonitor.start()
         self.receiver.start()
+        self.confirm.start()
 
     def wait_submitter(self) -> None:
         """Wait on task submission to complete."""
@@ -555,6 +660,12 @@ class ServerThread(Thread):
         self.queue.completed.put(None)
         self.receiver.join()
 
+    def wait_confirm(self) -> None:
+        """Wait for confirm thread to stop."""
+        log.trace('Waiting (confirm)')
+        self.queue.confirmed.put(None)
+        self.confirm.join()
+
     def stop(self, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
         log.warning('Stopping')
@@ -565,6 +676,8 @@ class ServerThread(Thread):
         self.heartmonitor.stop(wait=wait, timeout=timeout)
         self.queue.completed.put(None)
         self.receiver.stop(wait=wait, timeout=timeout)
+        self.queue.confirmed.put(None)
+        self.confirm.stop(wait=wait, timeout=timeout)
         super().stop(wait=wait, timeout=timeout)
 
 

@@ -30,12 +30,13 @@ Warning:
 
 # type annotations
 from __future__ import annotations
-from typing import List, Tuple, Optional, Callable, Dict, IO
+from typing import List, Tuple, Optional, Callable, Dict, IO, Type
 
 # standard libs
 import os
 import sys
 import time
+import json
 import random
 import functools
 from enum import Enum
@@ -43,6 +44,7 @@ from datetime import datetime, timedelta
 from queue import Queue, Empty as QueueEmpty, Full as QueueFull
 from subprocess import Popen, TimeoutExpired
 from socket import gaierror
+from dataclasses import dataclass
 from multiprocessing import AuthenticationError
 
 # external libs
@@ -65,10 +67,43 @@ from hypershell.core.exceptions import (handle_exception, handle_disconnect,
                                         handle_address_unknown, HostAddressInfo)
 
 # public interface
-__all__ = ['run_client', 'ClientThread', 'ClientApp', 'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY', ]
+__all__ = ['run_client', 'ClientThread', 'ClientApp', 'ClientInfo', 'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY', ]
 
 # initialize logger
 log = Logger.with_name(__name__)
+
+
+@dataclass
+class ClientInfo:
+    """Client instance ID/hostname and task ID mapping."""
+
+    client_id: str
+    client_host: str
+    task_ids: List[str]
+
+    @classmethod
+    def from_dict(cls: Type[ClientInfo], data: dict) -> ClientInfo:
+        """Initialize from existing dictionary."""
+        return cls(**data)
+
+    def to_dict(self: ClientInfo) -> dict:
+        """Export to dictionary."""
+        return {'client_id': self.client_id, 'client_host': self.client_host, 'task_ids': self.task_ids}
+
+    def pack(self: ClientInfo) -> bytes:
+        """Serialize data."""
+        return json.dumps(self.to_dict()).encode('utf-8')
+
+    @classmethod
+    def unpack(cls: Type[ClientInfo], data: bytes) -> ClientInfo:
+        """Deserialize from raw `data`."""
+        return cls.from_dict(json.loads(data.decode('utf-8')))
+
+    @classmethod
+    def from_tasks(cls: Type[ClientInfo], tasks: List[Task]) -> ClientInfo:
+        """Initialize from list of existing Task instances."""
+        return cls(client_id=INSTANCE, client_host=HOSTNAME,
+                   task_ids=[task.id for task in tasks])
 
 
 class SchedulerState(State, Enum):
@@ -76,10 +111,11 @@ class SchedulerState(State, Enum):
     START = 0
     GET_REMOTE = 1
     UNPACK = 2
-    POP_TASK = 3
-    PUT_LOCAL = 4
-    FINAL = 5
-    HALT = 6
+    PUT_CONFIRM = 3
+    POP_TASK = 4
+    PUT_LOCAL = 5
+    FINAL = 6
+    HALT = 7
 
 
 class ClientScheduler(StateMachine):
@@ -88,6 +124,7 @@ class ClientScheduler(StateMachine):
     queue: QueueClient
     local: Queue[Optional[Task]]
     bundle: List[bytes]
+    client_info: Optional[bytes]
 
     task: Task
     tasks: List[Task]
@@ -101,6 +138,7 @@ class ClientScheduler(StateMachine):
         self.local = local
         self.bundle = []
         self.tasks = []
+        self.client_info = None
 
     @functools.cached_property
     def actions(self) -> Dict[SchedulerState, Callable[[], SchedulerState]]:
@@ -108,6 +146,7 @@ class ClientScheduler(StateMachine):
             SchedulerState.START: self.start,
             SchedulerState.GET_REMOTE: self.get_remote,
             SchedulerState.UNPACK: self.unpack_bundle,
+            SchedulerState.PUT_CONFIRM: self.put_confirm,
             SchedulerState.POP_TASK: self.pop_task,
             SchedulerState.PUT_LOCAL: self.put_local,
             SchedulerState.FINAL: self.finalize,
@@ -136,7 +175,17 @@ class ClientScheduler(StateMachine):
     def unpack_bundle(self) -> SchedulerState:
         """Unpack latest bundle of tasks."""
         self.tasks = [Task.unpack(data) for data in self.bundle]
-        return SchedulerState.POP_TASK
+        self.client_info = ClientInfo.from_tasks(self.tasks).pack()
+        return SchedulerState.PUT_CONFIRM
+
+    def put_confirm(self) -> SchedulerState:
+        """Put confirmation details back on remote queue."""
+        try:
+            self.queue.confirmed.put(self.client_info, timeout=2)
+            log.debug(f'Confirmed {len(self.tasks)} tasks ({HOSTNAME}: {INSTANCE})')
+            return SchedulerState.POP_TASK
+        except QueueFull:
+            return SchedulerState.PUT_CONFIRM
 
     def pop_task(self) -> SchedulerState:
         """Pop next task off current task list."""
@@ -610,6 +659,7 @@ class ClientThread(Thread):
         self.client = QueueClient(config=QueueConfig(host=address[0], port=address[1], auth=auth))
         self.inbound = Queue(maxsize=bundlesize)
         self.outbound = Queue(maxsize=bundlesize)
+        self.received = Queue(maxsize=1)  # NOTE: block new bundles until signaling previous
         self.scheduler = ClientSchedulerThread(queue=self.client, local=self.inbound)
         self.heartbeat = ClientHeartbeatThread(queue=self.client, heartrate=heartrate)
         self.collector = ClientCollectorThread(queue=self.client, local=self.outbound,
