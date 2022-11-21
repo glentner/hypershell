@@ -105,6 +105,11 @@ class ClientInfo:
         return cls(client_id=INSTANCE, client_host=HOSTNAME,
                    task_ids=[task.id for task in tasks])
 
+    def transpose(self: ClientInfo) -> List[Dict[str, str]]:
+        """Represent as list of dicts for database update."""
+        return [{'id': task_id, 'client_id': self.client_id, 'client_host': self.client_host}
+                for task_id in self.task_ids]
+
 
 class SchedulerState(State, Enum):
     """Finite states for scheduler."""

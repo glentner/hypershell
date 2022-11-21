@@ -277,10 +277,7 @@ class Confirm(StateMachine):
     def update_info(self) -> ConfirmState:
         """Update client info in database for confirmed task bundle."""
         if not self.in_memory:
-            Task.update_all([
-                {'id': task_id, 'client_id': self.client_info.client_id, 'client_host': self.client_info.client_host}
-                for task_id in self.client_info.task_ids
-            ])
+            Task.update_all(self.client_info.transpose())
         return ConfirmState.UNLOAD
 
     @staticmethod
