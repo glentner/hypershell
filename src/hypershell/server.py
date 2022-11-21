@@ -227,7 +227,7 @@ class ConfirmState(State, Enum):
 class Confirm(StateMachine):
     """Collect task bundle confirmations from clients and update database."""
 
-    live: bool
+    in_memory: bool
     queue: QueueServer
     client_data: Optional[bytes]
     client_info: Optional[ClientInfo]
@@ -235,9 +235,9 @@ class Confirm(StateMachine):
     state = ConfirmState.START
     states = ConfirmState
 
-    def __init__(self, queue: QueueServer, live: bool = False) -> None:
+    def __init__(self, queue: QueueServer, in_memory: bool = False) -> None:
         """Initialize machine."""
-        self.live = live
+        self.in_memory = in_memory
         self.queue = queue
         self.client_data = None
         self.client_info = None
@@ -276,7 +276,7 @@ class Confirm(StateMachine):
 
     def update_info(self) -> ConfirmState:
         """Update client info in database for confirmed task bundle."""
-        if not self.live:
+        if not self.in_memory:
             Task.update_all([
                 {'id': task_id, 'client_id': self.client_info.client_id, 'client_host': self.client_info.client_host}
                 for task_id in self.client_info.task_ids
@@ -293,10 +293,10 @@ class Confirm(StateMachine):
 class ConfirmThread(Thread):
     """Run Confirm machine within dedicated thread."""
 
-    def __init__(self, queue: QueueServer, live: bool = False) -> None:
+    def __init__(self, queue: QueueServer, in_memory: bool = False) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-confirm')
-        self.machine = Confirm(queue=queue, live=live)
+        self.machine = Confirm(queue=queue, in_memory=in_memory)
 
     def run_with_exceptions(self) -> None:
         """Run machine."""
@@ -326,17 +326,17 @@ class Receiver(StateMachine):
     queue: QueueServer
     bundle: List[bytes]
 
-    live: bool
+    in_memory: bool
     redirect_failures: IO
 
     state = ReceiverState.START
     states = ReceiverState
 
-    def __init__(self, queue: QueueServer, live: bool = False, redirect_failures: IO = None) -> None:
+    def __init__(self, queue: QueueServer, in_memory: bool = False, redirect_failures: IO = None) -> None:
         """Initialize receiver."""
         self.queue = queue
         self.bundle = []
-        self.live = live
+        self.in_memory = in_memory
         self.redirect_failures = redirect_failures
 
     @cached_property
@@ -372,7 +372,7 @@ class Receiver(StateMachine):
 
     def update_tasks(self) -> ReceiverState:
         """Update tasks in database with run details."""
-        if not self.live:
+        if not self.in_memory:
             Task.update_all([task.to_dict() for task in self.tasks])
         for task in self.tasks:
             log.debug(f'Completed task ({task.id})')
@@ -392,10 +392,10 @@ class Receiver(StateMachine):
 class ReceiverThread(Thread):
     """Run receiver within dedicated thread."""
 
-    def __init__(self, queue: QueueServer, live: bool = False, redirect_failures: IO = None) -> None:
+    def __init__(self, queue: QueueServer, in_memory: bool = False, redirect_failures: IO = None) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-receiver')
-        self.machine = Receiver(queue=queue, live=live, redirect_failures=redirect_failures)
+        self.machine = Receiver(queue=queue, in_memory=in_memory, redirect_failures=redirect_failures)
 
     def run_with_exceptions(self) -> None:
         """Run machine."""
@@ -426,7 +426,7 @@ DEFAULT_EVICT: int = default.server.evict
 class HeartMonitor(StateMachine):
     """Collect heartbeat messages from connected clients."""
 
-    live: bool
+    in_memory: bool
     queue: QueueServer
     beats: Dict[str, Heartbeat]
     last_check: datetime
@@ -441,12 +441,12 @@ class HeartMonitor(StateMachine):
     state = HeartbeatState.START
     states = HeartbeatState
 
-    def __init__(self, queue: QueueServer, evict_after: int = DEFAULT_EVICT, live: bool = False) -> None:
+    def __init__(self, queue: QueueServer, evict_after: int = DEFAULT_EVICT, in_memory: bool = False) -> None:
         """Initialize with queue server."""
-        self.live = live
         self.queue = queue
         self.last_check = datetime.now()
         self.beats = {}
+        self.in_memory = in_memory
         if evict_after >= 10:
             self.wait_check = timedelta(seconds=int(evict_after / 10))
             self.evict_after = timedelta(seconds=evict_after)
@@ -474,7 +474,7 @@ class HeartMonitor(StateMachine):
     def get_next(self) -> HeartbeatState:
         """Get and stash heartbeat from clients."""
         try:
-            hb_data = self.queue.heartbeat.get(timeout=1)
+            hb_data = self.queue.heartbeat.get(timeout=2)
             self.queue.heartbeat.task_done()
             self.startup_phase = False
             if not hb_data:
@@ -525,7 +525,7 @@ class HeartMonitor(StateMachine):
             if age > self.evict_after:
                 log.warning(f'Evicting client ({hb.host}: {uuid})')
                 self.beats.pop(uuid)
-                if not self.live:
+                if not self.in_memory:
                     log.warning(f'Reverting orphaned tasks ({hb.host}: {uuid})')
                     Task.revert_orphaned(uuid)
         return HeartbeatState.SWITCH
@@ -549,10 +549,10 @@ class HeartMonitor(StateMachine):
 class HeartMonitorThread(Thread):
     """Run heart monitor within dedicated thread."""
 
-    def __init__(self, queue: QueueServer, evict_after: int = DEFAULT_EVICT, live: bool = False) -> None:
+    def __init__(self, queue: QueueServer, evict_after: int = DEFAULT_EVICT, in_memory: bool = False) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-heartmonitor')
-        self.machine = HeartMonitor(queue=queue, evict_after=evict_after, live=live)
+        self.machine = HeartMonitor(queue=queue, evict_after=evict_after, in_memory=in_memory)
 
     def run_with_exceptions(self) -> None:
         """Run machine."""
@@ -582,25 +582,25 @@ class ServerThread(Thread):
     confirm: ConfirmThread
     receiver: ReceiverThread
     heartmonitor: HeartMonitorThread
-    live_mode: bool
+    in_memory: bool
 
     def __init__(self,
                  source: Iterable[str] = None,
-                 live: bool = False, forever_mode: bool = False, restart_mode: bool = False,
+                 in_memory: bool = False, forever_mode: bool = False, restart_mode: bool = False,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                  max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = False,
                  redirect_failures: IO = None, evict_after: int = DEFAULT_EVICT) -> None:
         """Initialize queue manager and child threads."""
-        self.live_mode = live
-        if not self.live_mode and not DATABASE_ENABLED:
+        self.in_memory = in_memory
+        if not self.in_memory and not DATABASE_ENABLED:
             log.warning('No database configured - automatically disabled')
-            self.live_mode = True
-        if self.live_mode and max_retries > 0:
-            log.warning('Retries disabled in live mode')
+            self.in_memory = True
+        if self.in_memory and max_retries > 0:
+            log.warning('Retries disabled when database disabled')
         queue_config = QueueConfig(host=address[0], port=address[1], auth=auth)
         self.queue = QueueServer(config=queue_config)
-        if self.live_mode:
+        if self.in_memory:
             self.scheduler = None
             self.submitter = None if not source else LiveSubmitThread(
                 source, queue_config=queue_config, bundlesize=bundlesize, bundlewait=bundlewait)
@@ -608,9 +608,9 @@ class ServerThread(Thread):
             self.submitter = None if not source else SubmitThread(source, bundlesize=bundlesize, bundlewait=bundlewait)
             self.scheduler = SchedulerThread(queue=self.queue, bundlesize=bundlesize, attempts=max_retries + 1,
                                              eager=eager, forever_mode=forever_mode, restart_mode=restart_mode)
-        self.confirm = ConfirmThread(queue=self.queue, live=live)
-        self.receiver = ReceiverThread(queue=self.queue, live=self.live_mode, redirect_failures=redirect_failures)
-        self.heartmonitor = HeartMonitorThread(queue=self.queue, evict_after=evict_after, live=live)
+        self.confirm = ConfirmThread(queue=self.queue, in_memory=in_memory)
+        self.receiver = ReceiverThread(queue=self.queue, in_memory=self.in_memory, redirect_failures=redirect_failures)
+        self.heartmonitor = HeartMonitorThread(queue=self.queue, evict_after=evict_after, in_memory=in_memory)
         super().__init__(name='hypershell-server')
 
     def run_with_exceptions(self) -> None:
@@ -681,13 +681,13 @@ class ServerThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
-def serve_from(source: Iterable[str], live: bool = False, redirect_failures: IO = None,
+def serve_from(source: Iterable[str], in_memory: bool = False, redirect_failures: IO = None,
                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE,
                restart_mode: bool = False, evict_after: int = DEFAULT_EVICT) -> None:
     """Run server with the given task `source`, run until complete."""
-    thread = ServerThread.new(source=source, live=live, redirect_failures=redirect_failures,
+    thread = ServerThread.new(source=source, in_memory=in_memory, redirect_failures=redirect_failures,
                               bundlesize=bundlesize, bundlewait=bundlewait, address=address, auth=auth,
                               max_retries=max_retries, eager=eager, restart_mode=restart_mode,
                               evict_after=evict_after)
@@ -698,24 +698,24 @@ def serve_from(source: Iterable[str], live: bool = False, redirect_failures: IO 
         raise
 
 
-def serve_file(path: str, live: bool = False, redirect_failures: IO = None,
+def serve_file(path: str, in_memory: bool = False, redirect_failures: IO = None,
                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE,
                evict_after: int = DEFAULT_EVICT, **file_options) -> None:
     """Run server with tasks from a local file `path`, run until complete."""
     with open(path, mode='r', **file_options) as stream:
-        serve_from(stream, live=live, redirect_failures=redirect_failures,
+        serve_from(stream, in_memory=in_memory, redirect_failures=redirect_failures,
                    bundlesize=bundlesize, bundlewait=bundlewait, address=address, auth=auth,
                    max_retries=max_retries, eager=eager, evict_after=evict_after)
 
 
-def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, live: bool = False, redirect_failures: IO = None,
+def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, in_memory: bool = False, redirect_failures: IO = None,
                   address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                   max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE,
                   evict_after: int = DEFAULT_EVICT) -> None:
     """Run server forever."""
-    thread = ServerThread.new(source=None, live=live, redirect_failures=redirect_failures,
+    thread = ServerThread.new(source=None, in_memory=in_memory, redirect_failures=redirect_failures,
                               bundlesize=bundlesize, address=address, auth=auth,
                               forever_mode=True, max_retries=max_retries, eager=eager, evict_after=evict_after)
     try:
@@ -807,10 +807,10 @@ class ServerApp(Application):
     auth: str = QueueConfig.auth
     interface.add_argument('-k', '--auth', default=auth)
 
-    live_mode: bool = False
+    in_memory: bool = False
     auto_initdb: bool = False
     db_interface = interface.add_mutually_exclusive_group()
-    db_interface.add_argument('--no-db', action='store_true', dest='live_mode')
+    db_interface.add_argument('--no-db', action='store_true', dest='in_memory')
     db_interface.add_argument('--initdb', action='store_true', dest='auto_initdb')
 
     print_mode: bool = False
@@ -823,12 +823,12 @@ class ServerApp(Application):
         """Run server."""
         if self.forever_mode:
             serve_forever(bundlesize=self.bundlesize, address=(self.host, self.port), auth=self.auth,
-                          live=self.live_mode, redirect_failures=self.failure_stream,
+                          in_memory=self.in_memory, redirect_failures=self.failure_stream,
                           max_retries=self.max_retries, evict_after=config.server.evict)
         else:
             serve_from(source=self.input_stream, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
                        address=(self.host, self.port), auth=self.auth, max_retries=self.max_retries,
-                       live=self.live_mode, redirect_failures=self.failure_stream,
+                       in_memory=self.in_memory, redirect_failures=self.failure_stream,
                        restart_mode=self.restart_mode, evict_after=config.server.evict)
 
     def check_args(self):
@@ -863,7 +863,7 @@ class ServerApp(Application):
         self.check_args()
         if config.database.provider == 'sqlite' or self.auto_initdb:
             initdb()  # Auto-initialize if local sqlite provider
-        elif not self.live_mode:
+        elif not self.in_memory:
             checkdb()
         return self
 

@@ -54,13 +54,14 @@ class LocalCluster(Thread):
                  source: Iterable[str] = None, template: str = DEFAULT_TEMPLATE,
                  forever_mode: bool = False, restart_mode: bool = False,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, live: bool = False,
+                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, in_memory: bool = False,
                  num_tasks: int = 1, redirect_failures: IO = None,
                  redirect_output: IO = None, redirect_errors: IO = None,
                  delay_start: float = DEFAULT_DELAY, capture: bool = False) -> None:
         """Initialize server and client threads."""
         auth = secrets.token_hex(64)
-        self.server = ServerThread(source=source, auth=auth, live=live, bundlesize=bundlesize, bundlewait=bundlewait,
+        self.server = ServerThread(source=source, auth=auth, in_memory=in_memory,
+                                   bundlesize=bundlesize, bundlewait=bundlewait,
                                    max_retries=max_retries, eager=eager, forever_mode=forever_mode,
                                    restart_mode=restart_mode, redirect_failures=redirect_failures)
         self.client = ClientThread(num_tasks=num_tasks, template=template, auth=auth,
@@ -97,12 +98,12 @@ class RemoteCluster(Thread):
                  launcher: str = 'mpirun', launcher_args: List[str] = None,
                  bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port),
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, live: bool = False,
+                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, in_memory: bool = False,
                  num_tasks: int = 1, remote_exe: str = 'hyper-shell', redirect_failures: IO = None,
                  delay_start: float = DEFAULT_DELAY, capture: bool = False) -> None:
         """Initialize server and client threads."""
         auth = secrets.token_hex(64)
-        self.server = ServerThread(source=source, auth=auth, live=live, bundlesize=bundlesize,
+        self.server = ServerThread(source=source, auth=auth, in_memory=in_memory, bundlesize=bundlesize,
                                    bundlewait=bundlewait, max_retries=max_retries, eager=eager, address=bind,
                                    forever_mode=forever_mode, restart_mode=restart_mode,
                                    redirect_failures=redirect_failures)
@@ -223,14 +224,14 @@ class SSHCluster(Thread):
                  bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port),
                  launcher: str = 'ssh', launcher_args: List[str] = None, nodelist: List[str] = None,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, live: bool = False,
+                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, in_memory: bool = False,
                  num_tasks: int = 1, remote_exe: str = 'hyper-shell', redirect_failures: IO = None,
                  export_env: bool = False, delay_start: float = DEFAULT_DELAY, capture: bool = False) -> None:
         """Initialize server and client threads."""
         if nodelist is None:
             raise AttributeError('Expected nodelist')
         auth = secrets.token_hex(64)
-        self.server = ServerThread(source=source, auth=auth, live=live, bundlesize=bundlesize,
+        self.server = ServerThread(source=source, auth=auth, in_memory=in_memory, bundlesize=bundlesize,
                                    bundlewait=bundlewait, max_retries=max_retries, eager=eager, address=bind,
                                    forever_mode=forever_mode, restart_mode=restart_mode,
                                    redirect_failures=redirect_failures)
@@ -376,10 +377,10 @@ class ClusterApp(Application):
     interface.add_argument('-r', '--max-retries', type=int, default=max_retries)
     interface.add_argument('--eager', action='store_true', dest='eager_mode')
 
-    live_mode: bool = False
+    in_memory: bool = False
     auto_initdb: bool = False
     db_interface = interface.add_mutually_exclusive_group()
-    db_interface.add_argument('--no-db', action='store_true', dest='live_mode')
+    db_interface.add_argument('--no-db', action='store_true', dest='in_memory')
     db_interface.add_argument('--initdb', action='store_true', dest='auto_initdb')
 
     forever_mode: bool = False
@@ -426,7 +427,7 @@ class ClusterApp(Application):
         launcher = self.launchers.get(self.mode)
         launcher(source=self.source, num_tasks=self.num_tasks, template=self.template,
                  bundlesize=self.bundlesize, bundlewait=self.bundlewait,
-                 max_retries=self.max_retries, live=self.live_mode,
+                 max_retries=self.max_retries, in_memory=self.in_memory,
                  forever_mode=self.forever_mode, restart_mode=self.restart_mode,
                  redirect_failures=self.failure_stream, delay_start=self.delay_start,
                  capture=self.capture)
@@ -475,7 +476,7 @@ class ClusterApp(Application):
 
     def check_arguments(self) -> None:
         """Various checks on input arguments."""
-        if self.restart_mode and self.live_mode:
+        if self.restart_mode and self.in_memory:
             raise ArgumentError('Cannot restart without database (given --no-db)')
         if self.filepath is None and not self.restart_mode:
             self.filepath = '-'  # NOTE: assume STDIN
@@ -487,9 +488,9 @@ class ClusterApp(Application):
             raise ArgumentError('Cannot specify -c/--capture with -o/--output')
         if self.capture and self.errors_path:
             raise ArgumentError('Cannot specify -c/--capture with -e/--error')
-        if self.live_mode and self.forever_mode:
+        if self.in_memory and self.forever_mode:
             raise ArgumentError('Using --forever with --no-db is invalid')
-        if self.live_mode and self.restart_mode:
+        if self.in_memory and self.restart_mode:
             raise ArgumentError('Using --restart with --no-db is invalid')
         if self.forever_mode and self.restart_mode:
             raise ArgumentError('Using --forever with --restart is invalid')
@@ -531,7 +532,7 @@ class ClusterApp(Application):
         self.check_arguments()
         if config.database.provider == 'sqlite' or self.auto_initdb:
             initdb()  # Auto-initialize if local sqlite provider
-        elif not self.live_mode:
+        elif not self.in_memory:
             checkdb()
         return self
 
