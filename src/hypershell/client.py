@@ -130,6 +130,7 @@ class ClientScheduler(StateMachine):
     local: Queue[Optional[Task]]
     bundle: List[bytes]
     client_info: Optional[bytes]
+    no_confirm: bool
 
     task: Task
     tasks: List[Task]
@@ -137,13 +138,14 @@ class ClientScheduler(StateMachine):
     state = SchedulerState.START
     states = SchedulerState
 
-    def __init__(self, queue: QueueClient, local: Queue[Optional[Task]]) -> None:
+    def __init__(self, queue: QueueClient, local: Queue[Optional[Task]], no_confirm: bool = False) -> None:
         """Assign remote queue client and local task queue."""
         self.queue = queue
         self.local = local
         self.bundle = []
         self.tasks = []
         self.client_info = None
+        self.no_confirm = no_confirm
 
     @functools.cached_property
     def actions(self) -> Dict[SchedulerState, Callable[[], SchedulerState]]:
@@ -180,8 +182,11 @@ class ClientScheduler(StateMachine):
     def unpack_bundle(self) -> SchedulerState:
         """Unpack latest bundle of tasks."""
         self.tasks = [Task.unpack(data) for data in self.bundle]
-        self.client_info = ClientInfo.from_tasks(self.tasks).pack()
-        return SchedulerState.PUT_CONFIRM
+        if not self.no_confirm:
+            self.client_info = ClientInfo.from_tasks(self.tasks).pack()
+            return SchedulerState.PUT_CONFIRM
+        else:
+            return SchedulerState.POP_TASK
 
     def put_confirm(self) -> SchedulerState:
         """Put confirmation details back on remote queue."""
@@ -218,10 +223,10 @@ class ClientScheduler(StateMachine):
 class ClientSchedulerThread(Thread):
     """Run client scheduler in dedicated thread."""
 
-    def __init__(self, queue: QueueClient, local: Queue[Optional[bytes]]) -> None:
+    def __init__(self, queue: QueueClient, local: Queue[Optional[bytes]], no_confirm: bool = False) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-client-scheduler')
-        self.machine = ClientScheduler(queue=queue, local=local)
+        self.machine = ClientScheduler(queue=queue, local=local, no_confirm=no_confirm)
 
     def run_with_exceptions(self) -> None:
         """Run machine."""
@@ -643,6 +648,7 @@ class ClientThread(Thread):
     client: QueueClient
     num_tasks: int
     delay_start: float
+    no_confirm: bool
 
     inbound: Queue[Optional[Task]]
     outbound: Queue[Optional[Task]]
@@ -655,17 +661,19 @@ class ClientThread(Thread):
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port),
                  auth: str = QueueConfig.auth, template: str = DEFAULT_TEMPLATE,
-                 redirect_output: IO = None, redirect_errors: IO = None, capture: bool = False,
-                 heartrate: int = DEFAULT_HEARTRATE, delay_start: float = DEFAULT_DELAY) -> None:
+                 redirect_output: IO = None, redirect_errors: IO = None,
+                 heartrate: int = DEFAULT_HEARTRATE, capture: bool = False,
+                 delay_start: float = DEFAULT_DELAY, no_confirm: bool = False) -> None:
         """Initialize queue manager and child threads."""
         super().__init__(name='hypershell-client')
         self.num_tasks = num_tasks
         self.delay_start = delay_start
+        self.no_confirm = no_confirm
         self.client = QueueClient(config=QueueConfig(host=address[0], port=address[1], auth=auth))
         self.inbound = Queue(maxsize=bundlesize)
         self.outbound = Queue(maxsize=bundlesize)
         self.received = Queue(maxsize=1)  # NOTE: block new bundles until signaling previous
-        self.scheduler = ClientSchedulerThread(queue=self.client, local=self.inbound)
+        self.scheduler = ClientSchedulerThread(queue=self.client, local=self.inbound, no_confirm=no_confirm)
         self.heartbeat = ClientHeartbeatThread(queue=self.client, heartrate=heartrate)
         self.collector = ClientCollectorThread(queue=self.client, local=self.outbound,
                                                bundlesize=bundlesize, bundlewait=bundlewait)
@@ -745,12 +753,12 @@ def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None,
                capture: bool = False, heartrate: int = DEFAULT_HEARTRATE,
-               delay_start: float = DEFAULT_DELAY, ) -> None:
+               delay_start: float = DEFAULT_DELAY, no_confirm: bool = False) -> None:
     """Run client until disconnect signal received."""
     thread = ClientThread.new(num_tasks=num_tasks, bundlesize=bundlesize, bundlewait=bundlewait,
                               address=address, auth=auth, template=template, capture=capture,
                               redirect_output=redirect_output, redirect_errors=redirect_errors,
-                              heartrate=heartrate, delay_start=delay_start)
+                              heartrate=heartrate, delay_start=delay_start, no_confirm=no_confirm)
     try:
         thread.join()
     except Exception:
@@ -763,6 +771,7 @@ APP_USAGE = f"""\
 Usage:
 hyper-shell client [-h] [-N NUM] [-t TEMPLATE] [-b SIZE] [-w SEC] [-d SEC]
                    [-H ADDR] [-p PORT] [-k KEY] [-c | [-o PATH] [-e PATH]]
+                   [--no-confirm] [--delay-start SEC]
 
 Launch client directly, run tasks in parallel.\
 """
@@ -771,7 +780,7 @@ APP_HELP = f"""\
 {APP_USAGE}
 
 Tasks are pulled off of the shared queue in bundles from the server and run
-locally within the same shell as the client. By default the bundle size is one, 
+locally within the same shell as the client. By default the bundle size is one,
 meaning that at small scales there is greater responsiveness. It is recommended
 to coordinate these parameters to be the same as the server.
 
@@ -783,7 +792,8 @@ Options:
   -H, --host         ADDR  Hostname for server.
   -p, --port         NUM   Port number for server.
   -k, --auth         KEY   Cryptographic key to connect to server.
-  -d, --delay-start  SEC   Seconds to wait before start-up (default: {DEFAULT_DELAY}).   
+  -d, --delay-start  SEC   Seconds to wait before start-up (default: {DEFAULT_DELAY}).
+      --no-confirm         Disable confirmation of task bundle received.
   -o, --output       PATH  Redirect task output (default: <stdout>).
   -e, --errors       PATH  Redirect task errors (default: <stderr>).
   -c, --capture            Capture individual task <stdout> and <stderr>.
@@ -823,6 +833,9 @@ class ClientApp(Application):
     delay_start: float = DEFAULT_DELAY
     interface.add_argument('-d', '--delay-start', type=float, default=delay_start)
 
+    no_confirm: bool = False
+    interface.add_argument('--no-confirm', action='store_true')
+
     output_path: str = None
     errors_path: str = None
     interface.add_argument('-o', '--output', default=None, dest='output_path')
@@ -847,7 +860,8 @@ class ClientApp(Application):
             run_client(num_tasks=self.num_tasks, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
                        address=(self.host, self.port), auth=self.auth, template=self.template,
                        redirect_output=self.output_stream, redirect_errors=self.errors_stream,
-                       capture=self.capture, delay_start=self.delay_start, heartrate=config.client.heartrate)
+                       capture=self.capture, delay_start=self.delay_start, no_confirm=self.no_confirm,
+                       heartrate=config.client.heartrate)
         except gaierror:
             raise HostAddressInfo(f'Could not resolve host \'{self.host}\'')
 

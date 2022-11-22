@@ -57,6 +57,12 @@ Options
     This also has the effect of staggering the workload. If your tasks take on the order of 30
     minutes and you have 1000 nodes, choose ``--delay-start=-1800``.
 
+``--no-confirm``
+    Disable client confirmation of task bundle received.
+
+    To achieve even higher throughput at large scales, optionally disable confirmation
+    payloads from clients. Consider using this option when also using ``--no-db``.
+
 ``-o``, ``--output`` *PATH*
     File path for task outputs (default: <stdout>).
 

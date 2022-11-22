@@ -51,20 +51,20 @@ class LocalCluster(Thread):
     client: ClientThread
 
     def __init__(self,
-                 source: Iterable[str] = None, template: str = DEFAULT_TEMPLATE,
-                 forever_mode: bool = False, restart_mode: bool = False,
+                 source: Iterable[str] = None, num_tasks: int = 1, template: str = DEFAULT_TEMPLATE,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, in_memory: bool = False,
-                 num_tasks: int = 1, redirect_failures: IO = None,
-                 redirect_output: IO = None, redirect_errors: IO = None,
+                 in_memory: bool = False, no_confirm: bool = False,
+                 forever_mode: bool = False, restart_mode: bool = False,
+                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False,
+                 redirect_failures: IO = None, redirect_output: IO = None, redirect_errors: IO = None,
                  delay_start: float = DEFAULT_DELAY, capture: bool = False) -> None:
         """Initialize server and client threads."""
         auth = secrets.token_hex(64)
-        self.server = ServerThread(source=source, auth=auth, in_memory=in_memory,
+        self.server = ServerThread(source=source, auth=auth, in_memory=in_memory, no_confirm=no_confirm,
                                    bundlesize=bundlesize, bundlewait=bundlewait,
                                    max_retries=max_retries, eager=eager, forever_mode=forever_mode,
                                    restart_mode=restart_mode, redirect_failures=redirect_failures)
-        self.client = ClientThread(num_tasks=num_tasks, template=template, auth=auth,
+        self.client = ClientThread(num_tasks=num_tasks, template=template, auth=auth, no_confirm=no_confirm,
                                    bundlesize=bundlesize, bundlewait=bundlewait, delay_start=delay_start,
                                    redirect_output=redirect_output, redirect_errors=redirect_errors,
                                    capture=capture)
@@ -93,24 +93,25 @@ class RemoteCluster(Thread):
     client_argv: str
 
     def __init__(self,
-                 source: Iterable[str] = None, template: str = DEFAULT_TEMPLATE,
-                 forever_mode: bool = False, restart_mode: bool = False,
-                 launcher: str = 'mpirun', launcher_args: List[str] = None,
-                 bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port),
+                 source: Iterable[str] = None, num_tasks: int = 1, template: str = DEFAULT_TEMPLATE,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, in_memory: bool = False,
-                 num_tasks: int = 1, remote_exe: str = 'hyper-shell', redirect_failures: IO = None,
-                 delay_start: float = DEFAULT_DELAY, capture: bool = False) -> None:
+                 forever_mode: bool = False, restart_mode: bool = False,
+                 bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port), delay_start: float = DEFAULT_DELAY,
+                 launcher: str = 'mpirun', launcher_args: List[str] = None, remote_exe: str = 'hyper-shell',
+                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, redirect_failures: IO = None,
+                 in_memory: bool = False, no_confirm: bool = False, capture: bool = False) -> None:
         """Initialize server and client threads."""
         auth = secrets.token_hex(64)
-        self.server = ServerThread(source=source, auth=auth, in_memory=in_memory, bundlesize=bundlesize,
-                                   bundlewait=bundlewait, max_retries=max_retries, eager=eager, address=bind,
-                                   forever_mode=forever_mode, restart_mode=restart_mode,
+        self.server = ServerThread(source=source, auth=auth, bundlesize=bundlesize, bundlewait=bundlewait,
+                                   in_memory=in_memory, no_confirm=no_confirm, max_retries=max_retries, eager=eager,
+                                   address=bind, forever_mode=forever_mode, restart_mode=restart_mode,
                                    redirect_failures=redirect_failures)
         launcher_args = '' if launcher_args is None else ' '.join(launcher_args)
         client_args = ''
         if capture is True:
             client_args += ' --capture'
+        if no_confirm is True:
+            client_args += ' --no-confirm'
         self.client_argv = (f'{launcher} {launcher_args} {remote_exe} client -H {HOSTNAME} -p {bind[1]} '
                             f'-N {num_tasks} -b {bundlesize} -w {bundlewait} -t "{template}" -k {auth} '
                             f'-d {delay_start} {client_args}')
@@ -219,21 +220,22 @@ class SSHCluster(Thread):
     client_argv: List[str]
 
     def __init__(self,
-                 source: Iterable[str] = None, template: str = DEFAULT_TEMPLATE,
+                 source: Iterable[str] = None, num_tasks: int = 1, template: str = DEFAULT_TEMPLATE,
                  forever_mode: bool = False, restart_mode: bool = False,
-                 bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port),
+                 bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port), remote_exe: str = 'hyper-shell',
                  launcher: str = 'ssh', launcher_args: List[str] = None, nodelist: List[str] = None,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, in_memory: bool = False,
-                 num_tasks: int = 1, remote_exe: str = 'hyper-shell', redirect_failures: IO = None,
-                 export_env: bool = False, delay_start: float = DEFAULT_DELAY, capture: bool = False) -> None:
+                 no_confirm: bool = False, redirect_failures: IO = None, export_env: bool = False,
+                 delay_start: float = DEFAULT_DELAY, capture: bool = False) -> None:
         """Initialize server and client threads."""
         if nodelist is None:
             raise AttributeError('Expected nodelist')
         auth = secrets.token_hex(64)
-        self.server = ServerThread(source=source, auth=auth, in_memory=in_memory, bundlesize=bundlesize,
-                                   bundlewait=bundlewait, max_retries=max_retries, eager=eager, address=bind,
+        self.server = ServerThread(source=source, auth=auth, bundlesize=bundlesize, bundlewait=bundlewait,
+                                   max_retries=max_retries, eager=eager, address=bind,
                                    forever_mode=forever_mode, restart_mode=restart_mode,
+                                   in_memory=in_memory, no_confirm=no_confirm,
                                    redirect_failures=redirect_failures)
         launcher_env = '' if not export_env else compile_env()
         if launcher_args is None:
@@ -243,6 +245,8 @@ class SSHCluster(Thread):
         client_args = ''
         if capture is True:
             client_args += ' --capture'
+        if no_confirm:
+            client_args += ' --no-confirm'
         self.client_argv = [f'{launcher} {launcher_args} {host} {launcher_env} {remote_exe} '
                             f'client -H {HOSTNAME} -p {bind[1]} -N {num_tasks} -b {bundlesize} -w {bundlewait} '
                             f'-t \'"{template}"\' -k {auth} -d {delay_start} {client_args}'
@@ -303,9 +307,9 @@ APP_NAME = 'hyper-shell cluster'
 APP_USAGE = f"""\
 Usage:
 hyper-shell cluster [-h] [FILE | --restart | --forever] [-N NUM] [-t CMD] [-b SIZE] [-w SEC]
-                    [-r NUM [--eager]] [-f PATH] [--capture | [-o PATH] [-e PATH]] [--delay-start SEC] 
+                    [-p PORT] [-r NUM [--eager]] [-f PATH] [--capture | [-o PATH] [-e PATH]]
                     [--ssh [HOST... | --ssh-group NAME] [--env] | --mpi | --launcher=ARGS...]
-                    [--no-db | --initdb]
+                    [--no-db | --initdb] [--no-confirm] [--delay-start SEC]
 
 Start cluster locally, over SSH, or with a custom launcher.\
 """
@@ -331,6 +335,7 @@ Options:
       --eager                 Schedule failed tasks before new tasks.
       --no-db                 Disable database (submit directly to clients).
       --initdb                Auto-initialize database.
+      --no-confirm            Disable client confirmation of task bundle received.
       --forever               Schedule forever.
       --restart               Start scheduling from last completed task.
       --ssh-args     ARGS     Command-line arguments for SSH.
@@ -383,6 +388,9 @@ class ClusterApp(Application):
     db_interface.add_argument('--no-db', action='store_true', dest='in_memory')
     db_interface.add_argument('--initdb', action='store_true', dest='auto_initdb')
 
+    no_confirm: bool = False
+    interface.add_argument('--no-confirm', action='store_true')
+
     forever_mode: bool = False
     interface.add_argument('--forever', action='store_true', dest='forever_mode')
 
@@ -426,11 +434,10 @@ class ClusterApp(Application):
         """Run cluster."""
         launcher = self.launchers.get(self.mode)
         launcher(source=self.source, num_tasks=self.num_tasks, template=self.template,
-                 bundlesize=self.bundlesize, bundlewait=self.bundlewait,
-                 max_retries=self.max_retries, in_memory=self.in_memory,
-                 forever_mode=self.forever_mode, restart_mode=self.restart_mode,
-                 redirect_failures=self.failure_stream, delay_start=self.delay_start,
-                 capture=self.capture)
+                 bundlesize=self.bundlesize, bundlewait=self.bundlewait, max_retries=self.max_retries,
+                 in_memory=self.in_memory, no_confirm=self.no_confirm, forever_mode=self.forever_mode,
+                 restart_mode=self.restart_mode, redirect_failures=self.failure_stream,
+                 delay_start=self.delay_start, capture=self.capture)
 
     def run_local(self, **options) -> None:
         """Run local cluster."""

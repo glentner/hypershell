@@ -1,5 +1,6 @@
 ``hyper-shell cluster [-h]``
     ``[FILE | --restart | --forever]``
-    ``[--no-db | --initdb]`` ``[-N NUM]`` ``[-t CMD]`` ``[-b SIZE]`` ``[-w SEC]``
-    ``[--delay-start SEC]`` ``[-r NUM [--eager]]`` ``[--capture | [-o PATH] [-e PATH]]``
-    ``[-f PATH]`` ``[--ssh [HOST... | --ssh-group NAME] [--env] | --mpi | --launcher=ARGS...]``
+    ``[-N NUM]`` ``[-t CMD]`` ``[-b SIZE]`` ``[-w SEC]``
+    ``[-r NUM [--eager]]`` ``[-f PATH]`` ``[--capture | [-o PATH] [-e PATH]]``  ``[--delay-start SEC]``
+    ``[--ssh [HOST... | --ssh-group NAME] [--env] | --mpi | --launcher=ARGS...]``
+    ``[--no-db | --initdb]`` ``[--no-confirm]``

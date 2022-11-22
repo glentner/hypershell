@@ -100,6 +100,12 @@ Options
 
     Mutually exclusive to ``--no-db``. See ``hyper-shell initdb`` command.
 
+``--no-confirm``
+    Disable client confirmation of task bundle received.
+
+    To achieve even higher throughput at large scales, optionally disable confirmation
+    payloads from clients. Consider using this option when also using ``--no-db``.
+
 ``--forever``
     Schedule forever.
 

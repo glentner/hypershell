@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "HYPER-SHELL" "1" "Nov 15, 2022" "2.0.2" "hyper-shell"
+.TH "HYPER-SHELL" "1" "Nov 21, 2022" "2.1.0" "hyper-shell"
 .SH NAME
 hyper-shell \- Process shell commands over a distributed, asynchronous queue
 .SH SYNOPSIS
@@ -77,9 +77,10 @@ to manage task scheduling and persistence. Stand up the \fBserver\fP on its own 
 .TP
 .B \fBhyper\-shell cluster [\-h]\fP
 \fB[FILE | \-\-restart | \-\-forever]\fP
-\fB[\-\-no\-db | \-\-initdb]\fP \fB[\-N NUM]\fP \fB[\-t CMD]\fP \fB[\-b SIZE]\fP \fB[\-w SEC]\fP
-\fB[\-\-delay\-start SEC]\fP \fB[\-r NUM [\-\-eager]]\fP \fB[\-\-capture | [\-o PATH] [\-e PATH]]\fP
-\fB[\-f PATH]\fP \fB[\-\-ssh [HOST... | \-\-ssh\-group NAME] [\-\-env] | \-\-mpi | \-\-launcher=ARGS...]\fP
+\fB[\-N NUM]\fP \fB[\-t CMD]\fP \fB[\-b SIZE]\fP \fB[\-w SEC]\fP
+\fB[\-r NUM [\-\-eager]]\fP \fB[\-f PATH]\fP \fB[\-\-capture | [\-o PATH] [\-e PATH]]\fP  \fB[\-\-delay\-start SEC]\fP
+\fB[\-\-ssh [HOST... | \-\-ssh\-group NAME] [\-\-env] | \-\-mpi | \-\-launcher=ARGS...]\fP
+\fB[\-\-no\-db | \-\-initdb]\fP \fB[\-\-no\-confirm]\fP
 .UNINDENT
 .sp
 Start the cluster either locally or with remote clients over \fIssh\fP or a custom \fIlauncher\fP\&. This
@@ -196,6 +197,12 @@ tables if they don\(aqt already exist. This is a short\-hand for pre\-creating t
 .sp
 Mutually exclusive to \fB\-\-no\-db\fP\&. See \fBhyper\-shell initdb\fP command.
 .TP
+.B \fB\-\-no\-confirm\fP
+Disable client confirmation of task bundle received.
+.sp
+To achieve even higher throughput at large scales, optionally disable confirmation
+payloads from clients. Consider using this option when also using \fB\-\-no\-db\fP\&.
+.TP
 .B \fB\-\-forever\fP
 Schedule forever.
 .sp
@@ -282,6 +289,7 @@ for you and if \fB\-\-failures\fP is enabled these task args will be sent to a l
 .B \fBhyper\-shell\fP \fBserver\fP \fB[\-h]\fP
 \fB[FILE | \-\-forever | \-\-restart]\fP \fB[\-b NUM]\fP \fB[\-w SEC]\fP \fB[\-r NUM [\-\-eager]]\fP
 \fB[\-H ADDR]\fP \fB[\-p PORT]\fP \fB[\-k KEY]\fP \fB[\-\-no\-db | \-\-initdb]\fP \fB[\-\-print | \-f PATH]\fP
+\fB[\-\-no\-confirm]\fP
 .UNINDENT
 .sp
 Launch server, schedule directly or asynchronously from database.
@@ -378,6 +386,12 @@ tables if they don\(aqt already exist. This is a short\-hand for pre\-creating t
 .sp
 Mutually exclusive to \fB\-\-no\-db\fP\&. See \fBhyper\-shell initdb\fP command.
 .TP
+.B \fB\-\-no\-confirm\fP
+Disable client confirmation of task bundle received.
+.sp
+To achieve even higher throughput at large scales, optionally disable confirmation
+payloads from clients. Consider using this option when also using \fB\-\-no\-db\fP\&.
+.TP
 .B \fB\-\-forever\fP
 Schedule forever.
 .sp
@@ -418,9 +432,9 @@ Mutually exclusive to \fB\-\-print\fP\&.
 .INDENT 0.0
 .TP
 .B \fBhyper\-shell\fP \fBclient\fP \fB[\-h]\fP
-\fB[\-N NUM]\fP \fB[\-t TEMPLATE]\fP \fB[\-b SIZE]\fP \fB[\-w SEC]\fP \fB[\-d SEC]\fP
-\fB[\-H ADDR]\fP \fB[\-p PORT]\fP \fB[\-k KEY]\fP
-\fB[\-c | [\-o PATH] [\-e PATH]]\fP
+\fB[\-N NUM]\fP \fB[\-t CMD]\fP \fB[\-b SIZE]\fP \fB[\-w SEC]\fP \fB[\-d SEC]\fP
+\fB[\-H ADDR]\fP \fB[\-p PORT]\fP \fB[\-k KEY]\fP \fB[\-c | [\-o PATH] [\-e PATH]]\fP
+\fB[\-\-no\-confirm]\fP \fB[\-\-delay\-start SEC]\fP
 .UNINDENT
 .sp
 Launch client directly, run tasks in parallel.
@@ -489,6 +503,12 @@ Use \fB\-\-delay\-start\fP with a negative number to impose a uniform random del
 magnitude specified (e.g., \fB\-\-delay\-start=\-600\fP would delay the client up to ten minutes).
 This also has the effect of staggering the workload. If your tasks take on the order of 30
 minutes and you have 1000 nodes, choose \fB\-\-delay\-start=\-1800\fP\&.
+.TP
+.B \fB\-\-no\-confirm\fP
+Disable client confirmation of task bundle received.
+.sp
+To achieve even higher throughput at large scales, optionally disable confirmation
+payloads from clients. Consider using this option when also using \fB\-\-no\-db\fP\&.
 .TP
 .B \fB\-o\fP, \fB\-\-output\fP \fIPATH\fP
 File path for task outputs (default: <stdout>).
@@ -847,6 +867,27 @@ Limit number of returned records.
 .TP
 .B \fB\-c\fP, \fB\-\-count\fP
 Only print number of results that would be returned.
+.UNINDENT
+.SH TASK UPDATE USAGE
+.sp
+\fBhyper\-shell\fP \fBtask\fP \fBupdate\fP \fB[\-h]\fP \fBID\fP \fBFIELD\fP \fBVALUE\fP
+.sp
+Update individual task metadata.
+.sp
+Manually override task metadata after it has been submitted.
+Most fields should not be modified in this way, and may in fact
+be itself overwritten when the task is returned from the client.
+.SS Arguments
+.INDENT 0.0
+.TP
+.B ID
+Unique UUID.
+.TP
+.B FIELD
+Task metadata field name.
+.TP
+.B VALUE
+New value.
 .UNINDENT
 .SH TEMPLATES
 .sp
@@ -1329,6 +1370,39 @@ Universal identifier (UUID) for the current task.
 .B \fBTASK_ARGS\fP
 Original input command\-line argument line.
 Equivalent to \fB{}\fP, see \fI\%templates\fP section.
+.TP
+.B \fBTASK_SUBMIT_ID\fP
+Universal identifier (UUID) for submitting application instance.
+.TP
+.B \fBTASK_SUBMIT_HOST\fP
+Hostname of submitting application instance.
+.TP
+.B \fBTASK_SUBMIT_TIME\fP
+Timestamp task was submitted.
+.TP
+.B \fBTASK_SERVER_ID\fP
+Universal identifier (UUID) for server application instance.
+.TP
+.B \fBTASK_SERVER_HOST\fP
+Hostname of server application instance.
+.TP
+.B \fBTASK_SCHEDULE_TIME\fP
+Timestamp task was scheduled by server.
+.TP
+.B \fBTASK_CLIENT_ID\fP
+Universal identifier (UUID) for client application instance.
+.TP
+.B \fBTASK_CLIENT_HOST\fP
+Hostname of client application instance.
+.TP
+.B \fBTASK_COMMAND\fP
+Final command line for task.
+.TP
+.B \fBTASK_ATTEMPT\fP
+Integer number of attempts for current task (starts at 1).
+.TP
+.B \fBTASK_PREVIOUS_ID\fP
+Universal identifier (UUID) for previous attempt (if any).
 .TP
 .B \fBTASK_CWD\fP
 Current working directory for the current task.
