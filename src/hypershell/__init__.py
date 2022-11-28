@@ -12,6 +12,7 @@ import functools
 from cmdkit.app import Application, ApplicationGroup, exit_status
 from cmdkit.cli import Interface
 from cmdkit.config import ConfigurationError
+from sqlalchemy.exc import OperationalError
 
 # internal libs
 from hypershell.core.ansi import colorize_usage
@@ -101,6 +102,7 @@ Application.exceptions = {
     RuntimeError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
     ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
     DatabaseUninitialized: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+    OperationalError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
     Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
     Exception: functools.partial(write_traceback, logger=log, status=exit_status.runtime_error),
 }

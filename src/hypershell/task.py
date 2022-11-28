@@ -28,7 +28,7 @@ from cmdkit.config import ConfigurationError
 from cmdkit.app import Application, ApplicationGroup, exit_status
 from cmdkit.cli import Interface, ArgumentError
 from sqlalchemy import Column
-from sqlalchemy.exc import StatementError
+from sqlalchemy.exc import StatementError, OperationalError
 from sqlalchemy.orm import Query
 from sqlalchemy.orm.exc import StaleDataError
 from sqlalchemy.sql.elements import BinaryExpression
@@ -582,6 +582,7 @@ class TaskGroupApp(ApplicationGroup):
     exceptions = {
         ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
         DatabaseUninitialized: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        OperationalError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         **ApplicationGroup.exceptions
     }
 
