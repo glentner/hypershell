@@ -77,6 +77,7 @@ default = Namespace({
         'auth': '__HYPERSHELL__BAD__AUTHKEY__',
         'queuesize': 1,  # only allow a single bundle (scheduler must wait)
         'bundlesize': 1,
+        'bundlewait': 5,   # seconds
         'attempts': 1,
         'eager': False,  # prefer failed tasks to new tasks
         'wait': 5,  # seconds to wait between database queries
