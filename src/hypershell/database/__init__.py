@@ -19,7 +19,7 @@ from hypershell.core.ansi import colorize_usage
 from hypershell.core.logging import Logger
 from hypershell.core.config import config
 from hypershell.core.exceptions import write_traceback
-from hypershell.database.core import engine, in_memory
+from hypershell.database.core import engine, in_memory, schema
 from hypershell.database.model import Model, Task
 
 # public interface
@@ -47,7 +47,7 @@ def truncatedb() -> None:
 
 def checkdb() -> None:
     """Ensure database connection and tables exist."""
-    if not inspect(engine).has_table('task'):
+    if not inspect(engine).has_table('task', schema=schema):
         raise DatabaseUninitialized('Use \'initdb\' to initialize the database')
 
 
