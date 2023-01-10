@@ -603,7 +603,7 @@ class ServerThread(Thread):
             self.in_memory = True
         if self.in_memory and max_retries > 0:
             log.warning('Retries disabled when database disabled')
-        queue_config = QueueConfig(host=address[0], port=address[1], auth=auth)
+        queue_config = QueueConfig(host=address[0], port=address[1], auth=auth, size=config.server.queuesize)
         self.queue = QueueServer(config=queue_config)
         if self.in_memory:
             self.scheduler = None
@@ -800,8 +800,8 @@ class ServerApp(Application):
     bundlewait: int = config.submit.bundlewait
     interface.add_argument('-w', '--bundlewait', type=int, default=bundlewait)
 
-    eager_mode: bool = False
-    max_retries: int = DEFAULT_ATTEMPTS - 1
+    eager_mode: bool = config.server.eager
+    max_retries: int = config.server.attempts - 1
     interface.add_argument('-r', '--max-retries', type=int, default=max_retries)
     interface.add_argument('--eager', action='store_true')
 
@@ -811,13 +811,13 @@ class ServerApp(Application):
     restart_mode: bool = False
     interface.add_argument('--restart', action='store_true', dest='restart_mode')
 
-    host: str = QueueConfig.host
+    host: str = config.server.bind
     interface.add_argument('-H', '--bind', default=host, dest='host')
 
-    port: int = QueueConfig.port
+    port: int = config.server.port
     interface.add_argument('-p', '--port', type=int, default=port)
 
-    auth: str = QueueConfig.auth
+    auth: str = config.server.auth
     interface.add_argument('-k', '--auth', default=auth)
 
     in_memory: bool = False
@@ -840,13 +840,13 @@ class ServerApp(Application):
         if self.forever_mode:
             serve_forever(bundlesize=self.bundlesize, address=(self.host, self.port), auth=self.auth,
                           in_memory=self.in_memory, no_confirm=self.no_confirm,
-                          redirect_failures=self.failure_stream, max_retries=self.max_retries,
-                          evict_after=config.server.evict)
+                          max_retries=self.max_retries, eager=self.eager_mode,
+                          redirect_failures=self.failure_stream, evict_after=config.server.evict)
         else:
             serve_from(source=self.input_stream, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
                        address=(self.host, self.port), auth=self.auth, max_retries=self.max_retries,
                        in_memory=self.in_memory, no_confirm=self.no_confirm, evict_after=config.server.evict,
-                       redirect_failures=self.failure_stream, restart_mode=self.restart_mode)
+                       redirect_failures=self.failure_stream, restart_mode=self.restart_mode, eager=self.eager_mode)
 
     def check_args(self):
         """Fail particular argument combinations."""

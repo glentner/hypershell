@@ -812,13 +812,13 @@ class ClientApp(Application):
     num_tasks: int = DEFAULT_NUM_TASKS
     interface.add_argument('-N', '--num-tasks', type=int, default=num_tasks)
 
-    host: str = QueueConfig.host
+    host: str = config.server.bind
     interface.add_argument('-H', '--host', default=host)
 
-    port: int = QueueConfig.port
+    port: int = config.server.port
     interface.add_argument('-p', '--port', type=int, default=port)
 
-    auth: str = QueueConfig.auth
+    auth: str = config.server.auth
     interface.add_argument('-k', '--auth', default=auth)
 
     template: str = DEFAULT_TEMPLATE
