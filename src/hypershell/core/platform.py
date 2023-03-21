@@ -18,8 +18,7 @@ from cmdkit.app import exit_status
 from hypershell.core.ansi import bold, magenta
 
 # public interface
-__all__ = ['cwd', 'home', 'site', 'path', 'default_path',
-           'file_permissions', 'check_private', 'set_private']
+__all__ = ['cwd', 'home', 'site', 'path', 'default_path']
 
 
 cwd = os.getcwd()
@@ -83,18 +82,3 @@ else:
 os.makedirs(default_path.lib, exist_ok=True)
 os.makedirs(default_path.log, exist_ok=True)
 os.makedirs(os.path.join(default_path.lib, 'task'), exist_ok=True)
-
-
-def file_permissions(filepath: str) -> str:
-    """File permissions mask as a string."""
-    return stat.filemode(os.stat(filepath).st_mode)
-
-
-def check_private(filepath: str) -> bool:
-    """Check that `filepath` has '-rw-------' permissions."""
-    return file_permissions(filepath) == '-rw-------'
-
-
-def set_private(filepath: str) -> None:
-    """Update permissions to make private (i.e., go-rwx)."""
-    os.chmod(filepath, 33152)  # -rw-------

@@ -22,7 +22,7 @@ from cmdkit.config import Namespace, Configuration, Environ, ConfigurationError
 from cmdkit.app import exit_status
 
 # internal libs
-from hypershell.core.platform import path, home, check_private, set_private
+from hypershell.core.platform import path, home
 from hypershell.core.exceptions import write_traceback
 
 # public interface
@@ -104,9 +104,6 @@ def reload_file(filepath: str) -> Namespace:
     """Force reloading configuration file."""
     if not os.path.exists(filepath):
         return Namespace({})
-    if not check_private(filepath) and filepath != path.system.config:
-        # NOTE: Allow non-private for shared system level configuration
-        raise ConfigurationError(f'Non-private file permissions ({filepath})')
     try:
         return Namespace.from_toml(filepath)
     except Exception as err:
@@ -225,12 +222,10 @@ def update(scope: str, partial: dict) -> None:
         config_backup_path = os.path.join(os.path.dirname(config_path), f'.config.{timestamp}.toml')
         shutil.copy(config_path, config_backup_path)
         shutil.copystat(config_path, config_backup_path)
-        set_private(config_backup_path)
         log.debug(f'Created backup file ({config_backup_path})')
     else:
         with open(config_path, mode='w') as stream:
             stream.write(DEFAULT_CONFIG_HEADERS)
-        set_private(config_path)
     with open(config_path, mode='r') as stream:
         new_config = tomlkit.parse(stream.read())
     _inplace_update(new_config, partial)
