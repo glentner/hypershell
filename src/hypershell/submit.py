@@ -566,6 +566,7 @@ class SubmitApp(Application):
     count: int = 0
 
     exceptions = {
+        FileNotFoundError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
         **Application.exceptions,
     }
