@@ -70,7 +70,7 @@ Model = declarative_base()
 
 
 # Column types used by models
-UUID = Text().with_variant(PostgresUUID(), 'postgresql')
+UUID = Text().with_variant(PostgresUUID(as_uuid=False), 'postgresql')
 TEXT = Text()
 INTEGER = Integer()
 DATETIME = DateTime(timezone=True)
