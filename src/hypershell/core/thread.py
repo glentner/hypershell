@@ -19,14 +19,11 @@ __all__ = ['Thread', ]
 class Thread(threading.Thread, ABC):
     """Extends threading.Thread to provide exception handling."""
 
-    exc: Exception = None
-    lock: threading.Lock
-
+    __exception: Exception = None
     __should_halt: bool = False
 
     def __init__(self, name: str) -> None:
         super().__init__(name=name, daemon=True)
-        self.lock = threading.Lock()
 
     @abstractmethod
     def run_with_exceptions(self) -> None:
@@ -36,8 +33,8 @@ class Thread(threading.Thread, ABC):
         """Call `run_with_exceptions` within a try/except block."""
         try:
             self.run_with_exceptions()
-        except Exception as error:
-            self.exc = error
+        except Exception as exc:
+            self.__exception = exc
 
     @classmethod
     def new(cls, *args, **kwargs) -> Thread:
@@ -55,5 +52,5 @@ class Thread(threading.Thread, ABC):
     def join(self, timeout: Optional[float] = None) -> None:
         """Calls Thread.join but re-raises exceptions."""
         super().join(timeout=timeout)
-        if self.exc:
-            raise self.exc
+        if self.__exception:
+            raise self.__exception
