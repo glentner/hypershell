@@ -364,6 +364,10 @@ Arguments:
 Options:
   -w, --where     COND...   List of conditional statements.
   -s, --order-by  FIELD     Order output by field.
+      --failed              Alias for `exit_status != 0`
+      --succeeded           Alias for `exit_status == 0`
+      --finished            Alias for `exit_status != null`
+      --remaining           Alias for `exit_status == null`
   -x, --extract             Disable formatting for single column output.
       --json                Format output as JSON.
       --csv                 Format output as CSV.
@@ -384,7 +388,7 @@ class TaskSearchApp(Application):
     interface.add_argument('field_names', nargs='*', default=field_names)
 
     where_clauses: List[str] = None
-    interface.add_argument('-w', '--where', nargs='*', default=None, dest='where_clauses')
+    interface.add_argument('-w', '--where', nargs='*', default=[], dest='where_clauses')
 
     order_by: str = None
     order_desc: bool = False
@@ -394,8 +398,18 @@ class TaskSearchApp(Application):
     limit: int = None
     interface.add_argument('-l', '--limit', type=int, default=None)
 
-    count: bool = False
-    interface.add_argument('-c', '--count', action='store_true')
+    show_count: bool = False
+    interface.add_argument('-c', '--count', action='store_true', dest='show_count')
+
+    show_failed: bool = False
+    show_finished: bool = False
+    show_succeeded: bool = False
+    show_remaining: bool = False
+    search_alias_interface = interface.add_mutually_exclusive_group()
+    search_alias_interface.add_argument('--failed', action='store_true', dest='show_failed')
+    search_alias_interface.add_argument('--finished', action='store_true', dest='show_finished')
+    search_alias_interface.add_argument('--remaining', action='store_true', dest='show_remaining')
+    search_alias_interface.add_argument('--succeeded', action='store_true', dest='show_succeeded')
 
     output_format: str = 'table'
     output_formats: List[str] = ['table', 'json', 'csv', ]
@@ -408,7 +422,7 @@ class TaskSearchApp(Application):
     def run(self) -> None:
         """Search for tasks in database."""
         self.check_field_names()
-        if self.count:
+        if self.show_count:
             print(self.build_query().count())
         else:
             self.print_output(self.build_query().all())
@@ -429,6 +443,14 @@ class TaskSearchApp(Application):
 
     def build_filters(self) -> List[WhereClause]:
         """Create list of field selectors from command-line arguments."""
+        if self.show_failed:
+            self.where_clauses.append('exit_status != 0')
+        if self.show_succeeded:
+            self.where_clauses.append('exit_status == 0')
+        if self.show_finished:
+            self.where_clauses.append('exit_status != null')
+        if self.show_remaining:
+            self.where_clauses.append('exit_status == null')
         if not self.where_clauses:
             return []
         else:
