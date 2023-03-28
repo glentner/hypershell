@@ -364,10 +364,10 @@ Arguments:
 Options:
   -w, --where     COND...   List of conditional statements.
   -s, --order-by  FIELD     Order output by field.
-      --failed              Alias for `exit_status != 0`
-      --succeeded           Alias for `exit_status == 0`
-      --finished            Alias for `exit_status != null`
-      --remaining           Alias for `exit_status == null`
+      --failed              Alias for "exit_status != 0"
+      --succeeded           Alias for "exit_status == 0"
+      --finished            Alias for "exit_status != null"
+      --remaining           Alias for "exit_status == null"
   -x, --extract             Disable formatting for single column output.
       --json                Format output as JSON.
       --csv                 Format output as CSV.
