@@ -14,15 +14,15 @@ from uuid import uuid4 as gen_uuid
 from datetime import datetime
 
 # external libs
-from sqlalchemy import Column
+from sqlalchemy import Column, Index
 from sqlalchemy.orm import Query
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.types import Integer, DateTime, Text, Boolean
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
 
 # internal libs
-from hypershell.core.logging import HOSTNAME, Logger
+from hypershell.core.logging import HOSTNAME, Logger, INSTANCE
 from hypershell.database.core import schema, Session
 
 # public interface
@@ -65,7 +65,16 @@ def from_json_type(value: RT) -> Union[RT, VT]:
         return value
 
 
+# Shared base for database objects
 Model = declarative_base()
+
+
+# Column types used by models
+UUID = Text().with_variant(PostgresUUID(as_uuid=False), 'postgresql')
+TEXT = Text()
+INTEGER = Integer()
+DATETIME = DateTime(timezone=True)
+BOOLEAN = Boolean()
 
 
 class Task(Model):
@@ -74,36 +83,44 @@ class Task(Model):
     __tablename__ = 'task'
     __table_args__ = {'schema': schema}
 
-    id = Column(Text().with_variant(UUID(), 'postgresql'), primary_key=True, nullable=False)
-    args = Column(Text(), nullable=False)
+    id = Column(UUID, primary_key=True, nullable=False)
+    args = Column(TEXT, nullable=False)
 
-    submit_time = Column(DateTime(timezone=True), nullable=False)
-    submit_host = Column(Text(), nullable=True)
+    submit_id = Column(UUID, nullable=False)
+    submit_time = Column(DATETIME, nullable=False)
+    submit_host = Column(TEXT, nullable=True)
 
-    schedule_time = Column(DateTime(timezone=True), nullable=True)
-    server_host = Column(Text(), nullable=True)
+    server_id = Column(UUID, nullable=True)
+    server_host = Column(TEXT, nullable=True)
+    schedule_time = Column(DATETIME, nullable=True)
 
-    client_host = Column(Text(), nullable=True)
-    command = Column(Text(), nullable=True)
-    start_time = Column(DateTime(timezone=True), nullable=True)
-    completion_time = Column(DateTime(timezone=True), nullable=True)
-    exit_status = Column(Integer(), nullable=True)
+    client_id = Column(UUID, nullable=True)
+    client_host = Column(TEXT, nullable=True)
 
-    outpath = Column(Text(), nullable=True)
-    errpath = Column(Text(), nullable=True)
+    command = Column(TEXT, nullable=True)
+    start_time = Column(DATETIME, nullable=True)
+    completion_time = Column(DATETIME, nullable=True)
+    exit_status = Column(INTEGER, nullable=True)
 
-    attempt = Column(Integer(), nullable=False)
-    retried = Column(Boolean(), nullable=False)
-    previous_id = Column(Text().with_variant(UUID(), 'postgresql'), unique=True, nullable=True)
-    next_id = Column(Text().with_variant(UUID(), 'postgresql'), unique=True, nullable=True)
+    outpath = Column(TEXT, nullable=True)
+    errpath = Column(TEXT, nullable=True)
+
+    attempt = Column(INTEGER, nullable=False)
+    retried = Column(BOOLEAN, nullable=False)
+
+    previous_id = Column(UUID, unique=True, nullable=True)
+    next_id = Column(UUID, unique=True, nullable=True)
 
     columns = {
         'id': str,
         'args': str,
+        'submit_id': str,
         'submit_time': datetime,
         'submit_host': str,
-        'schedule_time': datetime,
+        'server_id': str,
         'server_host': str,
+        'schedule_time': datetime,
+        'client_id': str,
         'client_host': str,
         'command': str,
         'start_time': datetime,
@@ -176,7 +193,7 @@ class Task(Model):
     def new(cls, args: str, attempt: int = 1, retried: bool = False, **other) -> Task:
         """Create a new Task."""
         return Task(id=str(gen_uuid()), args=str(args).strip(),
-                    submit_time=datetime.now().astimezone(), submit_host=HOSTNAME,
+                    submit_id=INSTANCE, submit_host=HOSTNAME, submit_time=datetime.now().astimezone(),
                     attempt=attempt, retried=retried, **other)
 
     @classmethod
@@ -234,8 +251,9 @@ class Task(Model):
         else:
             tasks = cls.__next_not_eager(attempts, limit)
         for task in tasks:
-            task.schedule_time = datetime.now().astimezone()
+            task.server_id = INSTANCE
             task.server_host = HOSTNAME
+            task.schedule_time = datetime.now().astimezone()
         Session.commit()
         return tasks
 
@@ -296,7 +314,7 @@ class Task(Model):
         if changes:
             Session.bulk_update_mappings(cls, changes)
             Session.commit()  # NOTE: why is this necessary?
-            log.trace(f'Updated {len(changes)} task(s)')
+            log.trace(f'Updated {len(changes)} tasks')
 
     @classmethod
     def update(cls, id: str, **changes) -> None:
@@ -342,6 +360,42 @@ class Task(Model):
             for task in tasks:
                 task.schedule_time = None
                 task.server_host = None
+                task.server_id = None
+                task.client_host = None
+                task.client_id = None
             Session.commit()
             for task in tasks:
                 log.trace(f'Reverted previous task ({task.id})')
+
+    @classmethod
+    def select_orphaned(cls, client_id: str, limit: int) -> List[Task]:
+        """Select tasks that were orphaned from an evicted client."""
+        return (
+            cls.query()
+            .order_by(cls.schedule_time)
+            .filter(cls.schedule_time.isnot(None))
+            .filter(cls.completion_time.is_(None))
+            .filter(cls.client_id == client_id)
+            .limit(limit)
+            .all()
+        )
+
+    @classmethod
+    def revert_orphaned(cls, client_id: str) -> None:
+        """Revert orphaned tasks from an evicted client to un-scheduled state."""
+        while tasks := cls.select_orphaned(client_id, 100):
+            for task in tasks:
+                task.schedule_time = None
+                task.server_host = None
+                task.server_id = None
+                task.client_host = None
+                task.client_id = None
+            Session.commit()
+            for task in tasks:
+                log.trace(f'Reverted previous task ({task.id})')
+
+
+# Indices for efficient queries
+scheduled_index = Index('task_scheduled_index', Task.schedule_time)
+retries_index = Index('task_retries_index', Task.exit_status, Task.retried)
+client_completed_index = Index('task_client_completed_index', Task.client_id, Task.completion_time)

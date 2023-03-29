@@ -28,8 +28,9 @@ from cmdkit.config import ConfigurationError
 from cmdkit.app import Application, ApplicationGroup, exit_status
 from cmdkit.cli import Interface, ArgumentError
 from sqlalchemy import Column
-from sqlalchemy.exc import StatementError
+from sqlalchemy.exc import StatementError, OperationalError
 from sqlalchemy.orm import Query
+from sqlalchemy.orm.exc import StaleDataError
 from sqlalchemy.sql.elements import BinaryExpression
 
 # internal libs
@@ -80,7 +81,7 @@ class TaskSubmitApp(Application):
     interface.add_argument('argv', nargs='+')
 
     def run(self) -> None:
-        """Run submit thread."""
+        """Submit task to database."""
         task = Task.new(args=' '.join(self.argv))
         Task.add(task)
         print(task.id)
@@ -151,7 +152,7 @@ class TaskInfoApp(Application):
     }
 
     def run(self) -> None:
-        """Run submit thread."""
+        """Get metadata/status/outputs of task."""
         check_uuid(self.uuid)
         if self.extract_field and (self.print_stdout or self.print_stderr or self.format_json):
             raise ArgumentError('Cannot use -x/--extract with other output formats')
@@ -279,7 +280,7 @@ class TaskWaitApp(Application):
     }
 
     def run(self) -> None:
-        """Run submit thread."""
+        """Wait for task to complete."""
         check_uuid(self.uuid)
         self.wait_task()
         if self.print_info or self.format_json:
@@ -336,7 +337,7 @@ class TaskRunApp(Application):
     interface.add_argument('-n', '--interval', type=int, default=interval)
 
     def run(self) -> None:
-        """Run submit thread."""
+        """Submit task and wait for completion."""
         task = Task.new(args=' '.join(self.argv))
         Task.add(task)
         TaskWaitApp(uuid=task.id, interval=self.interval).run()
@@ -363,6 +364,10 @@ Arguments:
 Options:
   -w, --where     COND...   List of conditional statements.
   -s, --order-by  FIELD     Order output by field.
+      --failed              Alias for "exit_status != 0"
+      --succeeded           Alias for "exit_status == 0"
+      --finished            Alias for "exit_status != null"
+      --remaining           Alias for "exit_status == null"
   -x, --extract             Disable formatting for single column output.
       --json                Format output as JSON.
       --csv                 Format output as CSV.
@@ -373,7 +378,7 @@ Options:
 
 
 class TaskSearchApp(Application):
-    """Search for task(s) in database."""
+    """Search for tasks in database."""
 
     interface = Interface(SEARCH_PROGRAM,
                           colorize_usage(SEARCH_USAGE),
@@ -383,7 +388,7 @@ class TaskSearchApp(Application):
     interface.add_argument('field_names', nargs='*', default=field_names)
 
     where_clauses: List[str] = None
-    interface.add_argument('-w', '--where', nargs='*', default=None, dest='where_clauses')
+    interface.add_argument('-w', '--where', nargs='*', default=[], dest='where_clauses')
 
     order_by: str = None
     order_desc: bool = False
@@ -393,8 +398,18 @@ class TaskSearchApp(Application):
     limit: int = None
     interface.add_argument('-l', '--limit', type=int, default=None)
 
-    count: bool = False
-    interface.add_argument('-c', '--count', action='store_true')
+    show_count: bool = False
+    interface.add_argument('-c', '--count', action='store_true', dest='show_count')
+
+    show_failed: bool = False
+    show_finished: bool = False
+    show_succeeded: bool = False
+    show_remaining: bool = False
+    search_alias_interface = interface.add_mutually_exclusive_group()
+    search_alias_interface.add_argument('--failed', action='store_true', dest='show_failed')
+    search_alias_interface.add_argument('--finished', action='store_true', dest='show_finished')
+    search_alias_interface.add_argument('--remaining', action='store_true', dest='show_remaining')
+    search_alias_interface.add_argument('--succeeded', action='store_true', dest='show_succeeded')
 
     output_format: str = 'table'
     output_formats: List[str] = ['table', 'json', 'csv', ]
@@ -405,9 +420,9 @@ class TaskSearchApp(Application):
     output_interface.add_argument('-x', '--extract', action='store_const', const='extract', dest='output_format')
 
     def run(self) -> None:
-        """Run search application."""
+        """Search for tasks in database."""
         self.check_field_names()
-        if self.count:
+        if self.show_count:
             print(self.build_query().count())
         else:
             self.print_output(self.build_query().all())
@@ -428,6 +443,14 @@ class TaskSearchApp(Application):
 
     def build_filters(self) -> List[WhereClause]:
         """Create list of field selectors from command-line arguments."""
+        if self.show_failed:
+            self.where_clauses.append('exit_status != 0')
+        if self.show_succeeded:
+            self.where_clauses.append('exit_status == 0')
+        if self.show_finished:
+            self.where_clauses.append('exit_status != null')
+        if self.show_remaining:
+            self.where_clauses.append('exit_status == null')
         if not self.where_clauses:
             return []
         else:
@@ -487,6 +510,52 @@ class TaskSearchApp(Application):
                 raise ArgumentError(f'Invalid field name \'{name}\'')
 
 
+UPDATE_PROGRAM = 'hyper-shell task update'
+UPDATE_USAGE = f"""\
+Usage: 
+{UPDATE_PROGRAM} [-h] ID FIELD VALUE 
+
+Update individual task metadata.\
+"""
+
+UPDATE_HELP = f"""\
+{UPDATE_USAGE}
+
+Arguments:
+  ID                    Unique UUID.
+  FIELD                 Task metadata field name.
+  VALUE                 New value.
+
+Options:
+  -h, --help            Show this message and exit.\
+"""
+
+
+class TaskUpdateApp(Application):
+    """Update individual task attribute directly."""
+
+    interface = Interface(UPDATE_PROGRAM,
+                          colorize_usage(UPDATE_USAGE),
+                          colorize_usage(UPDATE_HELP))
+
+    uuid: str
+    interface.add_argument('uuid')
+
+    field: str
+    interface.add_argument('field', choices=list(Task.columns)[1:])  # NOTE: not ID!
+
+    value: str
+    interface.add_argument('value', type=smart_coerce)
+
+    def run(self) -> None:
+        """Update individual task attribute directly."""
+        check_uuid(self.uuid)
+        try:
+            Task.update(self.uuid, **{self.field: self.value, })
+        except StaleDataError as err:
+            raise Task.NotFound(str(err)) from err
+
+
 TASK_PROGRAM = 'hyper-shell task'
 TASK_USAGE = f"""\
 Usage: 
@@ -504,6 +573,7 @@ Commands:
   wait                   {TaskWaitApp.__doc__}
   run                    {TaskRunApp.__doc__}
   search                 {TaskSearchApp.__doc__}
+  update                 {TaskUpdateApp.__doc__}
 
 Options:
   -h, --help             Show this message and exit.\
@@ -526,6 +596,7 @@ class TaskGroupApp(ApplicationGroup):
         'wait': TaskWaitApp,
         'run': TaskRunApp,
         'search': TaskSearchApp,
+        'update': TaskUpdateApp,
     }
 
     # NOTE: ApplicationGroup only defines the CompletedCommand mechanism.
@@ -533,6 +604,7 @@ class TaskGroupApp(ApplicationGroup):
     exceptions = {
         ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
         DatabaseUninitialized: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        OperationalError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         **ApplicationGroup.exceptions
     }
 

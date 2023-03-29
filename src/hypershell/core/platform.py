@@ -6,24 +6,38 @@
 
 # standard libs
 import os
+import sys
 import stat
 import ctypes
 
 # external libs
 from cmdkit.config import Namespace
+from cmdkit.app import exit_status
+
+# internal libs
+from hypershell.core.ansi import bold, magenta
 
 # public interface
-__all__ = ['cwd', 'home', 'site', 'path', 'default_path',
-           'file_permissions', 'check_private', 'set_private']
+__all__ = ['cwd', 'home', 'site', 'path', 'default_path']
 
 
 cwd = os.getcwd()
 home = os.path.expanduser('~')
+if 'HYPERSHELL_SITE' not in os.environ:
+    local_site = os.path.join(cwd, '.hypershell')
+else:
+    local_site = os.getenv('HYPERSHELL_SITE')
+    if not os.path.isdir(local_site):
+        print(f'{bold(magenta("CRITICAL"))} [{__name__}] '
+              f'Directory does not exist (HYPERSHELL_SITE={local_site})', file=sys.stderr)
+        sys.exit(exit_status.bad_config)
+
+
 if os.name == 'nt':
     is_admin = ctypes.windll.shell32.IsUserAnAdmin() == 1
     site = Namespace(system=os.path.join(os.getenv('ProgramData'), 'HyperShell'),
                      user=os.path.join(os.getenv('AppData'), 'HyperShell'),
-                     local=os.path.join(cwd, '.hypershell'))
+                     local=local_site)
     path = Namespace({
         'system': {
             'lib': os.path.join(site.system, 'Library'),
@@ -41,7 +55,7 @@ if os.name == 'nt':
 else:
     is_admin = os.getuid() == 0
     site = Namespace(system='/', user=os.path.join(home, '.hypershell'),
-                     local=os.path.join(cwd, '.hypershell'))
+                     local=local_site)
     path = Namespace({
         'system': {
             'lib': os.path.join(site.system, 'var', 'lib', 'hypershell'),
@@ -58,23 +72,13 @@ else:
     })
 
 
+if 'HYPERSHELL_SITE' in os.environ:
+    default_path = path.local
+else:
+    default_path = path.user if not is_admin else path.system
+
+
 # Automatically initialize default site directories
-default_path = path.system if is_admin else path.user
 os.makedirs(default_path.lib, exist_ok=True)
 os.makedirs(default_path.log, exist_ok=True)
 os.makedirs(os.path.join(default_path.lib, 'task'), exist_ok=True)
-
-
-def file_permissions(filepath: str) -> str:
-    """File permissions mask as a string."""
-    return stat.filemode(os.stat(filepath).st_mode)
-
-
-def check_private(filepath: str) -> bool:
-    """Check that `filepath` has '-rw-------' permissions."""
-    return file_permissions(filepath) == '-rw-------'
-
-
-def set_private(filepath: str) -> None:
-    """Update permissions to make private (i.e., go-rwx)."""
-    os.chmod(filepath, 33152)  # -rw-------

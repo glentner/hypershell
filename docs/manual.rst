@@ -174,6 +174,16 @@ Task Search Usage
 .. include:: _include/task_search_help.rst
 
 
+Task Update Usage
+-----------------
+
+.. include:: _include/task_update_usage.rst
+
+.. include:: _include/task_update_desc.rst
+
+.. include:: _include/task_update_help.rst
+
+
 Templates
 ---------
 

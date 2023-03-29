@@ -98,29 +98,39 @@ def _apply_formatters(text: str, *formatters: Callable[[str], str]) -> str:
         return text
 
 
+# Look-around pattern to negate matches within quotation
+# Whole quotations are formatted together
+NOT_QUOTED = (
+    r'(?=([^"]*"[^"]*")*[^"]*$)' +
+    r"(?=([^']*'[^']*')*[^']*$)" +
+    r'(?=([^`]*`[^`]*`)*[^`]*$)'
+)
+
+
 def _format_headers(text: str) -> str:
     """Add rich ANSI formatting to section headers."""
     names = ['Usage', 'Commands', 'Arguments', 'Modes', 'Options', 'Files']
-    return re.sub(r'(?P<name>' + '|'.join(names) + r'):', bold(r'\g<name>:'), text)
+    return re.sub(r'(?P<name>' + '|'.join(names) + r'):' + NOT_QUOTED, bold(r'\g<name>:'), text)
 
 
 def _format_options(text: str) -> str:
     """Add rich ANSI formatting to option syntax."""
-    return re.sub(r'(?P<leader>[ /\[,])(?P<option>-[a-zA-Z]|--[a-z]+(-[a-z]+)?)\b',
-                  r'\g<leader>' + cyan(r'\g<option>'), text)
+    option_pattern = r'(?P<leader>[ /\[,])(?P<option>-[a-zA-Z]|--[a-z]+(-[a-z]+)?)\b'
+    return re.sub(option_pattern + NOT_QUOTED, r'\g<leader>' + cyan(r'\g<option>'), text)
 
 
 def _format_special_args(text: str) -> str:
     """Add rich ANSI formatting to special argument syntax."""
-    args = ['FILE', 'PATH', 'ARGS', 'ID', 'NUM', 'CMD', 'SIZE', 'SEC', 'NAME', 'TEMPLATE',
-            'ADDR', 'HOST', 'PORT', 'KEY', 'SECTION', 'VAR', 'VALUE', 'FIELD', 'COND', ]
-    return re.sub(r'\b(?P<arg>' + '|'.join(args) + r')\b', italic(r'\g<arg>'), text)
+    metavars = ['FILE', 'PATH', 'ARGS', 'ID', 'NUM', 'CMD', 'SIZE', 'SEC', 'NAME', 'TEMPLATE',
+                'ADDR', 'HOST', 'PORT', 'KEY', 'SECTION', 'VAR', 'VALUE', 'FIELD', 'COND', ]
+    metavars_pattern = r'\b(?P<arg>' + '|'.join(metavars) + r')\b'
+    return re.sub(metavars_pattern + NOT_QUOTED, italic(r'\g<arg>'), text)
 
 
 def _format_special_marker(text: str) -> str:
     """Add rich ANSI formatting to special markers (e.g., '<stdout>')."""
     args = ['<stdout>', '<stderr>', '<stdin>', '<devnull>', '<none>', '<command>', '<args>', ]
-    return re.sub(r'(?P<arg>' + '|'.join(args) + r')', italic(r'\g<arg>'), text)
+    return re.sub(r'(?P<arg>' + '|'.join(args) + r')' + NOT_QUOTED, italic(r'\g<arg>'), text)
 
 
 def _format_single_quoted_string(text: str) -> str:
@@ -139,10 +149,10 @@ def _format_backtick_string(text: str) -> str:
 
 def _format_digit(text: str) -> str:
     """Add rich ANSI formatting to numerical digits."""
-    return re.sub(r'\b(?P<num>\d+)\b', green(r'\g<num>'), text)
+    return re.sub(r'\b(?P<num>\d+|null|NULL)\b' + NOT_QUOTED, green(r'\g<num>'), text)
 
 
 def _format_external_commands(text: str) -> str:
     """Add rich ANSI formatting to external command mentions."""
     names = ['mpirun', 'mpiexec', 'srun', 'brun', 'jsrun', ]
-    return re.sub(r'\b(?P<name>' + '|'.join(names) + r')\b', italic(r'\g<name>'), text)
+    return re.sub(r'\b(?P<name>' + '|'.join(names) + r')\b' + NOT_QUOTED, italic(r'\g<name>'), text)

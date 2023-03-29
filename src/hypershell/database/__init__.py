@@ -12,14 +12,15 @@ from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
 from cmdkit.config import ConfigurationError
 from sqlalchemy import inspect
+from sqlalchemy.orm import close_all_sessions
 
 # internal libs
 from hypershell.core.ansi import colorize_usage
 from hypershell.core.logging import Logger
 from hypershell.core.config import config
 from hypershell.core.exceptions import write_traceback
-from hypershell.database.core import engine, in_memory
-from hypershell.database.model import Model
+from hypershell.database.core import engine, in_memory, schema
+from hypershell.database.model import Model, Task
 
 # public interface
 __all__ = ['InitDBApp', 'initdb', 'truncatedb', 'checkdb', 'DatabaseUninitialized', 'DATABASE_ENABLED', ]
@@ -35,14 +36,18 @@ def initdb() -> None:
 
 def truncatedb() -> None:
     """Truncate database tables."""
-    log.warning('Truncating database')
+    # NOTE: We still might hang here if other sessions exist outside this app instance
+    close_all_sessions()
+    log.trace('Dropping all tables')
     Model.metadata.drop_all(engine)
+    log.trace('Creating all tables')
     Model.metadata.create_all(engine)
+    log.warning(f'Truncated database')
 
 
 def checkdb() -> None:
     """Ensure database connection and tables exist."""
-    if not inspect(engine).has_table('task'):
+    if not inspect(engine).has_table('task', schema=schema):
         raise DatabaseUninitialized('Use \'initdb\' to initialize the database')
 
 
@@ -100,7 +105,7 @@ class InitDBApp(Application):
             else:
                 site = config.database.get('host', 'localhost')
             print(f'Connected to: {config.database.provider} ({site})')
-            response = input(f'Truncate database? [Y]es/no: ').strip()
+            response = input(f'Truncate database ({Task.count()} tasks)? [Y]es/no: ').strip()
             if response.lower() in ['', 'y', 'yes']:
                 truncatedb()
             elif response.lower() in ['n', 'no']:

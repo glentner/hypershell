@@ -169,8 +169,6 @@ class DatabaseURL(dict):
 # NOTE: mysql/mariadb and other providers not yet working
 providers = {
     'sqlite': 'sqlite',
-    'mysql': 'mysql',
-    'mariadb': 'mariadb+mariadbconnector',
     'postgres': 'postgresql',
     'postgresql': 'postgresql',
 }

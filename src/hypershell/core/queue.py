@@ -53,6 +53,7 @@ class QueueInterface(BaseManager, ABC):
     scheduled: JoinableQueue[Optional[List[bytes]]]
     completed: JoinableQueue[Optional[List[bytes]]]
     heartbeat: JoinableQueue[Optional[bytes]]
+    confirmed: JoinableQueue[Optional[bytes]]
 
     def __init__(self, config: QueueConfig) -> None:
         """Initialize queue interface."""
@@ -81,9 +82,11 @@ class QueueServer(QueueInterface):
         self.scheduled = JoinableQueue(maxsize=self.config.size)
         self.completed = JoinableQueue(maxsize=self.config.size)
         self.heartbeat = JoinableQueue(maxsize=0)
+        self.confirmed = JoinableQueue(maxsize=0)
         self.register('_get_scheduled', callable=self._get_scheduled)
         self.register('_get_completed', callable=self._get_completed)
         self.register('_get_heartbeat', callable=self._get_heartbeat)
+        self.register('_get_confirmed', callable=self._get_confirmed)
         super().start()
 
     def _get_scheduled(self) -> JoinableQueue[Optional[List[bytes]]]:
@@ -94,6 +97,9 @@ class QueueServer(QueueInterface):
 
     def _get_heartbeat(self) -> JoinableQueue[Optional[bytes]]:
         return self.heartbeat
+
+    def _get_confirmed(self) -> JoinableQueue[Optional[bytes]]:
+        return self.confirmed
 
     def __enter__(self) -> QueueServer:
         """Start the server."""
@@ -111,16 +117,19 @@ class QueueClient(QueueInterface):
     _get_scheduled: Callable[[], JoinableQueue[Optional[List[bytes]]]]
     _get_completed: Callable[[], JoinableQueue[Optional[List[bytes]]]]
     _get_heartbeat: Callable[[], JoinableQueue[Optional[bytes]]]
+    _get_confirmed: Callable[[], JoinableQueue[Optional[bytes]]]
 
     def connect(self) -> None:
         """Connect to server."""
         self.register('_get_scheduled')
         self.register('_get_completed')
         self.register('_get_heartbeat')
+        self.register('_get_confirmed')
         super().connect()
         self.scheduled = self._get_scheduled()
         self.completed = self._get_completed()
         self.heartbeat = self._get_heartbeat()
+        self.confirmed = self._get_confirmed()
 
     def __enter__(self) -> QueueClient:
         """Connect to server."""
