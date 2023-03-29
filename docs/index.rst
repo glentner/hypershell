@@ -34,7 +34,7 @@ the user ergonomics we provide. Novel design elements include but are not limite
 persisting task metadata and automated retries.
 
 *HyperShell* is pure Python and is tested on Linux, macOS, and Windows 10 in
-Python 3.9 and 3.10 environments. The server and client don't even need to use the same
+Python 3.9+ environments. The server and client don't even need to use the same
 platform simultaneously.
 
 -------------------
@@ -132,8 +132,8 @@ will each pull tasks off the queue asynchronously, balancing the load.
 Special variables are automatically defined for each individual task. For example, ``TASK_ID`` gives
 a unique UUID for each task (regardless of which client executes the task).
 
-Further, any environment variable defined with the ``HYPERSHELL_EXPORT_`` prefix will be injected into the
-environment of each task, *sans prefix*.
+Further, any environment variable defined with the ``HYPERSHELL_EXPORT_`` prefix will be injected into
+the environment of each task, *sans prefix*.
 
 Use ``-t`` (short for ``--template``) to expand a template, ``{}`` can be used to insert the incoming
 task arguments (alternatively, use ``TASK_ARGS``). Be sure to use single quotes to delay the variable
@@ -157,8 +157,8 @@ See the full documentation for environment variables under :ref:`configuration <
 |
 
 .. toctree::
-    :caption: Intro
     :hidden:
+    :caption: Intro
 
     getting_started
     install
@@ -175,13 +175,20 @@ See the full documentation for environment variables under :ref:`configuration <
     templates
 
 .. toctree::
-    :caption: Tutorial
     :hidden:
+    :caption: Tutorial
 
     tutorial/basic
     tutorial/distributed
     tutorial/hybrid
     tutorial/advanced
+
+.. toctree::
+    :hidden:
+    :caption: Project
+
+    blog/index
+    roadmap
 
 .. toctree::
     :hidden:

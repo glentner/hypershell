@@ -5,7 +5,7 @@ ID
     Unique UUID.
 
 FIELD
-    Task metadata field name.
+    Task field name (e.g., "args").
 
 VALUE
     New value.

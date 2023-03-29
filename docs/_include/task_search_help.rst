@@ -17,6 +17,18 @@ Options
 ``-x``, ``--extract``
     Disable formatting for single column output.
 
+``--failed``
+    Alias for ``-w 'exit_status != 0'``.
+
+``--succeeded``
+    Alias for ``-w 'exit_status == 0'``.
+
+``--finished``
+    Alias for ``-w 'exit_status != null'``.
+
+``--remaining``
+    Alias for ``-w 'exit_status == null'``.
+
 ``--json``
     Format output as JSON.
 
@@ -24,7 +36,7 @@ Options
     Format output as CSV.
 
 ``-l``, ``--limit`` *NUM*
-    Limit number of returned records.
+    Limit number of returned results.
 
 ``-c``, ``--count``
     Only print number of results that would be returned.
