@@ -137,7 +137,7 @@ class RemoteCluster(Thread):
 class NodeList(list):
     """A list of hostnames."""
 
-    name_pattern: re.Pattern = re.compile(r'^[a-z-A-Z0-9]*$')
+    group_pattern: re.Pattern = re.compile(r',(?![^[]*])')
     range_pattern: re.Pattern = re.compile(r'\[((\d+|\d+-\d+)(,(\d+|\d+-\d+))*)]')
 
     @classmethod
@@ -145,7 +145,7 @@ class NodeList(list):
         """Smart initialization via some command-line `arg`."""
         if not arg:
             return cls.from_config()
-        if cls.range_pattern.search(arg):
+        if ',' in arg or cls.range_pattern.search(arg):
             return cls.from_pattern(arg)
         else:
             return cls([arg, ])
@@ -181,13 +181,18 @@ class NodeList(list):
     @classmethod
     def from_pattern(cls: Type[NodeList], pattern: str) -> NodeList:
         """Expand a `pattern` to multiple hostnames."""
-        if match := cls.range_pattern.search(pattern):
-            range_spec = match.group()
-            prefix, suffix = pattern.split(range_spec)
-            segments = cls.expand_pattern(range_spec)
-            return cls([f'{prefix}{segment}{suffix}' for segment in segments])
+        pattern = pattern.strip(',')
+        if match := cls.group_pattern.search(pattern):
+            idx = match.start()
+            return cls(cls.from_pattern(pattern[0:idx]) + cls.from_pattern(pattern[idx+1:]))
         else:
-            return cls([pattern, ])
+            if match := cls.range_pattern.search(pattern):
+                range_spec = match.group()
+                prefix, suffix = pattern.split(range_spec)
+                segments = cls.expand_pattern(range_spec)
+                return cls([f'{prefix}{segment}{suffix}' for segment in segments])
+            else:
+                return cls([pattern, ])
 
     @staticmethod
     def expand_pattern(spec: str) -> List[str]:
