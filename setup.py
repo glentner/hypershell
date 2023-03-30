@@ -55,7 +55,7 @@ setup(
     include_package_data = True,
     long_description = long_description,
     long_description_content_type = 'text/x-rst',
-    classifiers      = ['Development Status :: 4 - Beta',
+    classifiers      = ['Development Status :: 5 - Production/Stable',
                         'Topic :: Utilities',
                         'Programming Language :: Python :: 3.9',
                         'Programming Language :: Python :: 3.10',
