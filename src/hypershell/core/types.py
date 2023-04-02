@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """Automatic type coercion of input data."""
