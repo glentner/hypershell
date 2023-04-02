@@ -215,7 +215,7 @@ class SchedulerThread(Thread):
 
 
 class ConfirmState(State, Enum):
-    """Finite states for Claim machine."""
+    """Finite states for task confirmation machine."""
     START = 0
     UNLOAD = 1
     UNPACK = 2
