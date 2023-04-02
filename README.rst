@@ -34,7 +34,7 @@ the ergonomics we provide. Novel design elements include but are not limited to
 persisting task metadata and automated retries.
 
 *HyperShell* is pure Python and is tested on Linux, macOS, and Windows 10 in
-Python 3.9 and 3.10 environments. The server and client don't even need to use the same
+Python 3.9+ environments. The server and client don't even need to use the same
 platform simultaneously.
 
 
@@ -50,9 +50,9 @@ comprehensive usage guide on the command line you can view the manual page with
 Contributions
 -------------
 
-Contributions are welcome. If you find bugs or have questions, open an *Issue* here. If and
-when the project grows, a code of conduct will be provided along side a more comprehensive set of
-guidelines for contributing; until then, just be kind.
+Contributions are welcome. If you find bugs or have questions, open an *Issue* here.
+We've added a Code of Conduct recently, adapted from the
+`Contributor Covenant <https://www.contributor-covenant.org/>`_, version 2.0.
 
 
 Citation

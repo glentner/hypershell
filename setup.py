@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """Build and installation script for hyper-shell."""
@@ -55,10 +55,11 @@ setup(
     include_package_data = True,
     long_description = long_description,
     long_description_content_type = 'text/x-rst',
-    classifiers      = ['Development Status :: 4 - Beta',
+    classifiers      = ['Development Status :: 5 - Production/Stable',
                         'Topic :: Utilities',
                         'Programming Language :: Python :: 3.9',
                         'Programming Language :: Python :: 3.10',
+                        'Programming Language :: Python :: 3.11',
                         'Operating System :: POSIX :: Linux',
                         'Operating System :: MacOS',
                         'Operating System :: Microsoft :: Windows',

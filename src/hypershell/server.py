@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -215,7 +215,7 @@ class SchedulerThread(Thread):
 
 
 class ConfirmState(State, Enum):
-    """Finite states for Claim machine."""
+    """Finite states for task confirmation machine."""
     START = 0
     UNLOAD = 1
     UNPACK = 2
