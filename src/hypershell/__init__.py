@@ -8,7 +8,7 @@
 import sys
 
 # external libs
-from cmdkit.app import Application, ApplicationGroup, exit_status
+from cmdkit.app import Application, ApplicationGroup
 from cmdkit.cli import Interface
 
 # internal libs
