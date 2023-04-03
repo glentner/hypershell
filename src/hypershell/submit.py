@@ -51,7 +51,7 @@ from queue import Queue, Empty as QueueEmpty, Full as QueueFull
 
 # external libs
 from cmdkit.config import ConfigurationError
-from cmdkit.app import Application, exit_status
+from cmdkit.app import Application
 from cmdkit.cli import Interface
 
 # internal libs
@@ -62,7 +62,7 @@ from hypershell.core.fsm import State, StateMachine
 from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
-from hypershell.core.exceptions import handle_exception
+from hypershell.core.exceptions import get_shared_exception_mapping
 from hypershell.database.model import Task
 from hypershell.database import initdb, checkdb
 
@@ -566,9 +566,7 @@ class SubmitApp(Application):
     count: int = 0
 
     exceptions = {
-        FileNotFoundError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-        ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
-        **Application.exceptions,
+        **get_shared_exception_mapping(__name__)
     }
 
     def run(self) -> None:

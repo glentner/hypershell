@@ -6,6 +6,7 @@
 
 # standard libs
 import sys
+import functools
 
 # external libs
 from cmdkit.app import Application, exit_status
@@ -13,12 +14,14 @@ from cmdkit.cli import Interface
 from cmdkit.config import ConfigurationError
 from sqlalchemy import inspect
 from sqlalchemy.orm import close_all_sessions
+from sqlalchemy.exc import OperationalError
 
 # internal libs
 from hypershell.core.ansi import colorize_usage
 from hypershell.core.logging import Logger
 from hypershell.core.config import config
-from hypershell.core.exceptions import write_traceback
+from hypershell.core.exceptions import (write_traceback, handle_exception, DatabaseUninitialized,
+                                        get_shared_exception_mapping)
 from hypershell.database.core import engine, in_memory, schema
 from hypershell.database.model import Model, Task
 
@@ -27,6 +30,16 @@ __all__ = ['InitDBApp', 'initdb', 'truncatedb', 'checkdb', 'ensuredb', 'DATABASE
 
 # initialize logger
 log = Logger.with_name(__name__)
+
+
+try:
+    if not in_memory:
+        DATABASE_ENABLED = True
+    else:
+        DATABASE_ENABLED = False
+except Exception as error:
+    write_traceback(error, module=__name__)
+    sys.exit(exit_status.bad_config)
 
 
 def initdb() -> None:
@@ -96,6 +109,11 @@ class InitDBApp(Application):
     auto_confirm: bool = False
     interface.add_argument('-y', '--yes', action='store_true', dest='auto_confirm')
 
+    exceptions = {
+        OperationalError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        **get_shared_exception_mapping(__name__),
+    }
+
     def run(self) -> None:
         """Business logic for `initdb`."""
         if not DATABASE_ENABLED:
@@ -119,13 +137,3 @@ class InitDBApp(Application):
                 print('Stopping')
             else:
                 raise RuntimeError(f'Stopping (invalid response: "{response}")')
-
-
-try:
-    if not in_memory:
-        DATABASE_ENABLED = True
-    else:
-        DATABASE_ENABLED = False
-except Exception as error:
-    write_traceback(error, module=__name__)
-    sys.exit(exit_status.bad_config)

@@ -12,12 +12,11 @@ from typing import Any
 import os
 import sys
 import json
-import functools
 import subprocess
 
 # external libs
 import toml
-from cmdkit.app import Application, ApplicationGroup, exit_status
+from cmdkit.app import Application, ApplicationGroup
 from cmdkit.cli import Interface, ArgumentError
 from cmdkit.config import ConfigurationError
 from rich.console import Console
@@ -29,7 +28,7 @@ from hypershell.core.platform import path
 from hypershell.core.types import smart_coerce
 from hypershell.core.config import load_file, update, config as full_config
 from hypershell.core.logging import Logger
-from hypershell.core.exceptions import handle_exception
+from hypershell.core.exceptions import get_shared_exception_mapping
 
 # public interface
 __all__ = ['ConfigApp', ]
@@ -68,6 +67,10 @@ class ConfigEditApp(Application):
     site_interface = interface.add_mutually_exclusive_group()
     site_interface.add_argument('--user', action='store_const', const='user')
     site_interface.add_argument('--system', action='store_const', const='system')
+
+    exceptions = {
+        **get_shared_exception_mapping(__name__)
+    }
 
     def run(self) -> None:
         """Business logic for `config edit`."""
@@ -127,8 +130,7 @@ class ConfigGetApp(Application):
     interface.add_argument('-x', '--expand', action='store_true')
 
     exceptions = {
-        ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
-        **Application.exceptions,
+        **get_shared_exception_mapping(__name__)
     }
 
     def run(self) -> None:
@@ -267,6 +269,10 @@ class ConfigSetApp(Application):
     site_interface.add_argument('--user', action='store_const', const='user', dest='site_name', default=site_name)
     site_interface.add_argument('--system', action='store_const', const='system', dest='site_name')
 
+    exceptions = {
+        **get_shared_exception_mapping(__name__)
+    }
+
     def run(self) -> None:
         """Business logic for `config set`."""
 
@@ -314,6 +320,10 @@ class ConfigWhichApp(Application):
 
     varpath: str = None
     interface.add_argument('varpath', metavar='VAR')
+
+    exceptions = {
+        **get_shared_exception_mapping(__name__)
+    }
 
     def run(self) -> None:
         """Business logic for `config which`."""

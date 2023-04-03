@@ -24,11 +24,10 @@ import yaml
 from rich.console import Console
 from rich.syntax import Syntax
 from rich.table import Table
-from cmdkit.config import ConfigurationError
 from cmdkit.app import Application, ApplicationGroup, exit_status
 from cmdkit.cli import Interface, ArgumentError
 from sqlalchemy import Column
-from sqlalchemy.exc import StatementError, OperationalError
+from sqlalchemy.exc import StatementError
 from sqlalchemy.orm import Query
 from sqlalchemy.orm.exc import StaleDataError
 from sqlalchemy.sql.elements import BinaryExpression
@@ -41,6 +40,7 @@ from hypershell.core.exceptions import handle_exception
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.remote import SSHConnection
 from hypershell.core.types import smart_coerce
+from hypershell.core.exceptions import get_shared_exception_mapping
 from hypershell.database.model import Task, to_json_type
 from hypershell.database import ensuredb
 
@@ -79,6 +79,10 @@ class TaskSubmitApp(Application):
 
     argv: List[str] = []
     interface.add_argument('argv', nargs='+')
+
+    exceptions = {
+        **get_shared_exception_mapping(__name__)
+    }
 
     def run(self) -> None:
         """Submit task to database."""
@@ -146,10 +150,7 @@ class TaskInfoApp(Application):
 
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-        StatementError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-        FileNotFoundError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-        RuntimeError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-        **Application.exceptions,
+        **get_shared_exception_mapping(__name__)
     }
 
     def run(self) -> None:
@@ -277,8 +278,7 @@ class TaskWaitApp(Application):
 
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-        StatementError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-        **Application.exceptions,
+        **get_shared_exception_mapping(__name__)
     }
 
     def run(self) -> None:
@@ -338,6 +338,10 @@ class TaskRunApp(Application):
 
     interval: int = DEFAULT_INTERVAL
     interface.add_argument('-n', '--interval', type=int, default=interval)
+
+    exceptions = {
+        **get_shared_exception_mapping(__name__)
+    }
 
     def run(self) -> None:
         """Submit task and wait for completion."""
@@ -422,6 +426,11 @@ class TaskSearchApp(Application):
     output_interface.add_argument('--json', action='store_const', const='json', dest='output_format')
     output_interface.add_argument('--csv', action='store_const', const='csv', dest='output_format')
     output_interface.add_argument('-x', '--extract', action='store_const', const='extract', dest='output_format')
+
+    exceptions = {
+        StatementError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        **get_shared_exception_mapping(__name__)
+    }
 
     def run(self) -> None:
         """Search for tasks in database."""
@@ -552,6 +561,11 @@ class TaskUpdateApp(Application):
     value: str
     interface.add_argument('value', type=smart_coerce)
 
+    exceptions = {
+        Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        **get_shared_exception_mapping(__name__)
+    }
+
     def run(self) -> None:
         """Update individual task attribute directly."""
         ensuredb()
@@ -604,26 +618,6 @@ class TaskGroupApp(ApplicationGroup):
         'search': TaskSearchApp,
         'update': TaskUpdateApp,
     }
-
-    # NOTE: ApplicationGroup only defines the CompletedCommand mechanism.
-    #       Extending this allows for a shared exception for all task commands
-    exceptions = {
-        ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
-        DatabaseUninitialized: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-        OperationalError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-        **ApplicationGroup.exceptions
-    }
-
-    def __enter__(self: TaskGroupApp) -> TaskGroupApp:
-        """Resource initialization."""
-        db = config.database.get('file', None) or config.database.get('database', None)
-        if config.database.provider == 'sqlite' and db in ('', ':memory:', None):
-            raise ConfigurationError('Missing database configuration')
-        if config.database.provider == 'sqlite':
-            initdb()  # Auto-initialize if local sqlite provider
-        else:
-            checkdb()
-        return self
 
 
 @dataclass

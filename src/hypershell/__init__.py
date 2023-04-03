@@ -6,17 +6,13 @@
 
 # standard libs
 import sys
-import functools
 
 # external libs
 from cmdkit.app import Application, ApplicationGroup, exit_status
 from cmdkit.cli import Interface
-from cmdkit.config import ConfigurationError
-from sqlalchemy.exc import OperationalError
 
 # internal libs
 from hypershell.core.ansi import colorize_usage
-from hypershell.core.exceptions import write_traceback, handle_exception
 from hypershell.core.logging import Logger, initialize_logging
 from hypershell.submit import SubmitApp
 from hypershell.server import ServerApp
@@ -24,8 +20,7 @@ from hypershell.client import ClientApp
 from hypershell.cluster import ClusterApp
 from hypershell.task import TaskGroupApp
 from hypershell.config import ConfigApp
-from hypershell.database import InitDBApp, DatabaseUninitialized
-from hypershell.database.model import Task
+from hypershell.database import InitDBApp
 
 # public interface
 __all__ = ['HyperShellApp', 'main', '__version__', '__license__']
@@ -95,17 +90,6 @@ Issue tracking at:
 If this software has helped in your research please consider
 citing us (see --citation).\
 """
-
-
-# Globally defined exception cases for all applications
-Application.exceptions = {
-    RuntimeError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-    ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
-    DatabaseUninitialized: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-    OperationalError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-    Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-    Exception: functools.partial(write_traceback, logger=log, status=exit_status.runtime_error),
-}
 
 
 class HyperShellApp(ApplicationGroup):

@@ -58,6 +58,7 @@ from cmdkit.cli import Interface, ArgumentError
 
 # internal libs
 from hypershell.core.ansi import colorize_usage
+from hypershell.core.exceptions import get_shared_exception_mapping
 from hypershell.core.config import config, default
 from hypershell.core.logging import Logger
 from hypershell.core.fsm import State, StateMachine
@@ -834,6 +835,10 @@ class ServerApp(Application):
     output_interface = interface.add_mutually_exclusive_group()
     output_interface.add_argument('--print', action='store_true', dest='print_mode')
     output_interface.add_argument('-f', '--failures', default=None, dest='failure_path')
+
+    exceptions = {
+        **get_shared_exception_mapping(__name__)
+    }
 
     def run(self) -> None:
         """Run server."""

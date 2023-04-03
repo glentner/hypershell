@@ -64,7 +64,7 @@ from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.logging import HOSTNAME, INSTANCE, Logger
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
 from hypershell.core.exceptions import (handle_exception, handle_disconnect,
-                                        handle_address_unknown, HostAddressInfo)
+                                        handle_address_unknown, HostAddressInfo, get_shared_exception_mapping)
 
 # public interface
 __all__ = ['run_client', 'ClientThread', 'ClientApp', 'ClientInfo', 'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY', ]
@@ -850,7 +850,7 @@ class ClientApp(Application):
         ConnectionRefusedError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         AuthenticationError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         HostAddressInfo: functools.partial(handle_address_unknown, logger=log, status=exit_status.runtime_error),
-        **Application.exceptions,
+        **get_shared_exception_mapping(__name__),
     }
 
     def run(self) -> None:

@@ -31,6 +31,7 @@ from hypershell.core.queue import QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.template import DEFAULT_TEMPLATE
+from hypershell.core.exceptions import get_shared_exception_mapping
 from hypershell.database import initdb, checkdb
 from hypershell.client import ClientThread, DEFAULT_NUM_TASKS, DEFAULT_DELAY
 from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
@@ -434,6 +435,10 @@ class ClusterApp(Application):
 
     failure_path: str = None
     interface.add_argument('-f', '--failures', default=None, dest='failure_path')
+
+    exceptions = {
+        **get_shared_exception_mapping(__name__)
+    }
 
     def run(self) -> None:
         """Run cluster."""
