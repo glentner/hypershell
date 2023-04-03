@@ -65,7 +65,7 @@ from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueServer, QueueConfig
 from hypershell.core.heartbeat import Heartbeat, ClientState
 from hypershell.database.model import Task
-from hypershell.database import initdb, checkdb, DATABASE_ENABLED
+from hypershell.database import ensuredb, DATABASE_ENABLED
 from hypershell.submit import SubmitThread, LiveSubmitThread, DEFAULT_BUNDLEWAIT
 from hypershell.client import ClientInfo
 
@@ -876,12 +876,9 @@ class ServerApp(Application):
             return None
 
     def __enter__(self) -> ServerApp:
-        """Open file if not stdin."""
+        """Ensure context and database ready."""
         self.check_args()
-        if config.database.provider == 'sqlite' or self.auto_initdb:
-            initdb()  # Auto-initialize if local sqlite provider
-        elif not self.in_memory:
-            checkdb()
+        ensuredb()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:

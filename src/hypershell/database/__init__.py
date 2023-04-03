@@ -23,7 +23,7 @@ from hypershell.database.core import engine, in_memory, schema
 from hypershell.database.model import Model, Task
 
 # public interface
-__all__ = ['InitDBApp', 'initdb', 'truncatedb', 'checkdb', 'DatabaseUninitialized', 'DATABASE_ENABLED', ]
+__all__ = ['InitDBApp', 'initdb', 'truncatedb', 'checkdb', 'ensuredb', 'DATABASE_ENABLED', ]
 
 # initialize logger
 log = Logger.with_name(__name__)
@@ -51,8 +51,15 @@ def checkdb() -> None:
         raise DatabaseUninitialized('Use \'initdb\' to initialize the database')
 
 
-class DatabaseUninitialized(Exception):
-    """The database needs to be initialized before operations."""
+def ensuredb(auto_init: bool = False) -> None:
+    """Ensure database configuration before applying any operations."""
+    db = config.database.get('file', None) or config.database.get('database', None)
+    if config.database.provider == 'sqlite' and db in ('', ':memory:', None):
+        raise ConfigurationError('Missing database configuration')
+    if config.database.provider == 'sqlite' or auto_init is True:
+        initdb()
+    else:
+        checkdb()
 
 
 INITDB_PROGRAM = 'hyper-shell initdb'
