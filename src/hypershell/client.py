@@ -315,7 +315,7 @@ class ClientCollector(StateMachine):
         wait_time = (datetime.now() - self.previous_send)
         since_last = wait_time.total_seconds()
         if len(self.tasks) >= self.bundlesize:
-            log.trace(f'Bundle size ({len(self.tasks)}) reached')
+            log.trace(f'Bundle size reached ({len(self.tasks)} tasks)')
             return CollectorState.PACK_BUNDLE
         elif since_last >= self.bundlewait:
             log.trace(f'Wait time exceeded ({wait_time})')
@@ -332,7 +332,7 @@ class ClientCollector(StateMachine):
         """Push out bundle of completed tasks."""
         if self.bundle:
             self.queue.completed.put(self.bundle)
-            log.trace(f'Returned bundle of {len(self.bundle)} tasks')
+            log.trace(f'Returned bundle ({len(self.bundle)} tasks)')
             self.tasks.clear()
             self.bundle.clear()
             self.previous_send = datetime.now()
@@ -463,8 +463,6 @@ class TaskExecutor(StateMachine):
     def start_task(self) -> TaskState:
         """Start current task locally."""
         env = task_env(self.task)
-        log.info(f'Running task ({self.task.id})')
-        log.debug(f'Running task ({self.task.id}: {self.task.command})')
         if self.capture:
             self.task.outpath = env['TASK_OUTPATH']
             self.task.errpath = env['TASK_ERRPATH']
@@ -474,6 +472,9 @@ class TaskExecutor(StateMachine):
         self.process = Popen(self.task.command, shell=True,
                              stdout=self.redirect_output, stderr=self.redirect_errors,
                              cwd=config.task.cwd, env=env)
+        log.info(f'Running task ({self.task.id})')
+        log.debug(f'Running task ({self.task.id}: {self.task.command})')
+        log.trace(f'Running task (uuid={self.task.id}, pid={self.process.pid}, argv={self.task.command})')
         return TaskState.WAIT_TASK
 
     def wait_task(self) -> TaskState:
@@ -487,6 +488,9 @@ class TaskExecutor(StateMachine):
                 self.redirect_errors.close()
             return TaskState.PUT_LOCAL
         except TimeoutExpired:
+            # Only include time elapsed to the nearest second (we don't need fractions)
+            elapsed = timedelta(seconds=round((datetime.now().astimezone() - self.task.start_time).total_seconds()))
+            log.trace(f'Waiting on task ({self.task.id}: {elapsed})')
             return TaskState.WAIT_TASK
 
     def put_local(self) -> TaskState:
