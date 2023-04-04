@@ -357,9 +357,9 @@ SEARCH_PROGRAM = 'hyper-shell task search'
 SEARCH_USAGE = f"""\
 Usage:
 hyper-shell task search [-h] [FIELD [FIELD ...]] [--where COND [COND ...]] 
-                        [--order-by FIELD [--desc]] [-x | --json | --csv] 
-                        [--count | --limit NUM]
-
+                        [--order-by FIELD [--desc]] [--count | --limit NUM]
+                        [--format FORMAT | --json | --csv] 
+                        
 Search for tasks in the database.\
 """
 
@@ -376,13 +376,21 @@ Options:
       --succeeded           Alias for "exit_status == 0"
       --finished            Alias for "exit_status != null"
       --remaining           Alias for "exit_status == null"
-  -x, --extract             Disable formatting for single column output.
       --json                Format output as JSON.
       --csv                 Format output as CSV.
-  -l, --limit     NUM       Limit the number of rows.
+      --format    FORMAT    Format output (normal, plain, table, csv, json).
+  -l, --limit     NUM       Limit the number of results.
   -c, --count               Show count of results.
   -h, --help                Show this message and exit.\
 """
+
+
+# Listing of all field names in order (default for search)
+ALL_FIELDS = list(Task.columns)
+
+
+# Reasonable limit on output delimiter (typically just single char).
+DELIMITER_MAX_SIZE = 100
 
 
 class TaskSearchApp(Application):
@@ -392,7 +400,7 @@ class TaskSearchApp(Application):
                           colorize_usage(SEARCH_USAGE),
                           colorize_usage(SEARCH_HELP))
 
-    field_names: List[str] = list(Task.columns)
+    field_names: List[str] = ALL_FIELDS
     interface.add_argument('field_names', nargs='*', default=field_names)
 
     where_clauses: List[str] = None
@@ -419,13 +427,16 @@ class TaskSearchApp(Application):
     search_alias_interface.add_argument('--remaining', action='store_true', dest='show_remaining')
     search_alias_interface.add_argument('--succeeded', action='store_true', dest='show_succeeded')
 
-    output_format: str = 'table'
-    output_formats: List[str] = ['table', 'json', 'csv', ]
+    output_format: str = '<default>'  # 'plain' if field_names else 'normal'
+    output_formats: List[str] = ['normal', 'plain', 'table', 'json', 'csv']
     output_interface = interface.add_mutually_exclusive_group()
     output_interface.add_argument('--format', default=output_format, dest='output_format', choices=output_formats)
     output_interface.add_argument('--json', action='store_const', const='json', dest='output_format')
     output_interface.add_argument('--csv', action='store_const', const='csv', dest='output_format')
-    output_interface.add_argument('-x', '--extract', action='store_const', const='extract', dest='output_format')
+    # output_interface.add_argument('-x', '--extract', action='store_const', const='extract', dest='output_format')
+
+    output_delimiter: str = '<default>'  # <space> if plain, ',' if --csv, else not valid
+    interface.add_argument('-d', '--delimiter', default=output_delimiter, dest='output_delimiter')
 
     exceptions = {
         StatementError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
@@ -436,6 +447,7 @@ class TaskSearchApp(Application):
         """Search for tasks in database."""
         ensuredb()
         self.check_field_names()
+        self.check_output_format()
         if self.show_count:
             print(self.build_query().count())
         else:
@@ -480,16 +492,8 @@ class TaskSearchApp(Application):
         """The requested output formatter."""
         return getattr(self, f'print_{self.output_format}')
 
-    def print_extract(self, results: List[Tuple]) -> None:
-        """Basic output from single column."""
-        if len(self.field_names) == 1:
-            for (value, ) in results:
-                print(json.dumps(to_json_type(value)).strip('"'), file=sys.stdout)
-        else:
-            raise ArgumentError(f'Cannot use -x/--extract for more than a single field')
-
     def print_table(self, results: List[Tuple]) -> None:
-        """Print in table format from simple instances of ModelInterface."""
+        """Print in table format."""
         table = Table(title=None)
         for name in self.field_names:
             table.add_column(name)
@@ -497,8 +501,38 @@ class TaskSearchApp(Application):
             table.add_row(*[json.dumps(to_json_type(value)).strip('"') for value in record])
         Console().print(table)
 
+    @staticmethod
+    def print_normal(results: List[Tuple]) -> None:
+        """Print semi-structured output with all field names."""
+        for record in results:
+            task = Task.from_dict(dict(zip(Task.columns, record)))
+            task_data = {k: json.dumps(to_json_type(v)).strip('"') for k, v in task.to_dict().items()}
+            print('---')
+            print(f'          id: {task_data["id"]}')
+            print(f'     command: {task_data["command"]} ({task_data["args"]})')
+            print(f' exit_status: {task_data["exit_status"]}')
+            print(f'   submitted: {task_data["submit_time"]}')
+            print(f'   scheduled: {task_data["schedule_time"]}')
+            print(f'     started: {task_data["start_time"]}')
+            print(f'   completed: {task_data["completion_time"]}')
+            print(f' submit_host: {task_data["submit_host"]} ({task_data["submit_id"]})')
+            print(f' server_host: {task_data["server_host"]} ({task_data["server_id"]})')
+            print(f' client_host: {task_data["client_host"]} ({task_data["client_id"]})')
+            print(f'     attempt: {task_data["attempt"]}')
+            print(f'     retried: {task_data["retried"]}')
+            print(f'     outpath: {task_data["outpath"]}')
+            print(f'     errpath: {task_data["errpath"]}')
+            print(f' previous_id: {task_data["previous_id"]}')
+            print(f'     next_id: {task_data["next_id"]}')
+
+    def print_plain(self, results: List[Tuple]) -> None:
+        """Print plain text output with given field names, one task per line."""
+        for record in results:
+            data = [json.dumps(to_json_type(value)).strip('"') for value in record]
+            print(self.output_delimiter.join(map(str, data)))
+
     def print_json(self, results: List[Tuple]) -> None:
-        """Print in JSON format from simple instances of ModelInterface."""
+        """Print in output in JSON format."""
         data = [{field: to_json_type(value) for field, value in zip(self.field_names, record)}
                 for record in results]
         if sys.stdout.isatty():
@@ -509,8 +543,8 @@ class TaskSearchApp(Application):
             print(json.dumps(data, indent=4, sort_keys=False), file=sys.stdout, flush=True)
 
     def print_csv(self, results: List[Tuple]) -> None:
-        """Print in CVS format from simple instances of ModelInterface."""
-        writer = csv.writer(sys.stdout)
+        """Print output in CVS format."""
+        writer = csv.writer(sys.stdout, delimiter=self.output_delimiter)
         writer.writerow(self.field_names)
         for record in results:
             data = [to_json_type(value) for value in record]
@@ -522,6 +556,30 @@ class TaskSearchApp(Application):
         for name in self.field_names:
             if name not in Task.columns:
                 raise ArgumentError(f'Invalid field name \'{name}\'')
+
+    def check_output_format(self) -> None:
+        """Check given output format is valid."""
+        if self.field_names == ALL_FIELDS:
+            if self.output_format == '<default>':
+                self.output_format = 'normal'
+        else:
+            if self.output_format == '<default>':
+                self.output_format = 'plain'
+            elif self.output_format == 'normal':
+                raise ArgumentError('Cannot use --format=normal with subset of field names')
+        if self.output_delimiter != '<default>' and self.output_format not in ['plain', 'csv']:
+            raise ArgumentError(f'Unused --delimiter for --format={self.output_format}')
+        if len(self.output_delimiter) > DELIMITER_MAX_SIZE:
+            raise ArgumentError(f'Output delimiter exceeds max size ({len(self.output_delimiter)} '
+                                f'> {DELIMITER_MAX_SIZE})')
+        if self.output_delimiter == '<default>':
+            if self.output_format == 'csv':
+                self.output_delimiter = ','
+            else:
+                self.output_delimiter = '\t'
+        elif self.output_format == 'csv' and len(self.output_delimiter) != 1:
+            # NOTE: csv module demands single-char delimiter
+            raise ArgumentError(f'Valid --csv output must use single-char delimiter')
 
 
 UPDATE_PROGRAM = 'hyper-shell task update'
