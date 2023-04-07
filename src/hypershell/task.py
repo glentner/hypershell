@@ -358,7 +358,7 @@ SEARCH_USAGE = f"""\
 Usage:
 hyper-shell task search [-h] [FIELD [FIELD ...]] [--where COND [COND ...]] 
                         [--order-by FIELD [--desc]] [--count | --limit NUM]
-                        [--format FORMAT | --json | --csv] 
+                        [--format FORMAT | --json | --csv]  [-d CHAR]
                         
 Search for tasks in the database.\
 """
@@ -367,21 +367,22 @@ SEARCH_HELP = f"""\
 {SEARCH_USAGE}
 
 Arguments:
-  FIELD                     Select specific named fields.
+  FIELD                      Select specific named fields.
 
 Options:
-  -w, --where     COND...   List of conditional statements.
-  -s, --order-by  FIELD     Order output by field.
-      --failed              Alias for "exit_status != 0"
-      --succeeded           Alias for "exit_status == 0"
-      --finished            Alias for "exit_status != null"
-      --remaining           Alias for "exit_status == null"
-      --json                Format output as JSON.
-      --csv                 Format output as CSV.
-      --format    FORMAT    Format output (normal, plain, table, csv, json).
-  -l, --limit     NUM       Limit the number of results.
-  -c, --count               Show count of results.
-  -h, --help                Show this message and exit.\
+  -w, --where      COND...   List of conditional statements.
+  -s, --order-by   FIELD     Order output by field.
+      --failed               Alias for "exit_status != 0"
+      --succeeded            Alias for "exit_status == 0"
+      --finished             Alias for "exit_status != null"
+      --remaining            Alias for "exit_status == null"
+      --json                 Format output as JSON.
+      --csv                  Format output as CSV.
+      --format     FORMAT    Format output (normal, plain, table, csv, json).
+  -d, --delimiter  CHAR      Field seperator for plain/csv formats.
+  -l, --limit      NUM       Limit the number of results.
+  -c, --count                Show count of results.
+  -h, --help                 Show this message and exit.\
 """
 
 
@@ -433,7 +434,6 @@ class TaskSearchApp(Application):
     output_interface.add_argument('--format', default=output_format, dest='output_format', choices=output_formats)
     output_interface.add_argument('--json', action='store_const', const='json', dest='output_format')
     output_interface.add_argument('--csv', action='store_const', const='csv', dest='output_format')
-    # output_interface.add_argument('-x', '--extract', action='store_const', const='extract', dest='output_format')
 
     output_delimiter: str = '<default>'  # <space> if plain, ',' if --csv, else not valid
     interface.add_argument('-d', '--delimiter', default=output_delimiter, dest='output_delimiter')
