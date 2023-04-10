@@ -6,7 +6,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import Dict, Any, Type
+from typing import Tuple, Dict, Any, Type
 
 # standard libraries
 import sys
@@ -14,6 +14,7 @@ import uuid
 import socket
 import logging
 import functools
+import datetime
 
 # external libs
 from cmdkit.app import exit_status
@@ -30,6 +31,7 @@ __all__ = ['Logger', 'HOSTNAME', 'INSTANCE', 'handler', 'initialize_logging', ]
 
 # Cached for later use
 HOSTNAME = socket.gethostname()
+HOSTNAME_SHORT = HOSTNAME.split('.', 1)[0]
 
 
 # Unique for every instance of hypershell
@@ -80,13 +82,42 @@ class Logger(logging.Logger):
 logging.setLoggerClass(Logger)
 
 
+def solve_relative_time(elapsed: float) -> Tuple[float, int, datetime.timedelta, str]:
+    """
+    Multiple formats of relative time since `elapsed` seconds.
+    Returns:
+        - Relative time in seconds (i.e., `elapsed`)
+        - Relative time in milliseconds
+        - Relative time as `datetime.timedelta`
+        - Relative time in dd-hh:mm:ss.sss format
+    """
+    elapsed_ms = int(elapsed * 1000)
+    reltime_delta = datetime.timedelta(seconds=elapsed)
+    reltime_delta_hours, remainder = divmod(reltime_delta.seconds, 3600)
+    reltime_delta_minutes, reltime_delta_seconds = divmod(remainder, 60)
+    reltime_delta_milliseconds = int(reltime_delta.microseconds / 1000)
+    return (
+        elapsed,
+        elapsed_ms,
+        reltime_delta,
+        f'{reltime_delta.days:02d}-{reltime_delta_hours:02d}:{reltime_delta_minutes:02d}:'
+        f'{reltime_delta_seconds:02d}.{reltime_delta_milliseconds:03d}'
+    )
+
+
 class LogRecord(logging.LogRecord):
     """Extends LogRecord to include the hostname and ANSI color codes."""
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+
+        # Context attributes
         self.app_id = INSTANCE
         self.hostname = HOSTNAME
+        self.hostname_short = HOSTNAME_SHORT
+        self.relative_name = self.name.split('.', 1)[-1]
+
+        # Formatting attributes
         self.ansi_level = level_color.get(self.levelname, Ansi.NULL).value
         self.ansi_reset = Ansi.RESET.value
         self.ansi_bold = Ansi.BOLD.value
@@ -101,6 +132,12 @@ class LogRecord(logging.LogRecord):
         self.ansi_magenta = Ansi.MAGENTA.value
         self.ansi_cyan = Ansi.CYAN.value
         self.ansi_white = Ansi.WHITE.value
+
+        # Timing attributes
+        (self.elapsed,
+         self.elapsed_ms,
+         self.elapsed_delta,
+         self.elapsed_hms) = solve_relative_time(self.relativeCreated / 1000)
 
 
 # inject factory back into logging library
