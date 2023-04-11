@@ -6,7 +6,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import List, Dict, Callable, IO, Tuple, Any
+from typing import List, Dict, Callable, IO, Tuple, Any, Optional
 
 # standard libs
 import os
@@ -107,7 +107,7 @@ def check_uuid(value: str) -> None:
 INFO_PROGRAM = 'hyper-shell task info'
 INFO_USAGE = f"""\
 Usage: 
-{INFO_PROGRAM} [-h] ID [--json | --stdout | --stderr | -x FIELD]
+{INFO_PROGRAM} [-h] ID [--yaml | --json | --stdout | --stderr | -x FIELD]
 
 Get metadata and/or task outputs.\
 """
@@ -119,8 +119,9 @@ Arguments:
   ID                    Unique task UUID.
 
 Options:
-      --json            Format as JSON.
-  -x, --extract  FIELD  Print this field only.
+      --yaml            Format task metadata as YAML.
+      --json            Format task metadata as JSON.
+  -x, --extract  FIELD  Print single field.
       --stdout          Fetch <stdout> from task.
       --stderr          Fetch <stderr> from task.
   -h, --help            Show this message and exit.\
@@ -137,16 +138,18 @@ class TaskInfoApp(Application):
     uuid: str
     interface.add_argument('uuid')
 
-    format_json: bool = False
     print_stdout: bool = False
     print_stderr: bool = False
-    print_interface = interface.add_mutually_exclusive_group()
-    print_interface.add_argument('--json', action='store_true', dest='format_json')
-    print_interface.add_argument('--stdout', action='store_true', dest='print_stdout')
-    print_interface.add_argument('--stderr', action='store_true', dest='print_stderr')
-
     extract_field: str = None
-    interface.add_argument('-x', '--extract', default=None, choices=Task.columns, dest='extract_field')
+    output_format: str = 'normal'
+    output_formats: List[str] = ['normal', 'json', 'yaml']
+    output_interface = interface.add_mutually_exclusive_group()
+    output_interface.add_argument('--format', default=output_format, dest='output_format', choices=output_formats)
+    output_interface.add_argument('--json', action='store_const', const='json', dest='output_format')
+    output_interface.add_argument('--yaml', action='store_const', const='yaml', dest='output_format')
+    output_interface.add_argument('--stdout', action='store_true', dest='print_stdout')
+    output_interface.add_argument('--stderr', action='store_true', dest='print_stderr')
+    output_interface.add_argument('-x', '--extract', default=None, choices=Task.columns, dest='extract_field')
 
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
@@ -157,49 +160,43 @@ class TaskInfoApp(Application):
         """Get metadata/status/outputs of task."""
         ensuredb()
         check_uuid(self.uuid)
-        if self.extract_field and (self.print_stdout or self.print_stderr or self.format_json):
-            raise ArgumentError('Cannot use -x/--extract with other output formats')
         if self.extract_field:
-            print(json.dumps(getattr(self.task, self.extract_field)).strip('"'))
-        elif not (self.print_stdout or self.print_stderr):
-            self.write(self.task.to_json())
+            self.print_field()
         elif self.print_stdout:
-            if self.task.outpath:
-                self.write_file(self.outpath, sys.stdout)
-            else:
-                raise RuntimeError(f'No <stdout> for task ({self.uuid})')
+            self.print_file(self.outpath, self.task.outpath, sys.stdout)
         elif self.print_stderr:
-            if self.task.errpath:
-                self.write_file(self.errpath, sys.stderr)
-            else:
-                raise RuntimeError(f'No <stderr> file for task ({self.uuid})')
+            self.print_file(self.errpath, self.task.errpath, sys.stderr)
+        elif self.output_format == 'normal':
+            print_normal(self.task)
+        else:
+            self.print_formatted()
 
-    def write_file(self: TaskInfoApp, path: str, dest: IO) -> None:
-        """Write content from `path` to other `dest` stream."""
-        if not os.path.exists(path) and self.task.client_host != HOSTNAME:
-            log.debug(f'Fetching remote files ({self.task.client_host})')
-            self.copy_remote_files()
-        with open(path, mode='r') as stream:
-            copyfileobj(stream, dest)
+    def print_field(self: TaskInfoApp) -> None:
+        """Print single field."""
+        print(json.dumps(self.task.to_json().get(self.extract_field)).strip('"'))
 
-    def write(self, data: dict) -> None:
-        """Format and print `data` to console."""
-        formatter = self.format_method[self.format_name]
-        output = formatter(data)
+    def print_formatted(self) -> None:
+        """Format and print task metadata to console."""
+        formatter = self.format_method[self.output_format]
+        output = formatter(self.task.to_json())  # NOTE: to_json() just means dict with converted value types
         if sys.stdout.isatty():
-            output = Syntax(output, self.format_name, word_wrap=True,
+            output = Syntax(output, self.output_format, word_wrap=True,
                             theme = config.console.theme, background_color = 'default')
             Console().print(output)
         else:
             print(output, file=sys.stdout, flush=True)
 
-    @functools.cached_property
-    def format_name(self) -> str:
-        """Either 'json' or 'yaml'."""
-        return 'yaml' if not self.format_json else 'json'
+    def print_file(self: TaskInfoApp, local_path: str, task_path: Optional[str], out_stream: IO) -> None:
+        """Print file contents, fetch from client if necessary."""
+        if task_path is None:
+            raise RuntimeError(f'No {out_stream.name} for task ({self.uuid})')
+        if not os.path.exists(local_path) and self.task.client_host != HOSTNAME:
+            self.copy_remote_files()
+        with open(local_path, mode='r') as in_stream:
+            copyfileobj(in_stream, out_stream)
 
     @functools.cached_property
-    def format_method(self) -> Dict[str, Callable[[dict], str]]:
+    def format_method(self: TaskInfoApp) -> Dict[str, Callable[[dict], str]]:
         """Format data method."""
         return {
             'yaml': functools.partial(yaml.dump, indent=4, sort_keys=False),
@@ -207,7 +204,8 @@ class TaskInfoApp(Application):
         }
 
     def copy_remote_files(self: TaskInfoApp) -> None:
-        """Copy output and error files and write to local streams."""
+        """Copy output and error files and to local host."""
+        log.debug(f'Fetching remote files ({self.task.client_host})')
         with SSHConnection(self.task.client_host) as remote:
             remote.get_file(self.task.outpath, self.outpath)
             remote.get_file(self.task.errpath, self.errpath)
@@ -505,25 +503,8 @@ class TaskSearchApp(Application):
     def print_normal(results: List[Tuple]) -> None:
         """Print semi-structured output with all field names."""
         for record in results:
-            task = Task.from_dict(dict(zip(Task.columns, record)))
-            task_data = {k: json.dumps(to_json_type(v)).strip('"') for k, v in task.to_dict().items()}
             print('---')
-            print(f'          id: {task_data["id"]}')
-            print(f'     command: {task_data["command"]} ({task_data["args"]})')
-            print(f' exit_status: {task_data["exit_status"]}')
-            print(f'   submitted: {task_data["submit_time"]}')
-            print(f'   scheduled: {task_data["schedule_time"]}')
-            print(f'     started: {task_data["start_time"]}')
-            print(f'   completed: {task_data["completion_time"]}')
-            print(f' submit_host: {task_data["submit_host"]} ({task_data["submit_id"]})')
-            print(f' server_host: {task_data["server_host"]} ({task_data["server_id"]})')
-            print(f' client_host: {task_data["client_host"]} ({task_data["client_id"]})')
-            print(f'     attempt: {task_data["attempt"]}')
-            print(f'     retried: {task_data["retried"]}')
-            print(f'     outpath: {task_data["outpath"]}')
-            print(f'     errpath: {task_data["errpath"]}')
-            print(f' previous_id: {task_data["previous_id"]}')
-            print(f'     next_id: {task_data["next_id"]}')
+            print_normal(Task.from_dict(dict(zip(Task.columns, record))))
 
     def print_plain(self, results: List[Tuple]) -> None:
         """Print plain text output with given field names, one task per line."""
@@ -717,3 +698,24 @@ class WhereClause:
             return WhereClause(field=field, value=smart_coerce(value), operand=operand)
         else:
             raise ArgumentError(f'Where clause not understood ({argument})')
+
+
+def print_normal(task: Task) -> None:
+    """Print semi-structured task metadata with all field names."""
+    task_data = {k: json.dumps(to_json_type(v)).strip('"') for k, v in task.to_dict().items()}
+    print(f'          id: {task_data["id"]}')
+    print(f'     command: {task_data["command"]} ({task_data["args"]})')
+    print(f' exit_status: {task_data["exit_status"]}')
+    print(f'   submitted: {task_data["submit_time"]}')
+    print(f'   scheduled: {task_data["schedule_time"]}')
+    print(f'     started: {task_data["start_time"]}')
+    print(f'   completed: {task_data["completion_time"]}')
+    print(f' submit_host: {task_data["submit_host"]} ({task_data["submit_id"]})')
+    print(f' server_host: {task_data["server_host"]} ({task_data["server_id"]})')
+    print(f' client_host: {task_data["client_host"]} ({task_data["client_id"]})')
+    print(f'     attempt: {task_data["attempt"]}')
+    print(f'     retried: {task_data["retried"]}')
+    print(f'     outpath: {task_data["outpath"]}')
+    print(f'     errpath: {task_data["errpath"]}')
+    print(f' previous_id: {task_data["previous_id"]}')
+    print(f'     next_id: {task_data["next_id"]}')
