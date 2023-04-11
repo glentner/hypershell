@@ -474,7 +474,7 @@ class TaskExecutor(StateMachine):
                              cwd=config.task.cwd, env=env)
         log.info(f'Running task ({self.task.id})')
         log.debug(f'Running task ({self.task.id}: {self.task.command})')
-        log.trace(f'Running task (uuid={self.task.id}, pid={self.process.pid}, argv={self.task.command})')
+        log.trace(f'Running task ({self.task.id}: pid={self.process.pid}, argv={self.task.command})')
         return TaskState.WAIT_TASK
 
     def wait_task(self) -> TaskState:
