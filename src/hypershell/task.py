@@ -6,7 +6,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import List, Dict, Callable, IO, Tuple, Any, Optional
+from typing import List, Dict, Callable, IO, Tuple, Any, Optional, Type
 
 # standard libs
 import os
@@ -84,7 +84,7 @@ class TaskSubmitApp(Application):
         **get_shared_exception_mapping(__name__)
     }
 
-    def run(self) -> None:
+    def run(self: TaskSubmitApp) -> None:
         """Submit task to database."""
         ensuredb()
         task = Task.new(args=' '.join(self.argv))
@@ -156,7 +156,7 @@ class TaskInfoApp(Application):
         **get_shared_exception_mapping(__name__)
     }
 
-    def run(self) -> None:
+    def run(self: TaskInfoApp) -> None:
         """Get metadata/status/outputs of task."""
         ensuredb()
         check_uuid(self.uuid)
@@ -175,7 +175,7 @@ class TaskInfoApp(Application):
         """Print single field."""
         print(json.dumps(self.task.to_json().get(self.extract_field)).strip('"'))
 
-    def print_formatted(self) -> None:
+    def print_formatted(self: TaskInfoApp) -> None:
         """Format and print task metadata to console."""
         formatter = self.format_method[self.output_format]
         output = formatter(self.task.to_json())  # NOTE: to_json() just means dict with converted value types
@@ -279,7 +279,7 @@ class TaskWaitApp(Application):
         **get_shared_exception_mapping(__name__)
     }
 
-    def run(self) -> None:
+    def run(self: TaskWaitApp) -> None:
         """Wait for task to complete."""
         ensuredb()
         check_uuid(self.uuid)
@@ -289,7 +289,7 @@ class TaskWaitApp(Application):
         elif self.print_status:
             TaskInfoApp(uuid=self.uuid, extract_field='exit_status').run()
 
-    def wait_task(self):
+    def wait_task(self: TaskWaitApp):
         """Wait for the task to complete."""
         log.info(f'Waiting on task ({self.uuid})')
         while True:
@@ -341,7 +341,7 @@ class TaskRunApp(Application):
         **get_shared_exception_mapping(__name__)
     }
 
-    def run(self) -> None:
+    def run(self: TaskRunApp) -> None:
         """Submit task and wait for completion."""
         ensuredb()
         task = Task.new(args=' '.join(self.argv))
@@ -441,7 +441,7 @@ class TaskSearchApp(Application):
         **get_shared_exception_mapping(__name__)
     }
 
-    def run(self) -> None:
+    def run(self: TaskSearchApp) -> None:
         """Search for tasks in database."""
         ensuredb()
         self.check_field_names()
@@ -451,7 +451,7 @@ class TaskSearchApp(Application):
         else:
             self.print_output(self.build_query().all())
 
-    def build_query(self) -> Query:
+    def build_query(self: TaskSearchApp) -> Query:
         """Build original query interface."""
         query = Task.query(*self.fields)
         if self.order_by:
@@ -465,7 +465,7 @@ class TaskSearchApp(Application):
             query = query.limit(self.limit)
         return query
 
-    def build_filters(self) -> List[WhereClause]:
+    def build_filters(self: TaskSearchApp) -> List[WhereClause]:
         """Create list of field selectors from command-line arguments."""
         if self.show_failed:
             self.where_clauses.append('exit_status != 0')
@@ -481,16 +481,16 @@ class TaskSearchApp(Application):
             return [WhereClause.from_cmdline(arg) for arg in self.where_clauses]
 
     @functools.cached_property
-    def fields(self) -> List[Column]:
+    def fields(self: TaskSearchApp) -> List[Column]:
         """Field instances to query against."""
         return [getattr(Task, name) for name in self.field_names]
 
     @functools.cached_property
-    def print_output(self) -> Callable[[List[Tuple]], None]:
+    def print_output(self: TaskSearchApp) -> Callable[[List[Tuple]], None]:
         """The requested output formatter."""
         return getattr(self, f'print_{self.output_format}')
 
-    def print_table(self, results: List[Tuple]) -> None:
+    def print_table(self: TaskSearchApp, results: List[Tuple]) -> None:
         """Print in table format."""
         table = Table(title=None)
         for name in self.field_names:
@@ -506,13 +506,13 @@ class TaskSearchApp(Application):
             print('---')
             print_normal(Task.from_dict(dict(zip(Task.columns, record))))
 
-    def print_plain(self, results: List[Tuple]) -> None:
+    def print_plain(self: TaskSearchApp, results: List[Tuple]) -> None:
         """Print plain text output with given field names, one task per line."""
         for record in results:
             data = [json.dumps(to_json_type(value)).strip('"') for value in record]
             print(self.output_delimiter.join(map(str, data)))
 
-    def print_json(self, results: List[Tuple]) -> None:
+    def print_json(self: TaskSearchApp, results: List[Tuple]) -> None:
         """Print in output in JSON format."""
         data = [{field: to_json_type(value) for field, value in zip(self.field_names, record)}
                 for record in results]
@@ -523,7 +523,7 @@ class TaskSearchApp(Application):
         else:
             print(json.dumps(data, indent=4, sort_keys=False), file=sys.stdout, flush=True)
 
-    def print_csv(self, results: List[Tuple]) -> None:
+    def print_csv(self: TaskSearchApp, results: List[Tuple]) -> None:
         """Print output in CVS format."""
         writer = csv.writer(sys.stdout, delimiter=self.output_delimiter)
         writer.writerow(self.field_names)
@@ -532,13 +532,13 @@ class TaskSearchApp(Application):
             data = [value if isinstance(value, str) else json.dumps(value) for value in data]
             writer.writerow(data)
 
-    def check_field_names(self) -> None:
+    def check_field_names(self: TaskSearchApp) -> None:
         """Check field names are valid."""
         for name in self.field_names:
             if name not in Task.columns:
                 raise ArgumentError(f'Invalid field name \'{name}\'')
 
-    def check_output_format(self) -> None:
+    def check_output_format(self: TaskSearchApp) -> None:
         """Check given output format is valid."""
         if self.field_names == ALL_FIELDS:
             if self.output_format == '<default>':
@@ -605,7 +605,7 @@ class TaskUpdateApp(Application):
         **get_shared_exception_mapping(__name__)
     }
 
-    def run(self) -> None:
+    def run(self: TaskUpdateApp) -> None:
         """Update individual task attribute directly."""
         ensuredb()
         check_uuid(self.uuid)
@@ -678,13 +678,13 @@ class WhereClause:
         '~':  lambda lhs, rhs: lhs.regexp_match(rhs),
     }
 
-    def compile(self) -> BinaryExpression:
+    def compile(self: WhereClause) -> BinaryExpression:
         """Build binary expression object out of elements."""
         op_call = self.op_call.get(self.operand)
         return op_call(getattr(Task, self.field), self.value)
 
     @classmethod
-    def from_cmdline(cls, argument: str) -> WhereClause:
+    def from_cmdline(cls: Type[WhereClause], argument: str) -> WhereClause:
         """
         Construct from command-line `argument`.
 

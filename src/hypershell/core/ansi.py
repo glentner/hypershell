@@ -3,6 +3,7 @@
 
 """ANSI color codes and methods."""
 
+
 # type annotations
 from __future__ import annotations
 from typing import Callable

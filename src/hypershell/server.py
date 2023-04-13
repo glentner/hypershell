@@ -42,7 +42,8 @@ Warning:
 
 # type annotations
 from __future__ import annotations
-from typing import List, Dict, Tuple, Iterable, IO, Optional, Callable
+from typing import List, Dict, Tuple, Iterable, IO, Optional, Callable, Type
+from types import TracebackType
 
 # standard libs
 import sys
@@ -114,7 +115,7 @@ class Scheduler(StateMachine):
 
     startup_phase: bool = True
 
-    def __init__(self, queue: QueueServer, bundlesize: int = DEFAULT_BUNDLESIZE,
+    def __init__(self: Scheduler, queue: QueueServer, bundlesize: int = DEFAULT_BUNDLESIZE,
                  attempts: int = DEFAULT_ATTEMPTS, eager: bool = DEFAULT_EAGER_MODE,
                  forever_mode: bool = False, restart_mode: bool = False) -> None:
         """Initialize queue and parameters."""
@@ -130,7 +131,7 @@ class Scheduler(StateMachine):
             self.startup_phase = False
 
     @cached_property
-    def actions(self) -> Dict[SchedulerState, Callable[[], SchedulerState]]:
+    def actions(self: Scheduler) -> Dict[SchedulerState, Callable[[], SchedulerState]]:
         return {
             SchedulerState.START: self.start,
             SchedulerState.LOAD: self.load_bundle,
@@ -139,7 +140,7 @@ class Scheduler(StateMachine):
             SchedulerState.FINAL: self.finalize,
         }
 
-    def start(self) -> SchedulerState:
+    def start(self: Scheduler) -> SchedulerState:
         """Initial setup then jump to LOAD state."""
         log.debug('Started (scheduler)')
         if self.forever_mode:
@@ -157,7 +158,7 @@ class Scheduler(StateMachine):
                 log.info(f'Reverted {tasks_interrupted} previously interrupted task(s)')
         return SchedulerState.LOAD
 
-    def load_bundle(self) -> SchedulerState:
+    def load_bundle(self: Scheduler) -> SchedulerState:
         """Load the next task bundle from the database."""
         self.tasks = Task.next(limit=self.bundlesize, attempts=self.attempts, eager=self.eager)
         if self.tasks:
@@ -170,12 +171,12 @@ class Scheduler(StateMachine):
             time.sleep(DEFAULT_QUERY_PAUSE)
             return SchedulerState.LOAD
 
-    def pack_bundle(self) -> SchedulerState:
+    def pack_bundle(self: Scheduler) -> SchedulerState:
         """Pack tasks into bundle (list)."""
         self.bundle = [task.pack() for task in self.tasks]
         return SchedulerState.POST
 
-    def post_bundle(self) -> SchedulerState:
+    def post_bundle(self: Scheduler) -> SchedulerState:
         """Put bundle on outbound queue."""
         try:
             self.queue.scheduled.put(self.bundle, timeout=2)
@@ -196,7 +197,7 @@ class Scheduler(StateMachine):
 class SchedulerThread(Thread):
     """Run scheduler within dedicated thread."""
 
-    def __init__(self, queue: QueueServer, bundlesize: int = DEFAULT_BUNDLESIZE,
+    def __init__(self: SchedulerThread, queue: QueueServer, bundlesize: int = DEFAULT_BUNDLESIZE,
                  attempts: int = DEFAULT_ATTEMPTS, eager: bool = DEFAULT_EAGER_MODE,
                  forever_mode: bool = False, restart_mode: bool = False) -> None:
         """Initialize machine."""
@@ -204,11 +205,11 @@ class SchedulerThread(Thread):
         self.machine = Scheduler(queue=queue, bundlesize=bundlesize, attempts=attempts, eager=eager,
                                  forever_mode=forever_mode, restart_mode=restart_mode)
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: SchedulerThread) -> None:
         """Run machine."""
         self.machine.run()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: SchedulerThread, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
         log.warning('Stopping (scheduler)')
         self.machine.halt()
@@ -236,7 +237,7 @@ class Confirm(StateMachine):
     state = ConfirmState.START
     states = ConfirmState
 
-    def __init__(self, queue: QueueServer, in_memory: bool = False) -> None:
+    def __init__(self: Confirm, queue: QueueServer, in_memory: bool = False) -> None:
         """Initialize machine."""
         self.in_memory = in_memory
         self.queue = queue
@@ -244,7 +245,7 @@ class Confirm(StateMachine):
         self.client_info = None
 
     @cached_property
-    def actions(self) -> Dict[ConfirmState, Callable[[], ConfirmState]]:
+    def actions(self: Confirm) -> Dict[ConfirmState, Callable[[], ConfirmState]]:
         return {
             ConfirmState.START: self.start,
             ConfirmState.UNLOAD: self.unload_info,
@@ -259,7 +260,7 @@ class Confirm(StateMachine):
         log.debug('Started (confirm)')
         return ConfirmState.UNLOAD
 
-    def unload_info(self) -> ConfirmState:
+    def unload_info(self: Confirm) -> ConfirmState:
         """Get the next task bundle confirmation from shared queue."""
         try:
             self.client_data = self.queue.confirmed.get(timeout=2)
@@ -268,14 +269,14 @@ class Confirm(StateMachine):
         except QueueEmpty:
             return ConfirmState.UNLOAD
 
-    def unpack_info(self) -> ConfirmState:
+    def unpack_info(self: Confirm) -> ConfirmState:
         """Unpack received client info."""
         self.client_info = ClientInfo.unpack(self.client_data)
         log.debug(f'Confirmed {len(self.client_info.task_ids)} tasks '
                   f'({self.client_info.client_host}: {self.client_info.client_id})')
         return ConfirmState.UPDATE
 
-    def update_info(self) -> ConfirmState:
+    def update_info(self: Confirm) -> ConfirmState:
         """Update client info in database for confirmed task bundle."""
         if not self.in_memory:
             Task.update_all(self.client_info.transpose())
@@ -291,16 +292,16 @@ class Confirm(StateMachine):
 class ConfirmThread(Thread):
     """Run Confirm machine within dedicated thread."""
 
-    def __init__(self, queue: QueueServer, in_memory: bool = False) -> None:
+    def __init__(self: ConfirmThread, queue: QueueServer, in_memory: bool = False) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-confirm')
         self.machine = Confirm(queue=queue, in_memory=in_memory)
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: ConfirmThread) -> None:
         """Run machine."""
         self.machine.run()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: ConfirmThread, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
         log.warning('Stopping (confirm)')
         self.machine.halt()
@@ -330,7 +331,7 @@ class Receiver(StateMachine):
     state = ReceiverState.START
     states = ReceiverState
 
-    def __init__(self, queue: QueueServer, in_memory: bool = False, redirect_failures: IO = None) -> None:
+    def __init__(self: Receiver, queue: QueueServer, in_memory: bool = False, redirect_failures: IO = None) -> None:
         """Initialize receiver."""
         self.queue = queue
         self.bundle = []
@@ -338,7 +339,7 @@ class Receiver(StateMachine):
         self.redirect_failures = redirect_failures
 
     @cached_property
-    def actions(self) -> Dict[ReceiverState, Callable[[], ReceiverState]]:
+    def actions(self: Receiver) -> Dict[ReceiverState, Callable[[], ReceiverState]]:
         return {
             ReceiverState.START: self.start,
             ReceiverState.UNLOAD: self.unload_bundle,
@@ -353,7 +354,7 @@ class Receiver(StateMachine):
         log.debug('Started (receiver)')
         return ReceiverState.UNLOAD
 
-    def unload_bundle(self) -> ReceiverState:
+    def unload_bundle(self: Receiver) -> ReceiverState:
         """Get the next bundle from the completed task queue."""
         try:
             self.bundle = self.queue.completed.get(timeout=2)
@@ -363,12 +364,12 @@ class Receiver(StateMachine):
             log.trace('No completed tasks returned - waiting')
             return ReceiverState.UNLOAD
 
-    def unpack_bundle(self) -> ReceiverState:
+    def unpack_bundle(self: Receiver) -> ReceiverState:
         """Unpack previous bundle into list of tasks."""
         self.tasks = [Task.unpack(data) for data in self.bundle]
         return ReceiverState.UPDATE
 
-    def update_tasks(self) -> ReceiverState:
+    def update_tasks(self: Receiver) -> ReceiverState:
         """Update tasks in database with run details."""
         if not self.in_memory:
             Task.update_all([task.to_dict() for task in self.tasks])
@@ -390,16 +391,19 @@ class Receiver(StateMachine):
 class ReceiverThread(Thread):
     """Run receiver within dedicated thread."""
 
-    def __init__(self, queue: QueueServer, in_memory: bool = False, redirect_failures: IO = None) -> None:
+    def __init__(self: ReceiverThread,
+                 queue: QueueServer,
+                 in_memory: bool = False,
+                 redirect_failures: IO = None) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-receiver')
         self.machine = Receiver(queue=queue, in_memory=in_memory, redirect_failures=redirect_failures)
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: ReceiverThread) -> None:
         """Run machine."""
         self.machine.run()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: ReceiverThread, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
         log.warning('Stopping (receiver)')
         self.machine.halt()
@@ -440,7 +444,7 @@ class HeartMonitor(StateMachine):
     state = HeartbeatState.START
     states = HeartbeatState
 
-    def __init__(self, queue: QueueServer, evict_after: int = DEFAULT_EVICT,
+    def __init__(self: HeartMonitor, queue: QueueServer, evict_after: int = DEFAULT_EVICT,
                  in_memory: bool = False, no_confirm: bool = False) -> None:
         """Initialize with queue server."""
         self.queue = queue
@@ -455,7 +459,7 @@ class HeartMonitor(StateMachine):
             raise RuntimeError(f'Evict period must be greater than 10 seconds: given {evict_after}')
 
     @cached_property
-    def actions(self) -> Dict[HeartbeatState, Callable[[], HeartbeatState]]:
+    def actions(self: HeartMonitor) -> Dict[HeartbeatState, Callable[[], HeartbeatState]]:
         return {
             HeartbeatState.START: self.start,
             HeartbeatState.NEXT: self.get_next,
@@ -472,7 +476,7 @@ class HeartMonitor(StateMachine):
         log.debug('Started (heartbeat)')
         return HeartbeatState.NEXT
 
-    def get_next(self) -> HeartbeatState:
+    def get_next(self: HeartMonitor) -> HeartbeatState:
         """Get and stash heartbeat from clients."""
         try:
             hb_data = self.queue.heartbeat.get(timeout=2)
@@ -486,7 +490,7 @@ class HeartMonitor(StateMachine):
         except QueueEmpty:
             return HeartbeatState.SWITCH
 
-    def update_client(self) -> HeartbeatState:
+    def update_client(self: HeartMonitor) -> HeartbeatState:
         """Update client with heartbeat or disconnect."""
         hb = self.latest_heartbeat
         if hb.state is not ClientState.FINISHED:
@@ -502,7 +506,7 @@ class HeartMonitor(StateMachine):
                 self.beats.pop(hb.uuid)
             return HeartbeatState.SWITCH
 
-    def switch_mode(self) -> HeartbeatState:
+    def switch_mode(self: HeartMonitor) -> HeartbeatState:
         """Decide to bail, signal, check, or get another heartbeat."""
         if self.startup_phase:
             return HeartbeatState.NEXT
@@ -517,7 +521,7 @@ class HeartMonitor(StateMachine):
         else:
             return HeartbeatState.NEXT
 
-    def check_clients(self) -> HeartbeatState:
+    def check_clients(self: HeartMonitor) -> HeartbeatState:
         """Check last heartbeat on all clients and evict if necessary."""
         log.debug(f'Checking clients ({len(self.beats)} connected)')
         for uuid in list(self.beats):
@@ -531,7 +535,7 @@ class HeartMonitor(StateMachine):
                     Task.revert_orphaned(uuid)
         return HeartbeatState.SWITCH
 
-    def signal_clients(self) -> HeartbeatState:
+    def signal_clients(self: HeartMonitor) -> HeartbeatState:
         """Send shutdown signal to all connected clients."""
         log.debug(f'Signaling clients ({len(self.beats)} connected)')
         for hb in self.beats.values():
@@ -550,26 +554,26 @@ class HeartMonitor(StateMachine):
 class HeartMonitorThread(Thread):
     """Run heart monitor within dedicated thread."""
 
-    def __init__(self, queue: QueueServer, evict_after: int = DEFAULT_EVICT,
+    def __init__(self: HeartMonitorThread, queue: QueueServer, evict_after: int = DEFAULT_EVICT,
                  in_memory: bool = False, no_confirm: bool = False) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-heartmonitor')
         self.machine = HeartMonitor(queue=queue, evict_after=evict_after,
                                     in_memory=in_memory, no_confirm=no_confirm)
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: HeartMonitorThread) -> None:
         """Run machine."""
         self.machine.run()
 
-    def signal_clients(self) -> None:
+    def signal_clients(self: HeartMonitorThread) -> None:
         """Set signal flag to post sentinel for each connected clients."""
         self.machine.should_signal = True
 
-    def signal_scheduler_done(self) -> None:
+    def signal_scheduler_done(self: HeartMonitorThread) -> None:
         """Set flag to tell heart monitor that scheduler is done."""
         self.machine.scheduler_done = True
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: HeartMonitorThread, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
         log.warning('Stopping (heartbeat)')
         self.machine.halt()
@@ -588,7 +592,7 @@ class ServerThread(Thread):
     in_memory: bool
     no_confirm: bool
 
-    def __init__(self,
+    def __init__(self: ServerThread,
                  source: Iterable[str] = None,
                  in_memory: bool = False, no_confirm: bool = False,
                  forever_mode: bool = False, restart_mode: bool = False,
@@ -623,7 +627,7 @@ class ServerThread(Thread):
                                                in_memory=in_memory, no_confirm=no_confirm)
         super().__init__(name='hypershell-server')
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: ServerThread) -> None:
         """Start child threads, wait."""
         log.debug('Started')
         with self.queue:
@@ -635,7 +639,7 @@ class ServerThread(Thread):
             self.wait_confirm()
         log.debug('Done')
 
-    def start_threads(self) -> None:
+    def start_threads(self: ServerThread) -> None:
         """Start child threads."""
         if self.submitter is not None:
             self.submitter.start()
@@ -646,39 +650,39 @@ class ServerThread(Thread):
         self.heartmonitor.start()
         self.receiver.start()
 
-    def wait_submitter(self) -> None:
+    def wait_submitter(self: ServerThread) -> None:
         """Wait on task submission to complete."""
         if self.submitter is not None:
             log.trace('Waiting (submitter)')
             self.submitter.join()
 
-    def wait_scheduler(self) -> None:
+    def wait_scheduler(self: ServerThread) -> None:
         """Wait scheduling until complete."""
         if self.scheduler is not None:
             log.trace('Waiting (scheduler)')
             self.scheduler.join()
 
-    def wait_heartbeat(self) -> None:
+    def wait_heartbeat(self: ServerThread) -> None:
         """Wait for heartmonitor to stop."""
         log.trace('Waiting (heartbeat)')
         self.heartmonitor.signal_scheduler_done()
         self.heartmonitor.signal_clients()
         self.heartmonitor.join()
 
-    def wait_receiver(self) -> None:
+    def wait_receiver(self: ServerThread) -> None:
         """Wait for receiver to stop."""
         log.trace('Waiting (receiver)')
         self.queue.completed.put(None)
         self.receiver.join()
 
-    def wait_confirm(self) -> None:
+    def wait_confirm(self: ServerThread) -> None:
         """Wait for confirm thread to stop."""
         if not self.no_confirm:
             log.trace('Waiting (confirm)')
             self.queue.confirmed.put(None)
             self.confirm.join()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: ServerThread, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
         log.warning('Stopping')
         if self.submitter is not None:
@@ -840,7 +844,7 @@ class ServerApp(Application):
         **get_shared_exception_mapping(__name__)
     }
 
-    def run(self) -> None:
+    def run(self: ServerApp) -> None:
         """Run server."""
         if self.forever_mode:
             serve_forever(bundlesize=self.bundlesize, address=(self.host, self.port), auth=self.auth,
@@ -853,7 +857,7 @@ class ServerApp(Application):
                        in_memory=self.in_memory, no_confirm=self.no_confirm, evict_after=config.server.evict,
                        redirect_failures=self.failure_stream, restart_mode=self.restart_mode, eager=self.eager_mode)
 
-    def check_args(self):
+    def check_args(self: ServerApp):
         """Fail particular argument combinations."""
         if self.filepath and self.forever_mode:
             raise ArgumentError('Cannot specify both FILE and --forever')
@@ -863,7 +867,7 @@ class ServerApp(Application):
             raise ArgumentError('Using --forever with --restart is invalid')
 
     @cached_property
-    def input_stream(self) -> Optional[IO]:
+    def input_stream(self: ServerApp) -> Optional[IO]:
         """Input IO stream for task args."""
         if self.forever_mode or self.restart_mode:
             return None
@@ -871,7 +875,7 @@ class ServerApp(Application):
             return sys.stdin if self.filepath == '-' else open(self.filepath, mode='r')
 
     @cached_property
-    def failure_stream(self) -> Optional[IO]:
+    def failure_stream(self: ServerApp) -> Optional[IO]:
         """IO stream for failed task args."""
         if self.print_mode:
             return sys.stdout
@@ -880,13 +884,16 @@ class ServerApp(Application):
         else:
             return None
 
-    def __enter__(self) -> ServerApp:
+    def __enter__(self: ServerApp) -> ServerApp:
         """Ensure context and database ready."""
         self.check_args()
         ensuredb()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self: ServerApp,
+                 exc_type: Optional[Type[Exception]],
+                 exc_val: Optional[Exception],
+                 exc_tb: Optional[TracebackType]) -> None:
         """Clean up IO if necessary."""
         if self.input_stream is not None and self.input_stream is not sys.stdin:
             self.input_stream.close()

@@ -77,7 +77,7 @@ class SSHConnection:
 
     sftp: Optional[SFTPClient] = None
 
-    def __init__(self, hostname_or_config: Union[str, SSHConfig]) -> None:
+    def __init__(self: SSHConnection, hostname_or_config: Union[str, SSHConfig]) -> None:
         """Initialize with hostname or prepared SSHConfig."""
         if isinstance(hostname_or_config, SSHConfig):
             self.config = hostname_or_config
@@ -89,7 +89,7 @@ class SSHConnection:
         self.open()
         return self
 
-    def __exit__(self,
+    def __exit__(self: SSHConnection,
                  exc_type: Optional[Type[Exception]],
                  exc_val: Optional[Exception],
                  exc_tb: Optional[TracebackType]) -> None:

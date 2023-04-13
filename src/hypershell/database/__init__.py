@@ -4,6 +4,9 @@
 """Database interface, models, and methods."""
 
 
+# type annotations
+from __future__ import annotations
+
 # standard libs
 import sys
 import functools
@@ -114,7 +117,7 @@ class InitDBApp(Application):
         **get_shared_exception_mapping(__name__),
     }
 
-    def run(self) -> None:
+    def run(self: InitDBApp) -> None:
         """Business logic for `initdb`."""
         if not DATABASE_ENABLED:
             raise ConfigurationError('No database configured')

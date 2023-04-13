@@ -6,7 +6,8 @@
 
 # type annotations
 from __future__ import annotations
-from typing import Dict, List, Callable, Union, Optional, Any, Iterable
+from typing import Dict, List, Callable, Union, Optional, Any, Iterable, Type
+from types import TracebackType
 
 # standard libs
 from multiprocessing.managers import BaseManager
@@ -36,7 +37,7 @@ class QueueConfig:
         return cls(**data)
 
     @classmethod
-    def load(cls) -> QueueConfig:
+    def load(cls: Type[QueueConfig]) -> QueueConfig:
         """Initialize from global configuration."""
         return cls.from_dict({
             'host': _config.server.host,
@@ -55,29 +56,34 @@ class QueueInterface(BaseManager, ABC):
     heartbeat: JoinableQueue[Optional[bytes]]
     confirmed: JoinableQueue[Optional[bytes]]
 
-    def __init__(self, config: QueueConfig) -> None:
+    def __init__(self: QueueInterface, config: QueueConfig) -> None:
         """Initialize queue interface."""
         self.config = config
         super().__init__(address=(self.config.host, self.config.port), authkey=self.config.auth.encode())
 
     @classmethod
-    def new(cls) -> QueueInterface:
+    def new(cls: Type[QueueInterface]) -> QueueInterface:
         """Create new interface from global configuration."""
         return cls(config=QueueConfig.load())
 
     @abstractmethod
-    def __enter__(self) -> QueueInterface:
+    def __enter__(self: QueueInterface) -> QueueInterface:
         """Start server or connect from client."""
 
     @abstractmethod
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self: QueueInterface,
+                 exc_type: Optional[Type[Exception]],
+                 exc_val: Optional[Exception],
+                 exc_tb: Optional[TracebackType]) -> None:
         """Stop or disconnect."""
 
 
 class QueueServer(QueueInterface):
     """Server for managing queue."""
 
-    def start(self, initializer: Optional[Callable[..., Any]] = ..., initargs: Iterable[Any] = ...) -> None:
+    def start(self: QueueServer,
+              initializer: Optional[Callable[..., Any]] = None,
+              initargs: Iterable[Any] = ()) -> None:
         """Initialize queues and start server."""
         self.scheduled = JoinableQueue(maxsize=self.config.size)
         self.completed = JoinableQueue(maxsize=self.config.size)
@@ -89,24 +95,27 @@ class QueueServer(QueueInterface):
         self.register('_get_confirmed', callable=self._get_confirmed)
         super().start()
 
-    def _get_scheduled(self) -> JoinableQueue[Optional[List[bytes]]]:
+    def _get_scheduled(self: QueueServer) -> JoinableQueue[Optional[List[bytes]]]:
         return self.scheduled
 
-    def _get_completed(self) -> JoinableQueue[Optional[List[bytes]]]:
+    def _get_completed(self: QueueServer) -> JoinableQueue[Optional[List[bytes]]]:
         return self.completed
 
-    def _get_heartbeat(self) -> JoinableQueue[Optional[bytes]]:
+    def _get_heartbeat(self: QueueServer) -> JoinableQueue[Optional[bytes]]:
         return self.heartbeat
 
-    def _get_confirmed(self) -> JoinableQueue[Optional[bytes]]:
+    def _get_confirmed(self: QueueServer) -> JoinableQueue[Optional[bytes]]:
         return self.confirmed
 
-    def __enter__(self) -> QueueServer:
+    def __enter__(self: QueueServer) -> QueueServer:
         """Start the server."""
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self: QueueServer,
+                 exc_type: Optional[Type[Exception]],
+                 exc_val: Optional[Exception],
+                 exc_tb: Optional[TracebackType]) -> None:
         """Shutdown the server."""
         self.shutdown()
 
@@ -131,10 +140,13 @@ class QueueClient(QueueInterface):
         self.heartbeat = self._get_heartbeat()
         self.confirmed = self._get_confirmed()
 
-    def __enter__(self) -> QueueClient:
+    def __enter__(self: QueueClient) -> QueueClient:
         """Connect to server."""
         self.connect()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self: QueueClient,
+                 exc_type: Optional[Type[Exception]],
+                 exc_val: Optional[Exception],
+                 exc_tb: Optional[TracebackType]) -> None:
         """Disconnect from server."""

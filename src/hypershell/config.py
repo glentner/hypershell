@@ -72,7 +72,7 @@ class ConfigEditApp(Application):
         **get_shared_exception_mapping(__name__)
     }
 
-    def run(self) -> None:
+    def run(self: ConfigEditApp) -> None:
         """Business logic for `config edit`."""
 
         config_path = path[self.site_name].config
@@ -133,7 +133,7 @@ class ConfigGetApp(Application):
         **get_shared_exception_mapping(__name__)
     }
 
-    def run(self) -> None:
+    def run(self: ConfigGetApp) -> None:
         """Business logic for `config get`."""
 
         if self.site_name is None:
@@ -191,7 +191,7 @@ class ConfigGetApp(Application):
         else:
             raise ConfigurationError(f'"{self.varpath}" not found in {config_path}')
 
-    def print_output(self, value: Any) -> None:
+    def print_output(self: ConfigGetApp, value: Any) -> None:
         """Format and print final `value`."""
         value = self.format_output(value)
         if sys.stdout.isatty():
@@ -203,7 +203,7 @@ class ConfigGetApp(Application):
             # NOTE: JSON formatting puts quotations - we don't want these on raw output
             print(value.strip('"'), file=sys.stdout, flush=True)
 
-    def format_output(self, value: Any) -> str:
+    def format_output(self: ConfigGetApp, value: Any) -> str:
         """Format `value` as appropriate text."""
         if isinstance(value, dict):
             value = self.format_section(value)
@@ -211,7 +211,7 @@ class ConfigGetApp(Application):
             value = json.dumps(value)  # NOTE: close enough
         return value
 
-    def format_section(self, value: dict) -> str:
+    def format_section(self: ConfigGetApp, value: dict) -> str:
         """Format an entire section for output."""
         if self.varpath == '.':
             value = toml.dumps(value)
@@ -273,7 +273,7 @@ class ConfigSetApp(Application):
         **get_shared_exception_mapping(__name__)
     }
 
-    def run(self) -> None:
+    def run(self: ConfigSetApp) -> None:
         """Business logic for `config set`."""
 
         if '.' not in self.varpath:
@@ -325,7 +325,7 @@ class ConfigWhichApp(Application):
         **get_shared_exception_mapping(__name__)
     }
 
-    def run(self) -> None:
+    def run(self: ConfigWhichApp) -> None:
         """Business logic for `config which`."""
         try:
             site = full_config.which(*self.varpath.split('.'))

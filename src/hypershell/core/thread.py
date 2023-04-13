@@ -6,7 +6,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Type
 
 # standard libs
 import threading
@@ -22,14 +22,14 @@ class Thread(threading.Thread, ABC):
     __exception: Exception = None
     __should_halt: bool = False
 
-    def __init__(self, name: str) -> None:
+    def __init__(self: Thread, name: str) -> None:
         super().__init__(name=name, daemon=True)
 
     @abstractmethod
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: Thread) -> None:
         """Implement `run` which may raise exceptions."""
 
-    def run(self) -> None:
+    def run(self: Thread) -> None:
         """Call `run_with_exceptions` within a try/except block."""
         try:
             self.run_with_exceptions()
@@ -37,19 +37,19 @@ class Thread(threading.Thread, ABC):
             self.__exception = exc
 
     @classmethod
-    def new(cls, *args, **kwargs) -> Thread:
+    def new(cls: Type[Thread], *args, **kwargs) -> Thread:
         """Initialize and start the thread."""
         thread = cls(*args, **kwargs)
         thread.start()
         return thread
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: Thread, wait: bool = False, timeout: int = None) -> None:
         """Signal to terminate."""
         self.__should_halt = True
         if wait:
             self.join(timeout=timeout)
 
-    def join(self, timeout: Optional[float] = None) -> None:
+    def join(self: Thread, timeout: Optional[float] = None) -> None:
         """Calls Thread.join but re-raises exceptions."""
         super().join(timeout=timeout)
         if self.__exception:
