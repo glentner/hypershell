@@ -7,7 +7,6 @@
 # standard libs
 import os
 import sys
-import stat
 import ctypes
 
 # external libs

@@ -6,7 +6,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import Any
+from typing import Any, Type
 
 # standard libs
 import sys
@@ -41,7 +41,7 @@ class DatabaseURL(dict):
         'postgresql://localhost/mine'
     """
 
-    def __init__(self, **fields) -> None:
+    def __init__(self: DatabaseURL, **fields) -> None:
         """Initialize fields."""
         try:
             super().__init__(provider=fields.pop('provider'),
@@ -56,10 +56,10 @@ class DatabaseURL(dict):
             raise AttributeError('Missing \'provider\'') from _error
         self._validate()
 
-    def __getattr__(self, field: str) -> Any:
+    def __getattr__(self: DatabaseURL, field: str) -> Any:
         return self.get(field)
 
-    def __repr__(self) -> str:
+    def __repr__(self: DatabaseURL) -> str:
         """Interactive representation."""
         masked = self.__class__(**self)
         masked['password'] = None if self.password is None else '****'
@@ -72,7 +72,7 @@ class DatabaseURL(dict):
                                        for field, value in self.parameters.items()])
         return value + ')>'
 
-    def _validate(self) -> None:
+    def _validate(self: DatabaseURL) -> None:
         """Validate provided arguments."""
         if self.provider == 'sqlite':
             self._validate_for_sqlite()
@@ -80,26 +80,26 @@ class DatabaseURL(dict):
             self._validate_database()
             self._validate_user_and_password()
 
-    def _validate_user_and_password(self) -> None:
+    def _validate_user_and_password(self: DatabaseURL) -> None:
         if self.user is not None and self.password is None:
             raise AttributeError('Must provide \'password\' if \'user\' provided')
         if self.user is None and self.password is not None:
             raise AttributeError('Must provide \'user\' if \'password\' provided')
 
-    def _validate_for_sqlite(self) -> None:
+    def _validate_for_sqlite(self: DatabaseURL) -> None:
         if self.file is not None and self.database is not None:
             raise AttributeError('Cannot provide both \'file\' and \'database\' for SQLite')
         for field in ('user', 'password', 'host', 'port'):
             if self.get(field) is not None:
                 raise AttributeError(f'Cannot provide \'{field}\' for SQLite')
 
-    def _validate_database(self) -> None:
+    def _validate_database(self: DatabaseURL) -> None:
         if self.file:
             raise AttributeError('Cannot provide \'file\' if not SQLite')
         if not self.database:
             raise AttributeError('Must provide \'database\' if not SQLite')
 
-    def encode(self) -> str:
+    def encode(self: DatabaseURL) -> str:
         """Construct URL string with encoded parameters."""
         return ''.join([
             f'{self.provider}://',
@@ -109,13 +109,13 @@ class DatabaseURL(dict):
             self._format_parameters(),
         ])
 
-    def _format_parameters(self) -> str:
+    def _format_parameters(self: DatabaseURL) -> str:
         if self.parameters:
             return '?' + urlencode(self.parameters)
         else:
             return ''
 
-    def _format_database_or_file(self) -> str:
+    def _format_database_or_file(self: DatabaseURL) -> str:
         if self.database:
             return f'/{self.database}'
         elif self.file:
@@ -123,7 +123,7 @@ class DatabaseURL(dict):
         else:
             return ''
 
-    def _format_host_and_port(self) -> str:
+    def _format_host_and_port(self: DatabaseURL) -> str:
         if self.host and self.port:
             return f'{self.host}:{self.port}'
         elif self.host and not self.port:
@@ -136,13 +136,13 @@ class DatabaseURL(dict):
             else:
                 return ''
 
-    def _format_user_and_password(self) -> str:
+    def _format_user_and_password(self: DatabaseURL) -> str:
         if self.user and self.password:
             return f'{self.user}:{self.password}@'
         else:
             return ''
 
-    def __str__(self) -> str:
+    def __str__(self: DatabaseURL) -> str:
         return self.encode()
 
     @staticmethod
@@ -156,7 +156,7 @@ class DatabaseURL(dict):
         return r
 
     @classmethod
-    def from_namespace(cls, ns: Namespace) -> DatabaseURL:
+    def from_namespace(cls: Type[DatabaseURL], ns: Namespace) -> DatabaseURL:
         fields = {}
         for key in ns.keys():
             key_ = cls._strip_endings(key, '_env', '_eval')

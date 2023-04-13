@@ -9,6 +9,7 @@ Run full cluster with server and clients.
 # type annotations
 from __future__ import annotations
 from typing import IO, Optional, Iterable, List, Dict, Callable, Tuple, Type
+from types import TracebackType
 
 # standard libs
 import os
@@ -31,6 +32,7 @@ from hypershell.core.queue import QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.template import DEFAULT_TEMPLATE
+from hypershell.core.exceptions import get_shared_exception_mapping
 from hypershell.database import initdb, checkdb
 from hypershell.client import ClientThread, DEFAULT_NUM_TASKS, DEFAULT_DELAY
 from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
@@ -50,7 +52,7 @@ class LocalCluster(Thread):
     server: ServerThread
     client: ClientThread
 
-    def __init__(self,
+    def __init__(self: LocalCluster,
                  source: Iterable[str] = None, num_tasks: int = 1, template: str = DEFAULT_TEMPLATE,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  in_memory: bool = False, no_confirm: bool = False,
@@ -70,7 +72,7 @@ class LocalCluster(Thread):
                                    capture=capture)
         super().__init__(name='hypershell-cluster')
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: LocalCluster) -> None:
         """Start child threads, wait."""
         self.server.start()
         time.sleep(2)  # NOTE: give the server a chance to start
@@ -78,7 +80,7 @@ class LocalCluster(Thread):
         self.client.join()
         self.server.join()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: LocalCluster, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
         self.server.stop(wait=wait, timeout=timeout)
         self.client.stop(wait=wait, timeout=timeout)
@@ -92,7 +94,7 @@ class RemoteCluster(Thread):
     clients: Popen
     client_argv: str
 
-    def __init__(self,
+    def __init__(self: RemoteCluster,
                  source: Iterable[str] = None, num_tasks: int = 1, template: str = DEFAULT_TEMPLATE,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  forever_mode: bool = False, restart_mode: bool = False,
@@ -117,7 +119,7 @@ class RemoteCluster(Thread):
                             f'-d {delay_start} {client_args}')
         super().__init__(name='hypershell-cluster')
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: RemoteCluster) -> None:
         """Start child threads, wait."""
         self.server.start()
         time.sleep(2)  # NOTE: give the server a chance to start
@@ -127,7 +129,7 @@ class RemoteCluster(Thread):
         self.clients.wait()
         self.server.join()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: RemoteCluster, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
         self.server.stop(wait=wait, timeout=timeout)
         self.clients.terminate()
@@ -224,7 +226,7 @@ class SSHCluster(Thread):
     clients: List[Popen]
     client_argv: List[str]
 
-    def __init__(self,
+    def __init__(self: SSHCluster,
                  source: Iterable[str] = None, num_tasks: int = 1, template: str = DEFAULT_TEMPLATE,
                  forever_mode: bool = False, restart_mode: bool = False,
                  bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port), remote_exe: str = 'hyper-shell',
@@ -258,7 +260,7 @@ class SSHCluster(Thread):
                             for host in nodelist]
         super().__init__(name='hypershell-cluster')
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: SSHCluster) -> None:
         """Start child threads, wait."""
         self.server.start()
         time.sleep(2)  # NOTE: give the server a chance to start
@@ -270,7 +272,7 @@ class SSHCluster(Thread):
             client.wait()
         self.server.join()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: SSHCluster, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
         self.server.stop(wait=wait, timeout=timeout)
         for client in self.clients:
@@ -435,7 +437,11 @@ class ClusterApp(Application):
     failure_path: str = None
     interface.add_argument('-f', '--failures', default=None, dest='failure_path')
 
-    def run(self) -> None:
+    exceptions = {
+        **get_shared_exception_mapping(__name__)
+    }
+
+    def run(self: ClusterApp) -> None:
         """Run cluster."""
         launcher = self.launchers.get(self.mode)
         launcher(source=self.source, num_tasks=self.num_tasks, template=self.template,
@@ -444,21 +450,21 @@ class ClusterApp(Application):
                  restart_mode=self.restart_mode, redirect_failures=self.failure_stream,
                  delay_start=self.delay_start, capture=self.capture)
 
-    def run_local(self, **options) -> None:
+    def run_local(self: ClusterApp, **options) -> None:
         """Run local cluster."""
         run_local(**options, redirect_output=self.output_stream, redirect_errors=self.errors_stream)
 
-    def run_launch(self, **options) -> None:
+    def run_launch(self: ClusterApp, **options) -> None:
         """Run remote cluster with custom launcher."""
         run_cluster(**options, launcher=self.launch_mode,
                     remote_exe=self.remote_exe, bind=('0.0.0.0', self.port))
 
-    def run_mpi(self, **options) -> None:
+    def run_mpi(self: ClusterApp, **options) -> None:
         """Run remote cluster with 'mpirun'."""
         run_cluster(**options, launcher='mpirun',
                     remote_exe=self.remote_exe, bind=('0.0.0.0', self.port))
 
-    def run_ssh(self, **options) -> None:
+    def run_ssh(self: ClusterApp, **options) -> None:
         """Run remote cluster with SSH."""
         if self.ssh_group:
             nodelist = NodeList.from_config(self.ssh_group)
@@ -468,7 +474,7 @@ class ClusterApp(Application):
                 remote_exe=self.remote_exe, bind=('0.0.0.0', self.port), export_env=self.export_env)
 
     @cached_property
-    def launchers(self) -> Dict[str, Callable]:
+    def launchers(self: ClusterApp) -> Dict[str, Callable]:
         """Map of launchers."""
         return {
             'local': self.run_local,
@@ -478,7 +484,7 @@ class ClusterApp(Application):
         }
 
     @cached_property
-    def mode(self) -> str:
+    def mode(self: ClusterApp) -> str:
         """The launch mode to run the cluster."""
         for name in ['ssh', 'mpi', 'launch']:
             if getattr(self, f'{name}_mode'):
@@ -486,7 +492,7 @@ class ClusterApp(Application):
         else:
             return 'local'
 
-    def check_arguments(self) -> None:
+    def check_arguments(self: ClusterApp) -> None:
         """Various checks on input arguments."""
         if self.restart_mode and self.in_memory:
             raise ArgumentError('Cannot restart without database (given --no-db)')
@@ -512,22 +518,22 @@ class ClusterApp(Application):
             raise ArgumentError('Cannot specify --ssh with target with --ssh-group')
 
     @cached_property
-    def output_stream(self) -> IO:
+    def output_stream(self: ClusterApp) -> IO:
         """IO stream to write task outputs."""
         return sys.stdout if not self.output_path else open(self.output_path, mode='w')
 
     @cached_property
-    def errors_stream(self) -> IO:
+    def errors_stream(self: ClusterApp) -> IO:
         """IO stream to write task errors."""
         return sys.stderr if not self.errors_path else open(self.errors_path, mode='w')
 
     @cached_property
-    def failure_stream(self) -> Optional[IO]:
+    def failure_stream(self: ClusterApp) -> Optional[IO]:
         """IO stream to write failed task args."""
         return None if not self.failure_path else open(self.failure_path, mode='w')
 
     @cached_property
-    def input_stream(self) -> Optional[IO]:
+    def input_stream(self: ClusterApp) -> Optional[IO]:
         """IO stream to read task command-line args."""
         if self.restart_mode:
             return None
@@ -535,11 +541,11 @@ class ClusterApp(Application):
             return sys.stdin if self.filepath == '-' else open(self.filepath, mode='r')
 
     @cached_property
-    def source(self) -> Iterable[str]:
+    def source(self: ClusterApp) -> Iterable[str]:
         """Input source for task command-line args."""
         return [] if self.restart_mode else self.input_stream
 
-    def __enter__(self) -> ClusterApp:
+    def __enter__(self: ClusterApp) -> ClusterApp:
         """Set up resources and attributes."""
         self.check_arguments()
         if config.database.provider == 'sqlite' or self.auto_initdb:
@@ -548,7 +554,10 @@ class ClusterApp(Application):
             checkdb()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self: ClusterApp,
+                 exc_type: Optional[Type[Exception]],
+                 exc_val: Optional[Exception],
+                 exc_tb: Optional[TracebackType]) -> None:
         """Close IO streams if not standard streams."""
         if self.input_stream and self.input_stream is not sys.stdin:
             self.input_stream.close()

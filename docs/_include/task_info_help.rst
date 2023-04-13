@@ -7,6 +7,9 @@ ID
 Options
 ^^^^^^^
 
+``--yaml``
+    Format metadata output as YAML.
+
 ``--json``
     Format metadata output as JSON.
 

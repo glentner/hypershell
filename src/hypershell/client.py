@@ -31,6 +31,7 @@ Warning:
 # type annotations
 from __future__ import annotations
 from typing import List, Tuple, Optional, Callable, Dict, IO, Type
+from types import TracebackType
 
 # standard libs
 import os
@@ -64,7 +65,7 @@ from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.logging import HOSTNAME, INSTANCE, Logger
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
 from hypershell.core.exceptions import (handle_exception, handle_disconnect,
-                                        handle_address_unknown, HostAddressInfo)
+                                        handle_address_unknown, HostAddressInfo, get_shared_exception_mapping)
 
 # public interface
 __all__ = ['run_client', 'ClientThread', 'ClientApp', 'ClientInfo', 'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY', ]
@@ -138,7 +139,7 @@ class ClientScheduler(StateMachine):
     state = SchedulerState.START
     states = SchedulerState
 
-    def __init__(self, queue: QueueClient, local: Queue[Optional[Task]], no_confirm: bool = False) -> None:
+    def __init__(self: ClientScheduler, queue: QueueClient, local: Queue[Optional[Task]], no_confirm: bool = False) -> None:
         """Assign remote queue client and local task queue."""
         self.queue = queue
         self.local = local
@@ -148,7 +149,7 @@ class ClientScheduler(StateMachine):
         self.no_confirm = no_confirm
 
     @functools.cached_property
-    def actions(self) -> Dict[SchedulerState, Callable[[], SchedulerState]]:
+    def actions(self: ClientScheduler) -> Dict[SchedulerState, Callable[[], SchedulerState]]:
         return {
             SchedulerState.START: self.start,
             SchedulerState.GET_REMOTE: self.get_remote,
@@ -165,7 +166,7 @@ class ClientScheduler(StateMachine):
         log.debug('Started (scheduler)')
         return SchedulerState.GET_REMOTE
 
-    def get_remote(self) -> SchedulerState:
+    def get_remote(self: ClientScheduler) -> SchedulerState:
         """Get the next task bundle from the server."""
         try:
             self.bundle = self.queue.scheduled.get(timeout=2)
@@ -179,7 +180,7 @@ class ClientScheduler(StateMachine):
         except QueueEmpty:
             return SchedulerState.GET_REMOTE
 
-    def unpack_bundle(self) -> SchedulerState:
+    def unpack_bundle(self: ClientScheduler) -> SchedulerState:
         """Unpack latest bundle of tasks."""
         self.tasks = [Task.unpack(data) for data in self.bundle]
         if not self.no_confirm:
@@ -188,7 +189,7 @@ class ClientScheduler(StateMachine):
         else:
             return SchedulerState.POP_TASK
 
-    def put_confirm(self) -> SchedulerState:
+    def put_confirm(self: ClientScheduler) -> SchedulerState:
         """Put confirmation details back on remote queue."""
         try:
             self.queue.confirmed.put(self.client_info, timeout=2)
@@ -197,7 +198,7 @@ class ClientScheduler(StateMachine):
         except QueueFull:
             return SchedulerState.PUT_CONFIRM
 
-    def pop_task(self) -> SchedulerState:
+    def pop_task(self: ClientScheduler) -> SchedulerState:
         """Pop next task off current task list."""
         try:
             self.task = self.tasks.pop(0)
@@ -205,7 +206,7 @@ class ClientScheduler(StateMachine):
         except IndexError:
             return SchedulerState.GET_REMOTE
 
-    def put_local(self) -> SchedulerState:
+    def put_local(self: ClientScheduler) -> SchedulerState:
         """Put latest task on the local task queue."""
         try:
             self.local.put(self.task, timeout=2)
@@ -223,16 +224,16 @@ class ClientScheduler(StateMachine):
 class ClientSchedulerThread(Thread):
     """Run client scheduler in dedicated thread."""
 
-    def __init__(self, queue: QueueClient, local: Queue[Optional[bytes]], no_confirm: bool = False) -> None:
+    def __init__(self: ClientSchedulerThread, queue: QueueClient, local: Queue[Optional[bytes]], no_confirm: bool = False) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-client-scheduler')
         self.machine = ClientScheduler(queue=queue, local=local, no_confirm=no_confirm)
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: ClientSchedulerThread) -> None:
         """Run machine."""
         self.machine.run()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: ClientSchedulerThread, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
         log.warning('Stopping (scheduler)')
         self.machine.halt()
@@ -270,7 +271,7 @@ class ClientCollector(StateMachine):
     state = CollectorState.START
     states = CollectorState
 
-    def __init__(self, queue: QueueClient, local: Queue[Optional[Task]],
+    def __init__(self: ClientCollector, queue: QueueClient, local: Queue[Optional[Task]],
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Collect tasks from local queue of finished tasks and push them to the server."""
         self.tasks = []
@@ -281,7 +282,7 @@ class ClientCollector(StateMachine):
         self.bundlewait = bundlewait
 
     @functools.cached_property
-    def actions(self) -> Dict[CollectorState, Callable[[], CollectorState]]:
+    def actions(self: ClientCollector) -> Dict[CollectorState, Callable[[], CollectorState]]:
         return {
             CollectorState.START: self.start,
             CollectorState.GET_LOCAL: self.get_local,
@@ -291,13 +292,13 @@ class ClientCollector(StateMachine):
             CollectorState.FINAL: self.finalize,
         }
 
-    def start(self) -> CollectorState:
+    def start(self: ClientCollector) -> CollectorState:
         """Jump to GET_LOCAL state."""
         log.debug('Started (collector)')
         self.previous_send = datetime.now()
         return CollectorState.GET_LOCAL
 
-    def get_local(self) -> CollectorState:
+    def get_local(self: ClientCollector) -> CollectorState:
         """Get the next task from the local completed task queue."""
         try:
             task = self.local.get(timeout=1)
@@ -310,12 +311,12 @@ class ClientCollector(StateMachine):
         except QueueEmpty:
             return CollectorState.CHECK_BUNDLE
 
-    def check_bundle(self) -> CollectorState:
+    def check_bundle(self: ClientCollector) -> CollectorState:
         """Check state of task bundle and proceed with return if necessary."""
         wait_time = (datetime.now() - self.previous_send)
         since_last = wait_time.total_seconds()
         if len(self.tasks) >= self.bundlesize:
-            log.trace(f'Bundle size ({len(self.tasks)}) reached')
+            log.trace(f'Bundle size reached ({len(self.tasks)} tasks)')
             return CollectorState.PACK_BUNDLE
         elif since_last >= self.bundlewait:
             log.trace(f'Wait time exceeded ({wait_time})')
@@ -323,16 +324,16 @@ class ClientCollector(StateMachine):
         else:
             return CollectorState.GET_LOCAL
 
-    def pack_bundle(self) -> CollectorState:
+    def pack_bundle(self: ClientCollector) -> CollectorState:
         """Pack tasks into bundle before pushing back to server."""
         self.bundle = [task.pack() for task in self.tasks]
         return CollectorState.PUT_REMOTE
 
-    def put_remote(self) -> CollectorState:
+    def put_remote(self: ClientCollector) -> CollectorState:
         """Push out bundle of completed tasks."""
         if self.bundle:
             self.queue.completed.put(self.bundle)
-            log.trace(f'Returned bundle of {len(self.bundle)} tasks')
+            log.trace(f'Returned bundle ({len(self.bundle)} tasks)')
             self.tasks.clear()
             self.bundle.clear()
             self.previous_send = datetime.now()
@@ -340,7 +341,7 @@ class ClientCollector(StateMachine):
             log.trace('No local tasks to return')
         return CollectorState.GET_LOCAL
 
-    def finalize(self) -> CollectorState:
+    def finalize(self: ClientCollector) -> CollectorState:
         """Push out any remaining tasks and halt."""
         self.put_remote()
         log.debug('Done (collector)')
@@ -350,17 +351,17 @@ class ClientCollector(StateMachine):
 class ClientCollectorThread(Thread):
     """Run client collector within dedicated thread."""
 
-    def __init__(self, queue: QueueClient, local: Queue[Optional[bytes]],
+    def __init__(self: ClientCollectorThread, queue: QueueClient, local: Queue[Optional[bytes]],
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-client-collector')
         self.machine = ClientCollector(queue=queue, local=local, bundlesize=bundlesize, bundlewait=bundlewait)
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: ClientCollectorThread) -> None:
         """Run machine."""
         self.machine.run()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: ClientCollectorThread, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
         log.warning('Stopping (collector)')
         self.machine.halt()
@@ -408,7 +409,7 @@ class TaskExecutor(StateMachine):
     state = TaskState.START
     states = TaskState
 
-    def __init__(self, id: int, inbound: Queue[Optional[Task]], outbound: Queue[Optional[Task]],
+    def __init__(self: TaskExecutor, id: int, inbound: Queue[Optional[Task]], outbound: Queue[Optional[Task]],
                  template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None,
                  capture: bool = False) -> None:
         """Initialize task executor."""
@@ -421,7 +422,7 @@ class TaskExecutor(StateMachine):
         self.capture = capture
 
     @functools.cached_property
-    def actions(self) -> Dict[TaskState, Callable[[], TaskState]]:
+    def actions(self: TaskExecutor) -> Dict[TaskState, Callable[[], TaskState]]:
         return {
             TaskState.START: self.start,
             TaskState.GET_LOCAL: self.get_local,
@@ -432,12 +433,12 @@ class TaskExecutor(StateMachine):
             TaskState.FINAL: self.finalize,
         }
 
-    def start(self) -> TaskState:
+    def start(self: TaskExecutor) -> TaskState:
         """Jump to GET_LOCAL state."""
         log.debug(f'Started (executor-{self.id})')
         return TaskState.GET_LOCAL
 
-    def get_local(self) -> TaskState:
+    def get_local(self: TaskExecutor) -> TaskState:
         """Get the next task from the local queue of new tasks."""
         try:
             self.task = self.inbound.get(timeout=1)
@@ -446,7 +447,7 @@ class TaskExecutor(StateMachine):
         except QueueEmpty:
             return TaskState.GET_LOCAL
 
-    def create_task(self) -> TaskState:
+    def create_task(self: TaskExecutor) -> TaskState:
         """Expand template and initialize task command-line."""
         try:
             self.task.client_id = INSTANCE
@@ -460,11 +461,9 @@ class TaskExecutor(StateMachine):
             self.task.exit_status = -1
             return TaskState.PUT_LOCAL
 
-    def start_task(self) -> TaskState:
+    def start_task(self: TaskExecutor) -> TaskState:
         """Start current task locally."""
         env = task_env(self.task)
-        log.info(f'Running task ({self.task.id})')
-        log.debug(f'Running task ({self.task.id}: {self.task.command})')
         if self.capture:
             self.task.outpath = env['TASK_OUTPATH']
             self.task.errpath = env['TASK_ERRPATH']
@@ -474,9 +473,12 @@ class TaskExecutor(StateMachine):
         self.process = Popen(self.task.command, shell=True,
                              stdout=self.redirect_output, stderr=self.redirect_errors,
                              cwd=config.task.cwd, env=env)
+        log.info(f'Running task ({self.task.id})')
+        log.debug(f'Running task ({self.task.id}: {self.task.command})')
+        log.trace(f'Running task ({self.task.id}: pid={self.process.pid}, argv={self.task.command})')
         return TaskState.WAIT_TASK
 
-    def wait_task(self) -> TaskState:
+    def wait_task(self: TaskExecutor) -> TaskState:
         """Wait for current task to complete."""
         try:
             self.task.exit_status = self.process.wait(timeout=2)
@@ -487,9 +489,12 @@ class TaskExecutor(StateMachine):
                 self.redirect_errors.close()
             return TaskState.PUT_LOCAL
         except TimeoutExpired:
+            # Only include time elapsed to the nearest second (we don't need fractions)
+            elapsed = timedelta(seconds=round((datetime.now().astimezone() - self.task.start_time).total_seconds()))
+            log.trace(f'Waiting on task ({self.task.id}: {elapsed})')
             return TaskState.WAIT_TASK
 
-    def put_local(self) -> TaskState:
+    def put_local(self: TaskExecutor) -> TaskState:
         """Put completed task on outbound queue."""
         try:
             self.outbound.put(self.task, timeout=1)
@@ -497,7 +502,7 @@ class TaskExecutor(StateMachine):
         except QueueFull:
             return TaskState.PUT_LOCAL
 
-    def finalize(self) -> TaskState:
+    def finalize(self: TaskExecutor) -> TaskState:
         """Push out any remaining tasks and halt."""
         log.debug(f'Done (executor-{self.id})')
         return TaskState.HALT
@@ -508,7 +513,7 @@ class TaskThread(Thread):
 
     id: int
 
-    def __init__(self,
+    def __init__(self: TaskThread,
                  id: int,
                  inbound: Queue[Optional[str]], outbound: Queue[Optional[str]],
                  template: str = DEFAULT_TEMPLATE, capture: bool = False,
@@ -520,11 +525,11 @@ class TaskThread(Thread):
                                     redirect_output=redirect_output, redirect_errors=redirect_errors,
                                     capture=capture)
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: TaskThread) -> None:
         """Run machine."""
         self.machine.run()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: TaskThread, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
         log.warning(f'Stopping (executor-{self.id})')
         self.machine.halt()
@@ -556,14 +561,14 @@ class ClientHeartbeat(StateMachine):
     state = HeartbeatState.START
     states = HeartbeatState
 
-    def __init__(self, queue: QueueClient, heartrate: int = DEFAULT_HEARTRATE) -> None:
+    def __init__(self: ClientHeartbeat, queue: QueueClient, heartrate: int = DEFAULT_HEARTRATE) -> None:
         """Initialize heartbeat machine."""
         self.queue = queue
         self.previous = datetime.now()
         self.heartrate = timedelta(seconds=heartrate)
 
     @functools.cached_property
-    def actions(self) -> Dict[HeartbeatState, Callable[[], HeartbeatState]]:
+    def actions(self: ClientHeartbeat) -> Dict[HeartbeatState, Callable[[], HeartbeatState]]:
         return {
             HeartbeatState.START: self.start,
             HeartbeatState.SUBMIT: self.submit,
@@ -577,7 +582,7 @@ class ClientHeartbeat(StateMachine):
         log.debug(f'Started (heartbeat)')
         return HeartbeatState.SUBMIT
 
-    def submit(self) -> HeartbeatState:
+    def submit(self: ClientHeartbeat) -> HeartbeatState:
         """Publish new heartbeat to remote queue."""
         try:
             client_state = self.client_state  # atomic
@@ -592,7 +597,7 @@ class ClientHeartbeat(StateMachine):
         except QueueEmpty:
             return HeartbeatState.SUBMIT
 
-    def wait(self) -> HeartbeatState:
+    def wait(self: ClientHeartbeat) -> HeartbeatState:
         """Wait until next needed heartbeat."""
         if self.no_wait:
             return HeartbeatState.SUBMIT
@@ -614,21 +619,21 @@ class ClientHeartbeat(StateMachine):
 class ClientHeartbeatThread(Thread):
     """Run heartbeat machine within dedicated thread."""
 
-    def __init__(self, queue: QueueClient, heartrate: int = DEFAULT_HEARTRATE) -> None:
+    def __init__(self: ClientHeartbeatThread, queue: QueueClient, heartrate: int = DEFAULT_HEARTRATE) -> None:
         """Initialize heartbeat machine."""
         super().__init__(name=f'hypershell-heartbeat')
         self.machine = ClientHeartbeat(queue=queue, heartrate=heartrate)
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: ClientHeartbeatThread) -> None:
         """Run machine."""
         self.machine.run()
 
-    def signal_finished(self) -> None:
+    def signal_finished(self: ClientHeartbeatThread) -> None:
         """Set client state to communicate completion."""
         self.machine.client_state = ClientState.FINISHED
         self.machine.no_wait = True
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: ClientHeartbeatThread, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
         log.warning('Stopping (heartbeat)')
         self.machine.halt()
@@ -656,7 +661,7 @@ class ClientThread(Thread):
     collector: ClientCollectorThread
     executors: List[TaskThread]
 
-    def __init__(self,
+    def __init__(self: ClientThread,
                  num_tasks: int = DEFAULT_NUM_TASKS,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
                  address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port),
@@ -683,7 +688,7 @@ class ClientThread(Thread):
                                      template=template, capture=capture)
                           for count in range(num_tasks)]
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: ClientThread) -> None:
         """Start child threads, wait."""
         log.debug(f'Started ({self.num_tasks} executors)')
         self.wait_start()
@@ -695,7 +700,7 @@ class ClientThread(Thread):
             self.wait_heartbeat()
         log.debug('Done')
 
-    def wait_start(self) -> None:
+    def wait_start(self: ClientThread) -> None:
         """Wait constant period or random interval."""
         if self.delay_start == 0:
             return
@@ -707,7 +712,7 @@ class ClientThread(Thread):
             log.debug(f'Waiting random ({delay:.1f} seconds)')
             time.sleep(delay)
 
-    def start_threads(self) -> None:
+    def start_threads(self: ClientThread) -> None:
         """Start child threads."""
         self.scheduler.start()
         self.collector.start()
@@ -715,18 +720,18 @@ class ClientThread(Thread):
         for executor in self.executors:
             executor.start()
 
-    def wait_scheduler(self) -> None:
+    def wait_scheduler(self: ClientThread) -> None:
         """Wait for all tasks to be completed."""
         log.trace('Waiting (scheduler)')
         self.scheduler.join()
 
-    def wait_collector(self) -> None:
+    def wait_collector(self: ClientThread) -> None:
         """Signal collector to halt."""
         log.trace('Waiting (collector)')
         self.outbound.put(None)
         self.collector.join()
 
-    def wait_executors(self) -> None:
+    def wait_executors(self: ClientThread) -> None:
         """Send disconnect signal to each task executor thread."""
         for _ in self.executors:
             self.inbound.put(None)  # signal executors to shut down
@@ -734,13 +739,13 @@ class ClientThread(Thread):
             log.trace(f'Waiting (executor-{thread.id})')
             thread.join()
 
-    def wait_heartbeat(self) -> None:
+    def wait_heartbeat(self: ClientThread) -> None:
         """Signal HALT on heartbeat."""
         log.trace('Waiting (heartbeat)')
         self.heartbeat.signal_finished()
         self.heartbeat.join()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: ClientThread, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
         log.warning('Stopping')
         self.scheduler.stop(wait=wait, timeout=timeout)
@@ -850,10 +855,10 @@ class ClientApp(Application):
         ConnectionRefusedError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         AuthenticationError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         HostAddressInfo: functools.partial(handle_address_unknown, logger=log, status=exit_status.runtime_error),
-        **Application.exceptions,
+        **get_shared_exception_mapping(__name__),
     }
 
-    def run(self) -> None:
+    def run(self: ClientApp) -> None:
         """Run client."""
         try:
             self.check_args()
@@ -865,22 +870,25 @@ class ClientApp(Application):
         except gaierror:
             raise HostAddressInfo(f'Could not resolve host \'{self.host}\'')
 
-    def check_args(self) -> None:
+    def check_args(self: ClientApp) -> None:
         """Check for logical errors in command-line arguments."""
         if self.capture and (self.output_path or self.errors_path):
             raise ArgumentError('Cannot specify --capture with either --output or --errors')
 
     @functools.cached_property
-    def output_stream(self) -> IO:
+    def output_stream(self: ClientApp) -> IO:
         """IO stream for task outputs."""
         return sys.stdout if not self.output_path else open(self.output_path, mode='w')
 
     @functools.cached_property
-    def errors_stream(self) -> IO:
+    def errors_stream(self: ClientApp) -> IO:
         """IO stream for task errors."""
         return sys.stderr if not self.errors_path else open(self.errors_path, mode='w')
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self: ClientApp,
+                 exc_type: Optional[Type[Exception]],
+                 exc_val: Optional[Exception],
+                 exc_tb: Optional[TracebackType]) -> None:
         """Close IO streams if necessary."""
         if self.output_stream is not sys.stdout:
             self.output_stream.close()

@@ -24,7 +24,7 @@ with open('src/hypershell/__init__.py', mode='r') as source:
 
 
 # Core dependencies
-DEPS = ['cmdkit>=2.6.0', 'toml>=0.10.2', 'tomlkit>=0.11.0', 'pyyaml>=6.0',
+DEPS = ['cmdkit==2.6.1', 'toml>=0.10.2', 'tomlkit>=0.11.0', 'pyyaml>=6.0',
         'sqlalchemy>=1.4.22', 'rich>=10.16.2', 'paramiko>=2.9.1']
 
 # Dependencies for readthedocs.io

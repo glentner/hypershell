@@ -12,12 +12,11 @@ from typing import Any
 import os
 import sys
 import json
-import functools
 import subprocess
 
 # external libs
 import toml
-from cmdkit.app import Application, ApplicationGroup, exit_status
+from cmdkit.app import Application, ApplicationGroup
 from cmdkit.cli import Interface, ArgumentError
 from cmdkit.config import ConfigurationError
 from rich.console import Console
@@ -29,7 +28,7 @@ from hypershell.core.platform import path
 from hypershell.core.types import smart_coerce
 from hypershell.core.config import load_file, update, config as full_config
 from hypershell.core.logging import Logger
-from hypershell.core.exceptions import handle_exception
+from hypershell.core.exceptions import get_shared_exception_mapping
 
 # public interface
 __all__ = ['ConfigApp', ]
@@ -69,7 +68,11 @@ class ConfigEditApp(Application):
     site_interface.add_argument('--user', action='store_const', const='user')
     site_interface.add_argument('--system', action='store_const', const='system')
 
-    def run(self) -> None:
+    exceptions = {
+        **get_shared_exception_mapping(__name__)
+    }
+
+    def run(self: ConfigEditApp) -> None:
         """Business logic for `config edit`."""
 
         config_path = path[self.site_name].config
@@ -127,11 +130,10 @@ class ConfigGetApp(Application):
     interface.add_argument('-x', '--expand', action='store_true')
 
     exceptions = {
-        ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
-        **Application.exceptions,
+        **get_shared_exception_mapping(__name__)
     }
 
-    def run(self) -> None:
+    def run(self: ConfigGetApp) -> None:
         """Business logic for `config get`."""
 
         if self.site_name is None:
@@ -189,7 +191,7 @@ class ConfigGetApp(Application):
         else:
             raise ConfigurationError(f'"{self.varpath}" not found in {config_path}')
 
-    def print_output(self, value: Any) -> None:
+    def print_output(self: ConfigGetApp, value: Any) -> None:
         """Format and print final `value`."""
         value = self.format_output(value)
         if sys.stdout.isatty():
@@ -201,7 +203,7 @@ class ConfigGetApp(Application):
             # NOTE: JSON formatting puts quotations - we don't want these on raw output
             print(value.strip('"'), file=sys.stdout, flush=True)
 
-    def format_output(self, value: Any) -> str:
+    def format_output(self: ConfigGetApp, value: Any) -> str:
         """Format `value` as appropriate text."""
         if isinstance(value, dict):
             value = self.format_section(value)
@@ -209,7 +211,7 @@ class ConfigGetApp(Application):
             value = json.dumps(value)  # NOTE: close enough
         return value
 
-    def format_section(self, value: dict) -> str:
+    def format_section(self: ConfigGetApp, value: dict) -> str:
         """Format an entire section for output."""
         if self.varpath == '.':
             value = toml.dumps(value)
@@ -267,7 +269,11 @@ class ConfigSetApp(Application):
     site_interface.add_argument('--user', action='store_const', const='user', dest='site_name', default=site_name)
     site_interface.add_argument('--system', action='store_const', const='system', dest='site_name')
 
-    def run(self) -> None:
+    exceptions = {
+        **get_shared_exception_mapping(__name__)
+    }
+
+    def run(self: ConfigSetApp) -> None:
         """Business logic for `config set`."""
 
         if '.' not in self.varpath:
@@ -315,7 +321,11 @@ class ConfigWhichApp(Application):
     varpath: str = None
     interface.add_argument('varpath', metavar='VAR')
 
-    def run(self) -> None:
+    exceptions = {
+        **get_shared_exception_mapping(__name__)
+    }
+
+    def run(self: ConfigWhichApp) -> None:
         """Business logic for `config which`."""
         try:
             site = full_config.which(*self.varpath.split('.'))

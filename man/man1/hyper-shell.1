@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "HYPER-SHELL" "1" "Apr 02, 2023" "2.2.0" "hyper-shell"
+.TH "HYPER-SHELL" "1" "Apr 13, 2023" "2.3.0" "hyper-shell"
 .SH NAME
 hyper-shell \- Process shell commands over a distributed, asynchronous queue
 .SH SYNOPSIS
@@ -56,7 +56,7 @@ hyper\-shell config [\-h] {get | set | which | edit } [\-\-user | \-\-system] ..
 .fi
 .sp
 .nf
-hyper\-shell task [\-h] {submit | update | info | wait | run | search} ...
+hyper\-shell task [\-h] {submit | info | wait | run | search | update} ...
 .fi
 .sp
 .SH DESCRIPTION
@@ -727,7 +727,7 @@ To use options, preface with leading \fB\-\-\fP\&.
 .INDENT 0.0
 .TP
 .B \fBhyper\-shell\fP \fBtask\fP \fBinfo\fP \fB[\-h]\fP
-\fBID\fP \fB[\-\-json | \-\-stdout | \-\-stderr | \-\-x FIELD]\fP
+\fBID\fP \fB[\-\-yaml | \-\-json | \-\-stdout | \-\-stderr | \-\-x FIELD]\fP
 .UNINDENT
 .sp
 Get metadata and/or task outputs.
@@ -746,6 +746,9 @@ Unique task UUID.
 .UNINDENT
 .SS Options
 .INDENT 0.0
+.TP
+.B \fB\-\-yaml\fP
+Format metadata output as YAML.
 .TP
 .B \fB\-\-json\fP
 Format metadata output as JSON.
@@ -826,8 +829,8 @@ Time in seconds to wait between polling (default: 5).
 .TP
 .B \fBhyper\-shell\fP \fBtask\fP \fBsearch\fP \fB[\-h]\fP
 \fB[FIELD [FIELD ...]]\fP \fB[\-\-where COND [COND ...]]\fP
-\fB[\-\-order\-by FIELD [\-\-desc]]\fP \fB[\-x | \-\-json | \-\-csv]\fP
-\fB[\-\-count | \-\-limit NUM]\fP
+\fB[\-\-order\-by FIELD [\-\-desc]]\fP \fB[\-\-count | \-\-limit NUM]\fP
+\fB[\-\-format FORMAT | \-\-json | \-\-csv]\fP \fB[\-d CHAR]\fP
 .UNINDENT
 .sp
 Search for tasks in database.
@@ -853,9 +856,6 @@ List of conditional statements to filter results (e.g., \fB\-w \(aqexit_status !
 .B \fB\-s\fP, \fB\-\-order\-by\fP \fIFIELD\fP
 Order results by field.
 .TP
-.B \fB\-x\fP, \fB\-\-extract\fP
-Disable formatting for single column output.
-.TP
 .B \fB\-\-failed\fP
 Alias for \fB\-w \(aqexit_status != 0\(aq\fP\&.
 .TP
@@ -874,11 +874,14 @@ Format output as JSON.
 .B \fB\-\-csv\fP
 Format output as CSV.
 .TP
+.B \fB\-d\fP, \fB\-\-delimiter\fP \fICHAR\fP
+Field seperator for plain/csv formats.
+.TP
 .B \fB\-l\fP, \fB\-\-limit\fP \fINUM\fP
-Limit number of returned results.
+Limit the number of results.
 .TP
 .B \fB\-c\fP, \fB\-\-count\fP
-Only print number of results that would be returned.
+Show count of results.
 .UNINDENT
 .SH TASK UPDATE USAGE
 .sp

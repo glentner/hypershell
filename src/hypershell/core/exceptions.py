@@ -5,7 +5,8 @@
 
 
 # type annotations
-from typing import Union, Callable
+from __future__ import annotations
+from typing import Dict, Union, Callable, Type
 
 # standard libraries
 import os
@@ -18,6 +19,7 @@ from datetime import datetime
 # external libs
 from cmdkit.app import exit_status
 from cmdkit.config import Namespace
+from cmdkit.config import ConfigurationError
 
 # internal libs
 from hypershell.core.ansi import faint, bold, magenta, yellow, red
@@ -25,7 +27,9 @@ from hypershell.core.platform import default_path
 
 # public interface
 __all__ = ['display_warning', 'display_error', 'display_critical', 'traceback_filepath', 'write_traceback',
-           'handle_exception', 'handle_disconnect', 'handle_address_unknown', 'HostAddressInfo', ]
+           'handle_exception', 'handle_disconnect', 'handle_address_unknown',
+           'HostAddressInfo', 'DatabaseUninitialized',
+           'get_shared_exception_mapping', ]
 
 
 def _display_message(levelname: str, error: Union[Exception, str],
@@ -41,6 +45,14 @@ def _display_message(levelname: str, error: Union[Exception, str],
 display_warning = functools.partial(_display_message, 'WARNING', colorized=yellow)
 display_error = functools.partial(_display_message, 'ERROR', colorized=red)
 display_critical = functools.partial(_display_message, 'CRITICAL', colorized=magenta)
+
+
+class HostAddressInfo(Exception):
+    """Could not resolve hostname."""
+
+
+class DatabaseUninitialized(Exception):
+    """The database needs to be initialized before operations."""
 
 
 def traceback_filepath(path: Namespace = None) -> str:
@@ -74,13 +86,25 @@ def handle_exception(exc: Exception, logger: logging.Logger, status: int) -> int
     return status
 
 
-class HostAddressInfo(Exception):
-    """Could not resolve hostname."""
-
-
 def handle_address_unknown(exc: Exception,  # noqa: unused
                            logger: logging.Logger,
                            status: int = exit_status.runtime_error) -> int:
     """Could not get address info for hostname (see `socket.gaierror`)."""
     logger.critical(f'{exc.__class__.__name__}: {exc}')
     return status
+
+
+def get_shared_exception_mapping(modname: str = 'hypershell') -> Dict[Type[Exception], Callable[[Exception], int]]:
+    """Globally defined exception cases for all application subcommands."""
+    # We need a single location to define basic exception cases but cannot define them under
+    # `hypershell.__init__` as a class-level override of `Application.exceptions` because the
+    # subcommand classes are imported first. This function is now part of core and has no
+    # internal dependencies, so it can be imported by all other modules.
+    logger = logging.getLogger(modname)
+    return {
+        RuntimeError: functools.partial(handle_exception, logger=logger, status=exit_status.runtime_error),
+        FileNotFoundError: functools.partial(handle_exception, logger=logger, status=exit_status.runtime_error),
+        ConfigurationError: functools.partial(handle_exception, logger=logger, status=exit_status.bad_config),
+        DatabaseUninitialized: functools.partial(handle_exception, logger=logger, status=exit_status.runtime_error),
+        Exception: functools.partial(write_traceback, logger=logger, status=exit_status.runtime_error),
+    }

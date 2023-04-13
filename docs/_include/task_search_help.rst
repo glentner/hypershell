@@ -14,9 +14,6 @@ Options
 ``-s``, ``--order-by`` *FIELD*
     Order results by field.
 
-``-x``, ``--extract``
-    Disable formatting for single column output.
-
 ``--failed``
     Alias for ``-w 'exit_status != 0'``.
 
@@ -35,8 +32,11 @@ Options
 ``--csv``
     Format output as CSV.
 
+``-d``, ``--delimiter`` *CHAR*
+    Field seperator for plain/csv formats.
+
 ``-l``, ``--limit`` *NUM*
-    Limit number of returned results.
+    Limit the number of results.
 
 ``-c``, ``--count``
-    Only print number of results that would be returned.
+    Show count of results.

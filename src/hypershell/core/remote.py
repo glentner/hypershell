@@ -10,6 +10,7 @@ from typing import Tuple, Optional, Type, Union, IO
 from types import TracebackType
 
 # standard libs
+import os
 import sys
 from dataclasses import dataclass
 
@@ -47,6 +48,8 @@ class SSHConfig:
     @staticmethod
     def check_config(hostname: str, filepath: str = DEFAULT_SSH_CONFIG) -> Optional[dict]:
         """Check to see if `hostname` is defined in `filepath`, return `paramiko.SSHConfig`."""
+        if not os.path.exists(filepath):
+            return None
         with open(filepath, mode='r') as stream:
             ssh_config = SSHConfigParser()
             ssh_config.parse(stream)
@@ -55,13 +58,15 @@ class SSHConfig:
     @classmethod
     def from_config(cls: Type[SSHConfig], hostname: str, filepath: str = DEFAULT_SSH_CONFIG) -> SSHConfig:
         """Read configuration from file."""
-        profile = cls.check_config(hostname, filepath)
-        return cls(**{
-            'hostname': profile.get('hostname', hostname),
-            'username': profile.get('user', None),
-            'key_filename': profile.get('identityfile', None),
-            'sock': None if 'proxycommand' not in profile else ProxyCommand(profile['proxycommand']),
-        })
+        if profile := cls.check_config(hostname, filepath):
+            return cls(**{
+                'hostname': profile.get('hostname', hostname),
+                'username': profile.get('user', None),
+                'key_filename': profile.get('identityfile', None),
+                'sock': None if 'proxycommand' not in profile else ProxyCommand(profile['proxycommand']),
+            })
+        else:
+            return cls(hostname=hostname)
 
 
 class SSHConnection:
@@ -72,7 +77,7 @@ class SSHConnection:
 
     sftp: Optional[SFTPClient] = None
 
-    def __init__(self, hostname_or_config: Union[str, SSHConfig]) -> None:
+    def __init__(self: SSHConnection, hostname_or_config: Union[str, SSHConfig]) -> None:
         """Initialize with hostname or prepared SSHConfig."""
         if isinstance(hostname_or_config, SSHConfig):
             self.config = hostname_or_config
@@ -84,7 +89,7 @@ class SSHConnection:
         self.open()
         return self
 
-    def __exit__(self,
+    def __exit__(self: SSHConnection,
                  exc_type: Optional[Type[Exception]],
                  exc_val: Optional[Exception],
                  exc_tb: Optional[TracebackType]) -> None:

@@ -39,7 +39,8 @@ Warning:
 
 # type annotations
 from __future__ import annotations
-from typing import List, Iterable, Iterator, IO, Optional, Dict, Callable
+from typing import List, Iterable, Iterator, IO, Optional, Dict, Callable, Type
+from types import TracebackType
 
 # standard libs
 import io
@@ -51,7 +52,7 @@ from queue import Queue, Empty as QueueEmpty, Full as QueueFull
 
 # external libs
 from cmdkit.config import ConfigurationError
-from cmdkit.app import Application, exit_status
+from cmdkit.app import Application
 from cmdkit.cli import Interface
 
 # internal libs
@@ -62,7 +63,7 @@ from hypershell.core.fsm import State, StateMachine
 from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
-from hypershell.core.exceptions import handle_exception
+from hypershell.core.exceptions import get_shared_exception_mapping
 from hypershell.database.model import Task
 from hypershell.database import initdb, checkdb
 
@@ -95,7 +96,7 @@ class Loader(StateMachine):
     state = LoaderState.START
     states = LoaderState
 
-    def __init__(self, source: Iterable[str], queue: Queue[Optional[Task]], template: str = DEFAULT_TEMPLATE) -> None:
+    def __init__(self: Loader, source: Iterable[str], queue: Queue[Optional[Task]], template: str = DEFAULT_TEMPLATE) -> None:
         """Initialize source to read tasks and submit to database."""
         self.template = Template(template)
         self.source = map(self.template.expand, map(str.strip, map(str, source)))
@@ -103,7 +104,7 @@ class Loader(StateMachine):
         self.count = 0
 
     @functools.cached_property
-    def actions(self) -> Dict[LoaderState, Callable[[], LoaderState]]:
+    def actions(self: Loader) -> Dict[LoaderState, Callable[[], LoaderState]]:
         return {
             LoaderState.START: self.start,
             LoaderState.GET: self.get_task,
@@ -117,7 +118,7 @@ class Loader(StateMachine):
         log.debug('Started (loader)')
         return LoaderState.GET
 
-    def get_task(self) -> LoaderState:
+    def get_task(self: Loader) -> LoaderState:
         """Get the next task from the source."""
         try:
             self.task = Task.new(args=next(self.source))
@@ -126,7 +127,7 @@ class Loader(StateMachine):
         except StopIteration:
             return LoaderState.FINAL
 
-    def put_task(self) -> LoaderState:
+    def put_task(self: Loader) -> LoaderState:
         """Enqueue loaded task."""
         try:
             self.queue.put(self.task, timeout=1)
@@ -145,16 +146,19 @@ class Loader(StateMachine):
 class LoaderThread(Thread):
     """Run loader within dedicated thread."""
 
-    def __init__(self, source: Iterable[str], queue: Queue[Optional[Task]], template: str = DEFAULT_TEMPLATE) -> None:
+    def __init__(self: LoaderThread,
+                 source: Iterable[str],
+                 queue: Queue[Optional[Task]],
+                 template: str = DEFAULT_TEMPLATE) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-submit-loader')
         self.machine = Loader(source=source, queue=queue, template=template)
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: LoaderThread) -> None:
         """Run machine."""
         self.machine.run()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: LoaderThread, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
         log.warning('Stopping (loader)')
         self.machine.halt()
@@ -186,9 +190,10 @@ class DatabaseCommitter(StateMachine):
     state = DatabaseCommitterState.START
     states = DatabaseCommitterState
 
-    def __init__(self,
+    def __init__(self: DatabaseCommitter,
                  queue: Queue[Optional[Task]],
-                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
+                 bundlesize: int = DEFAULT_BUNDLESIZE,
+                 bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize with task queue and buffering parameters."""
         self.queue = queue
         self.tasks = []
@@ -196,7 +201,7 @@ class DatabaseCommitter(StateMachine):
         self.bundlewait = bundlewait
 
     @functools.cached_property
-    def actions(self) -> Dict[DatabaseCommitterState, Callable[[], DatabaseCommitterState]]:
+    def actions(self: DatabaseCommitter) -> Dict[DatabaseCommitterState, Callable[[], DatabaseCommitterState]]:
         return {
             DatabaseCommitterState.START: self.start,
             DatabaseCommitterState.GET: self.get_task,
@@ -204,13 +209,13 @@ class DatabaseCommitter(StateMachine):
             DatabaseCommitterState.FINAL: self.finalize,
         }
 
-    def start(self) -> DatabaseCommitterState:
+    def start(self: DatabaseCommitter) -> DatabaseCommitterState:
         """Jump to GET state."""
         log.debug('Started (committer: database)')
         self.previous_submit = datetime.now()
         return DatabaseCommitterState.GET
 
-    def get_task(self) -> DatabaseCommitterState:
+    def get_task(self: DatabaseCommitter) -> DatabaseCommitterState:
         """Get tasks from local queue and check buffer."""
         try:
             task = self.queue.get(timeout=1)
@@ -226,7 +231,7 @@ class DatabaseCommitter(StateMachine):
         else:
             return DatabaseCommitterState.FINAL
 
-    def commit(self) -> DatabaseCommitterState:
+    def commit(self: DatabaseCommitter) -> DatabaseCommitterState:
         """Commit tasks to database."""
         if self.tasks:
             Task.add_all(self.tasks)
@@ -235,7 +240,7 @@ class DatabaseCommitter(StateMachine):
             self.previous_submit = datetime.now()
         return DatabaseCommitterState.GET
 
-    def finalize(self) -> DatabaseCommitterState:
+    def finalize(self: DatabaseCommitter) -> DatabaseCommitterState:
         """Force final commit of tasks and halt."""
         self.commit()
         log.debug('Done (committer: database)')
@@ -245,17 +250,19 @@ class DatabaseCommitter(StateMachine):
 class DatabaseCommitterThread(Thread):
     """Run committer within dedicated thread."""
 
-    def __init__(self, queue: Queue[Optional[Task]],
-                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
+    def __init__(self: DatabaseCommitterThread,
+                 queue: Queue[Optional[Task]],
+                 bundlesize: int = DEFAULT_BUNDLESIZE,
+                 bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-submit-committer')
         self.machine = DatabaseCommitter(queue=queue, bundlesize=bundlesize, bundlewait=bundlewait)
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: DatabaseCommitterThread) -> None:
         """Run machine."""
         self.machine.run()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: DatabaseCommitterThread, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
         log.warning('Stopping (committer: database)')
         self.machine.halt()
@@ -270,7 +277,7 @@ class SubmitThread(Thread):
     loader: LoaderThread
     committer: DatabaseCommitterThread
 
-    def __init__(self, source: Iterable[str], bundlesize: int = DEFAULT_BUNDLESIZE,
+    def __init__(self: SubmitThread, source: Iterable[str], bundlesize: int = DEFAULT_BUNDLESIZE,
                  bundlewait: int = DEFAULT_BUNDLEWAIT, template: str = DEFAULT_TEMPLATE) -> None:
         """Initialize queue and child threads."""
         self.source = source
@@ -279,7 +286,7 @@ class SubmitThread(Thread):
         self.committer = DatabaseCommitterThread(queue=self.queue, bundlesize=bundlesize, bundlewait=bundlewait)
         super().__init__(name='hypershell-submit')
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: SubmitThread) -> None:
         """Start child threads, wait."""
         log.debug(f'Started ({self.source_name})')
         self.loader.start()
@@ -290,7 +297,7 @@ class SubmitThread(Thread):
         log.debug('Done')
 
     @functools.cached_property
-    def source_name(self) -> str:
+    def source_name(self: SubmitThread) -> str:
         """Log details of source."""
         if self.source is sys.stdin:
             return '<stdin>'
@@ -299,7 +306,7 @@ class SubmitThread(Thread):
         else:
             return '<iterable>'
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: SubmitThread, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
         log.warning('Stopping')
         self.loader.stop(wait=wait, timeout=timeout)
@@ -308,7 +315,7 @@ class SubmitThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
     @property
-    def task_count(self) -> int:
+    def task_count(self: SubmitThread) -> int:
         """Count of submitted tasks."""
         return self.loader.machine.count
 
@@ -339,7 +346,7 @@ class QueueCommitter(StateMachine):
     state = QueueCommitterState.START
     states = QueueCommitterState
 
-    def __init__(self, local: Queue[Optional[Task]], client: QueueClient,
+    def __init__(self: QueueCommitter, local: Queue[Optional[Task]], client: QueueClient,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize with queue handles and buffering parameters."""
         self.local = local
@@ -350,7 +357,7 @@ class QueueCommitter(StateMachine):
         self.bundlewait = bundlewait
 
     @functools.cached_property
-    def actions(self) -> Dict[QueueCommitterState, Callable[[], QueueCommitterState]]:
+    def actions(self: QueueCommitter) -> Dict[QueueCommitterState, Callable[[], QueueCommitterState]]:
         return {
             QueueCommitterState.START: self.start,
             QueueCommitterState.GET: self.get_task,
@@ -359,13 +366,13 @@ class QueueCommitter(StateMachine):
             QueueCommitterState.FINAL: self.finalize,
         }
 
-    def start(self) -> QueueCommitterState:
+    def start(self: QueueCommitter) -> QueueCommitterState:
         """Jump to GET state."""
         log.debug('Started (committer: no database)')
         self.previous_submit = datetime.now()
         return QueueCommitterState.GET
 
-    def get_task(self) -> QueueCommitterState:
+    def get_task(self: QueueCommitter) -> QueueCommitterState:
         """Get tasks from local queue and check buffer."""
         try:
             task = self.local.get(timeout=1)
@@ -381,7 +388,7 @@ class QueueCommitter(StateMachine):
         else:
             return QueueCommitterState.FINAL
 
-    def pack_bundle(self) -> QueueCommitterState:
+    def pack_bundle(self: QueueCommitter) -> QueueCommitterState:
         """Pack tasks into bundle for remote queue."""
         if self.tasks:
             self.bundle = [task.pack() for task in self.tasks]
@@ -389,7 +396,7 @@ class QueueCommitter(StateMachine):
         else:
             return QueueCommitterState.GET
 
-    def commit(self) -> QueueCommitterState:
+    def commit(self: QueueCommitter) -> QueueCommitterState:
         """Commit tasks to server scheduling queue."""
         try:
             if self.tasks:
@@ -414,17 +421,17 @@ class QueueCommitter(StateMachine):
 class QueueCommitterThread(Thread):
     """Run queue committer within dedicated thread."""
 
-    def __init__(self, local: Queue[Optional[Task]], client: QueueClient,
+    def __init__(self: QueueCommitterThread, local: Queue[Optional[Task]], client: QueueClient,
                  bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-submit-committer')
         self.machine = QueueCommitter(local=local, client=client, bundlesize=bundlesize, bundlewait=bundlewait)
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: QueueCommitterThread) -> None:
         """Run machine."""
         self.machine.run()
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: QueueCommitterThread, wait: bool = False, timeout: int = None) -> None:
         """Stop machine."""
         log.warning('Stopping (committer: no database)')
         self.machine.halt()
@@ -440,8 +447,12 @@ class LiveSubmitThread(Thread):
     loader: LoaderThread
     committer: QueueCommitterThread
 
-    def __init__(self, source: Iterable[str], queue_config: QueueConfig, template: str = DEFAULT_TEMPLATE,
-                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
+    def __init__(self: LiveSubmitThread,
+                 source: Iterable[str],
+                 queue_config: QueueConfig,
+                 template: str = DEFAULT_TEMPLATE,
+                 bundlesize: int = DEFAULT_BUNDLESIZE,
+                 bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
         """Initialize queue and child threads."""
         self.source = source
         self.local = Queue(maxsize=bundlesize)
@@ -451,7 +462,7 @@ class LiveSubmitThread(Thread):
                                               bundlesize=bundlesize, bundlewait=bundlewait)
         super().__init__(name='hypershell-submit')
 
-    def run_with_exceptions(self) -> None:
+    def run_with_exceptions(self: LiveSubmitThread) -> None:
         """Start child threads, wait."""
         log.debug(f'Started ({self.source_name})')
         with self.client:
@@ -465,7 +476,7 @@ class LiveSubmitThread(Thread):
         log.debug('Done')
 
     @functools.cached_property
-    def source_name(self) -> str:
+    def source_name(self: LiveSubmitThread) -> str:
         """Log details of source."""
         if self.source is sys.stdin:
             return '<stdin>'
@@ -474,7 +485,7 @@ class LiveSubmitThread(Thread):
         else:
             return '<iterable>'
 
-    def stop(self, wait: bool = False, timeout: int = None) -> None:
+    def stop(self: LiveSubmitThread, wait: bool = False, timeout: int = None) -> None:
         """Stop child threads before main thread."""
         log.warning('Stopping')
         self.loader.stop(wait=wait, timeout=timeout)
@@ -483,7 +494,7 @@ class LiveSubmitThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
     @property
-    def task_count(self) -> int:
+    def task_count(self: LiveSubmitThread) -> int:
         """Count of submitted tasks."""
         return self.loader.machine.count
 
@@ -566,17 +577,15 @@ class SubmitApp(Application):
     count: int = 0
 
     exceptions = {
-        FileNotFoundError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-        ConfigurationError: functools.partial(handle_exception, logger=log, status=exit_status.bad_config),
-        **Application.exceptions,
+        **get_shared_exception_mapping(__name__)
     }
 
-    def run(self) -> None:
+    def run(self: SubmitApp) -> None:
         """Run submit thread."""
         self.submit_all()
         log.info(f'Submitted {self.count} tasks')
 
-    def submit_all(self) -> None:
+    def submit_all(self: SubmitApp) -> None:
         """Submit all tasks from source."""
         self.count = submit_from(self.source, template=self.template,
                                  bundlesize=self.bundlesize, bundlewait=self.bundlewait)
@@ -588,7 +597,7 @@ class SubmitApp(Application):
         if config.database.provider == 'sqlite' and db in ('', ':memory:', None):
             raise ConfigurationError('Submitting tasks to in-memory database has no effect')
 
-    def __enter__(self) -> SubmitApp:
+    def __enter__(self: SubmitApp) -> SubmitApp:
         """Open file if not stdin."""
         self.source = sys.stdin if self.filepath == '-' else open(self.filepath, mode='r')
         self.check_config()
@@ -598,7 +607,10 @@ class SubmitApp(Application):
             checkdb()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self: SubmitApp,
+                 exc_type: Optional[Type[Exception]],
+                 exc_val: Optional[Exception],
+                 exc_tb: Optional[TracebackType]) -> None:
         """Close file if not stdin."""
         if self.source is not sys.stdin:
             self.source.close()
