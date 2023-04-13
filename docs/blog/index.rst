@@ -12,7 +12,7 @@ A place for announcements, release notes, thoughts and ideas for the project.
 
 `April 13, 2023`
 
-The v2.3.0 release of `HyperShell` includes a number of fixes and improvements.
+The v2.3.0 release includes a number of fixes and improvements.
 A number of bugs have been fixed and we added better default output formatting
 of task info from searches.
 
