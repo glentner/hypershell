@@ -695,7 +695,13 @@ class WhereClause:
         match = cls.pattern.match(argument)
         if match:
             field, operand, value = match.groups()
-            return WhereClause(field=field, value=smart_coerce(value), operand=operand)
+            if Task.columns.get(field) is str:
+                # We want to coerce the value (e.g., as an int or None)
+                # But also allow for, e.g., args==1 which expects type str.
+                value = None if value.lower() in {'none', 'null'} else value
+            else:
+                value = smart_coerce(value)
+            return WhereClause(field=field, value=value, operand=operand)
         else:
             raise ArgumentError(f'Where clause not understood ({argument})')
 
