@@ -224,7 +224,10 @@ class ClientScheduler(StateMachine):
 class ClientSchedulerThread(Thread):
     """Run client scheduler in dedicated thread."""
 
-    def __init__(self: ClientSchedulerThread, queue: QueueClient, local: Queue[Optional[bytes]], no_confirm: bool = False) -> None:
+    def __init__(self: ClientSchedulerThread,
+                 queue: QueueClient,
+                 local: Queue[Optional[bytes]],
+                 no_confirm: bool = False) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-client-scheduler')
         self.machine = ClientScheduler(queue=queue, local=local, no_confirm=no_confirm)
