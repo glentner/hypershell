@@ -108,6 +108,9 @@ class Task(Model):
     attempt = Column(INTEGER, nullable=False)
     retried = Column(BOOLEAN, nullable=False)
 
+    waited = Column(INTEGER, nullable=True)
+    duration = Column(INTEGER, nullable=True)
+
     previous_id = Column(UUID, unique=True, nullable=True)
     next_id = Column(UUID, unique=True, nullable=True)
 
@@ -130,6 +133,8 @@ class Task(Model):
         'errpath': str,
         'attempt': int,
         'retried': int,
+        'waited': int,
+        'duration': int,
         'previous_id': str,
         'next_id': str,
     }

@@ -473,6 +473,7 @@ class TaskExecutor(StateMachine):
             self.redirect_output = open(self.task.outpath, mode='w')
             self.redirect_errors = open(self.task.errpath, mode='w')
         self.task.start_time = datetime.now().astimezone()
+        self.task.waited = int((self.task.start_time - self.task.submit_time).total_seconds())
         self.process = Popen(self.task.command, shell=True,
                              stdout=self.redirect_output, stderr=self.redirect_errors,
                              cwd=config.task.cwd, env=env)
@@ -486,6 +487,7 @@ class TaskExecutor(StateMachine):
         try:
             self.task.exit_status = self.process.wait(timeout=2)
             self.task.completion_time = datetime.now().astimezone()
+            self.task.duration = int((self.task.completion_time - self.task.start_time).total_seconds())
             log.debug(f'Completed task ({self.task.id})')
             if self.capture:
                 self.redirect_output.close()

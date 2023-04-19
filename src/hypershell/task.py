@@ -16,6 +16,7 @@ import csv
 import json
 import time
 import functools
+from datetime import timedelta
 from dataclasses import dataclass
 from shutil import copyfileobj
 
@@ -709,13 +710,15 @@ class WhereClause:
 def print_normal(task: Task) -> None:
     """Print semi-structured task metadata with all field names."""
     task_data = {k: json.dumps(to_json_type(v)).strip('"') for k, v in task.to_dict().items()}
+    task_data['waited'] = 'null' if not task.waited else timedelta(seconds=int(task_data['waited']))
+    task_data['duration'] = 'null' if not task.duration else timedelta(seconds=int(task_data['duration']))
     print(f'          id: {task_data["id"]}')
     print(f'     command: {task_data["command"]} ({task_data["args"]})')
     print(f' exit_status: {task_data["exit_status"]}')
     print(f'   submitted: {task_data["submit_time"]}')
     print(f'   scheduled: {task_data["schedule_time"]}')
-    print(f'     started: {task_data["start_time"]}')
-    print(f'   completed: {task_data["completion_time"]}')
+    print(f'     started: {task_data["start_time"]} (waited: {task_data["waited"]})')
+    print(f'   completed: {task_data["completion_time"]} (duration: {task_data["duration"]})')
     print(f' submit_host: {task_data["submit_host"]} ({task_data["submit_id"]})')
     print(f' server_host: {task_data["server_host"]} ({task_data["server_id"]})')
     print(f' client_host: {task_data["client_host"]} ({task_data["client_id"]})')
