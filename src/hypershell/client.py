@@ -473,7 +473,8 @@ class TaskExecutor(StateMachine):
             self.redirect_output = open(self.task.outpath, mode='w')
             self.redirect_errors = open(self.task.errpath, mode='w')
         self.task.start_time = datetime.now().astimezone()
-        self.task.waited = int((self.task.start_time - self.task.submit_time).total_seconds())
+        # NOTE: enforce tz aware submit_time (in case of sqlite backend)
+        self.task.waited = int((self.task.start_time - self.task.submit_time.astimezone()).total_seconds())
         self.process = Popen(self.task.command, shell=True,
                              stdout=self.redirect_output, stderr=self.redirect_errors,
                              cwd=config.task.cwd, env=env)
