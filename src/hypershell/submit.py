@@ -96,7 +96,10 @@ class Loader(StateMachine):
     state = LoaderState.START
     states = LoaderState
 
-    def __init__(self: Loader, source: Iterable[str], queue: Queue[Optional[Task]], template: str = DEFAULT_TEMPLATE) -> None:
+    def __init__(self: Loader,
+                 source: Iterable[str],
+                 queue: Queue[Optional[Task]],
+                 template: str = DEFAULT_TEMPLATE) -> None:
         """Initialize source to read tasks and submit to database."""
         self.template = Template(template)
         self.source = map(self.template.expand, map(str.strip, map(str, source)))
