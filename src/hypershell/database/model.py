@@ -18,8 +18,8 @@ from sqlalchemy import Column, Index
 from sqlalchemy.orm import Query
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.types import Integer, DateTime, Text, Boolean
-from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
+from sqlalchemy.types import Integer, DateTime, Text, Boolean, JSON as _JSON
+from sqlalchemy.dialects.postgresql import UUID as PostgresUUID, JSONB as PostgresJSON
 
 # internal libs
 from hypershell.core.logging import HOSTNAME, Logger, INSTANCE
@@ -75,6 +75,7 @@ TEXT = Text()
 INTEGER = Integer()
 DATETIME = DateTime(timezone=True)
 BOOLEAN = Boolean()
+JSON = _JSON().with_variant(PostgresJSON(), 'postgresql')
 
 
 class Task(Model):
@@ -114,6 +115,8 @@ class Task(Model):
     previous_id = Column(UUID, unique=True, nullable=True)
     next_id = Column(UUID, unique=True, nullable=True)
 
+    tag = Column(JSON, nullable=False, default={})
+
     columns = {
         'id': str,
         'args': str,
@@ -137,6 +140,7 @@ class Task(Model):
         'duration': int,
         'previous_id': str,
         'next_id': str,
+        'tag': dict,
     }
 
     class NotFound(NotFound):
