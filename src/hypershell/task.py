@@ -27,7 +27,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from cmdkit.app import Application, ApplicationGroup, exit_status
 from cmdkit.cli import Interface, ArgumentError
-from sqlalchemy import Column
+from sqlalchemy import Column, type_coerce, JSON, text
 from sqlalchemy.exc import StatementError
 from sqlalchemy.orm import Query
 from sqlalchemy.orm.exc import StaleDataError
@@ -46,7 +46,7 @@ from hypershell.database.model import Task, to_json_type
 from hypershell.database import ensuredb
 
 # public interface
-__all__ = ['TaskGroupApp', ]
+__all__ = ['TaskGroupApp', 'Tag', ]
 
 # initialize logger
 log = Logger.with_name(__name__)
@@ -55,7 +55,7 @@ log = Logger.with_name(__name__)
 SUBMIT_PROGRAM = 'hyper-shell task submit'
 SUBMIT_USAGE = f"""\
 Usage:
-{SUBMIT_PROGRAM} [-h] ARGS...
+{SUBMIT_PROGRAM} [-h] [-t TAG [TAG...]] ARGS...
 
 Submit individual task to database.\
 """
@@ -67,6 +67,7 @@ Arguments:
   ARGS...                Command-line arguments.
 
 Options:
+  -t, --tag    TAG...    Assign tags as `key:value`.
   -h, --help             Show this message and exit.\
 """
 
@@ -81,6 +82,9 @@ class TaskSubmitApp(Application):
     argv: List[str] = []
     interface.add_argument('argv', nargs='+')
 
+    taglist: List[str] = []
+    interface.add_argument('-t', '--tag', nargs='*', dest='taglist')
+
     exceptions = {
         **get_shared_exception_mapping(__name__)
     }
@@ -88,7 +92,7 @@ class TaskSubmitApp(Application):
     def run(self: TaskSubmitApp) -> None:
         """Submit task to database."""
         ensuredb()
-        task = Task.new(args=' '.join(self.argv))
+        task = Task.new(args=' '.join(self.argv), tag=Tag.parse_cmdline_list(self.taglist))
         Task.add(task)
         print(task.id)
 
@@ -355,7 +359,7 @@ class TaskRunApp(Application):
 SEARCH_PROGRAM = 'hyper-shell task search'
 SEARCH_USAGE = f"""\
 Usage:
-hyper-shell task search [-h] [FIELD [FIELD ...]] [--where COND [COND ...]] 
+hyper-shell task search [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]]
                         [--order-by FIELD [--desc]] [--count | --limit NUM]
                         [--format FORMAT | --json | --csv]  [-d CHAR]
                         
@@ -370,14 +374,15 @@ Arguments:
 
 Options:
   -w, --where      COND...   List of conditional statements.
+  -t, --with-tag   TAG...    List of tags.
   -s, --order-by   FIELD     Order output by field.
-      --failed               Alias for "exit_status != 0"
-      --succeeded            Alias for "exit_status == 0"
-      --finished             Alias for "exit_status != null"
-      --remaining            Alias for "exit_status == null"
-      --json                 Format output as JSON.
-      --csv                  Format output as CSV.
+      --failed               Alias for `exit_status != 0`
+      --succeeded            Alias for `exit_status == 0`
+      --finished             Alias for `exit_status != null`
+      --remaining            Alias for `exit_status == null`
       --format     FORMAT    Format output (normal, plain, table, csv, json).
+      --json                 Format output as JSON (alias for `--format=json`).
+      --csv                  Format output as CSV (alias for `--format=csv`.
   -d, --delimiter  CHAR      Field seperator for plain/csv formats.
   -l, --limit      NUM       Limit the number of results.
   -c, --count                Show count of results.
@@ -405,6 +410,9 @@ class TaskSearchApp(Application):
 
     where_clauses: List[str] = None
     interface.add_argument('-w', '--where', nargs='*', default=[], dest='where_clauses')
+
+    taglist: List[str] = None
+    interface.add_argument('-t', '--with-tag', nargs='*', default=[], dest='taglist')
 
     order_by: str = None
     order_desc: bool = False
@@ -455,18 +463,46 @@ class TaskSearchApp(Application):
     def build_query(self: TaskSearchApp) -> Query:
         """Build original query interface."""
         query = Task.query(*self.fields)
+        query = self.__build_order_by_clause(query)
+        query = self.__build_where_clause(query)
+        query = self.__build_where_clause_for_tags(query)
+        return query.limit(self.limit)
+
+    def __build_where_clause_for_tags(self: TaskSearchApp, query: Query) -> Query:
+        """Add JSON-based tag where-clauses to query if necessary."""
+        tags_name_only = []
+        tags_with_value = Tag.parse_cmdline_list(self.taglist)
+        for name in list(tags_with_value.keys()):
+            if not tags_with_value[name]:
+                tags_name_only.append(name)
+                tags_with_value.pop(name)
+        for name in tags_name_only:
+            if config.database.provider == 'sqlite':
+                # NOTE: sqlalchemy adds `json_quote(json_extract(task.tag, ?)) is not null`
+                # and cannot find a way to exclude `json_quote`, so we do it ourselves
+                query = query.filter(text('json_extract(task.tag, :tag) is not null')).params(tag=f'$."{name}"')
+            else:
+                query = query.filter(Task.tag[name].isnot(None))
+        for name, value in tags_with_value.items():
+            query = query.filter(Task.tag[name] == type_coerce(str(value), JSON))
+        return query
+
+    def __build_where_clause(self: TaskSearchApp, query: Query) -> Query:
+        """Add explicit where-clauses to query if necessary."""
+        for where_clause in self.__build_filters():
+            query = query.filter(where_clause.compile())
+        return query
+
+    def __build_order_by_clause(self: TaskSearchApp, query: Query) -> Query:
+        """Add order by clause to query if necessary."""
         if self.order_by:
             field = getattr(Task, self.order_by)
             if self.order_desc:
                 field = field.desc()
             query = query.order_by(field)
-        for where_clause in self.build_filters():
-            query = query.filter(where_clause.compile())
-        if self.limit:
-            query = query.limit(self.limit)
         return query
 
-    def build_filters(self: TaskSearchApp) -> List[WhereClause]:
+    def __build_filters(self: TaskSearchApp) -> List[WhereClause]:
         """Create list of field selectors from command-line arguments."""
         if self.show_failed:
             self.where_clauses.append('exit_status != 0')
@@ -599,7 +635,7 @@ class TaskUpdateApp(Application):
     interface.add_argument('field', choices=list(Task.columns)[1:])  # NOTE: not ID!
 
     value: str
-    interface.add_argument('value', type=smart_coerce)
+    interface.add_argument('value')
 
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
@@ -611,7 +647,17 @@ class TaskUpdateApp(Application):
         ensuredb()
         check_uuid(self.uuid)
         try:
-            Task.update(self.uuid, **{self.field: self.value, })
+            if self.field == 'tag':
+                Task.update(self.uuid, tag={**Task.from_id(self.uuid).tag,
+                                            **Tag.parse_cmdline_list([self.value, ])})
+            else:
+                if Task.columns.get(self.field) is str:
+                    # We want to coerce the value (e.g., as an int or None)
+                    # But also allow for, e.g., args==1 which expects type str.
+                    value = None if self.value.lower() in {'none', 'null'} else self.value
+                else:
+                    value = smart_coerce(self.value)
+                Task.update(self.uuid, **{self.field: value, })
         except StaleDataError as err:
             raise Task.NotFound(str(err)) from err
 
@@ -707,11 +753,38 @@ class WhereClause:
             raise ArgumentError(f'Where clause not understood ({argument})')
 
 
+@dataclass
+class Tag:
+    """Tag specification.."""
+
+    name: str
+    value: str = ''
+
+    def to_dict(self: Tag) -> Dict[str, str]:
+        """Format tag specification as dictionary."""
+        return {self.name: self.value, }
+
+    @classmethod
+    def from_cmdline(cls: Type[Tag], arg: str) -> Tag:
+        """Construct from command-line `arg`."""
+        tag_part = arg.strip().split(':', 1)
+        if len(tag_part) == 1:
+            return cls(name=tag_part[0].strip())
+        else:
+            return cls(name=tag_part[0].strip(), value=tag_part[1].strip())
+
+    @classmethod
+    def parse_cmdline_list(cls: Type[Tag], args: List[str]) -> Dict[str, Optional[str]]:
+        """Parse command-line list of tags."""
+        return {tag.name: tag.value for tag in map(cls.from_cmdline, args)}
+
+
 def print_normal(task: Task) -> None:
     """Print semi-structured task metadata with all field names."""
     task_data = {k: json.dumps(to_json_type(v)).strip('"') for k, v in task.to_dict().items()}
     task_data['waited'] = 'null' if not task.waited else timedelta(seconds=int(task_data['waited']))
     task_data['duration'] = 'null' if not task.duration else timedelta(seconds=int(task_data['duration']))
+    task_data['tag'] = ', '.join(f'{k}:{v}' if v else k for k, v in task.tag.items())
     print(f'          id: {task_data["id"]}')
     print(f'     command: {task_data["command"]} ({task_data["args"]})')
     print(f' exit_status: {task_data["exit_status"]}')
@@ -728,3 +801,4 @@ def print_normal(task: Task) -> None:
     print(f'     errpath: {task_data["errpath"]}')
     print(f' previous_id: {task_data["previous_id"]}')
     print(f'     next_id: {task_data["next_id"]}')
+    print(f'        tags: {task_data["tag"]}')

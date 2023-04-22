@@ -123,7 +123,7 @@ def _format_options(text: str) -> str:
 def _format_special_args(text: str) -> str:
     """Add rich ANSI formatting to special argument syntax."""
     metavars = ['FILE', 'PATH', 'ARGS', 'ID', 'NUM', 'CMD', 'SIZE', 'SEC', 'NAME', 'TEMPLATE', 'CHAR',
-                'ADDR', 'HOST', 'PORT', 'KEY', 'SECTION', 'VAR', 'VALUE', 'FIELD', 'COND', 'FORMAT']
+                'ADDR', 'HOST', 'PORT', 'KEY', 'SECTION', 'VAR', 'VALUE', 'FIELD', 'COND', 'FORMAT', 'TAG']
     metavars_pattern = r'\b(?P<arg>' + '|'.join(metavars) + r')\b'
     return re.sub(metavars_pattern + NOT_QUOTED, italic(r'\g<arg>'), text)
 
