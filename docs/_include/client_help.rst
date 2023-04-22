@@ -83,4 +83,10 @@ Options
     Mutually exclusive with both ``--output`` and ``--errors``.
 
 ``--timeout`` *SEC*
-    Timeout in seconds. Automatically shutdown if no tasks received (default: never).
+    Timeout in seconds. Automatically shutdown if no tasks received (default: none).
+
+``--task-timeout`` *SEC*
+    Task-level walltime limit (default: none).
+
+    Executors will send a progression of SIGINT, SIGTERM, and SIGKILL.
+    If the process still persists the executor itself will shutdown.
