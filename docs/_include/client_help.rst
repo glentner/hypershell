@@ -81,3 +81,6 @@ Options
     Task outputs can be automatically retrieved via SFTP, see *task* usage.
 
     Mutually exclusive with both ``--output`` and ``--errors``.
+
+``--timeout`` *SEC*
+    Timeout in seconds. Automatically shutdown if no tasks received (default: never).

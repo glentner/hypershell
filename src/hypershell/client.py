@@ -132,6 +132,9 @@ class ClientScheduler(StateMachine):
     bundle: List[bytes]
     client_info: Optional[bytes]
     no_confirm: bool
+    timeout: Optional[int]
+
+    previous_received: datetime
 
     task: Task
     tasks: List[Task]
@@ -139,7 +142,11 @@ class ClientScheduler(StateMachine):
     state = SchedulerState.START
     states = SchedulerState
 
-    def __init__(self: ClientScheduler, queue: QueueClient, local: Queue[Optional[Task]], no_confirm: bool = False) -> None:
+    def __init__(self: ClientScheduler,
+                 queue: QueueClient,
+                 local: Queue[Optional[Task]],
+                 no_confirm: bool = False,
+                 timeout: int = None) -> None:
         """Assign remote queue client and local task queue."""
         self.queue = queue
         self.local = local
@@ -147,6 +154,8 @@ class ClientScheduler(StateMachine):
         self.tasks = []
         self.client_info = None
         self.no_confirm = no_confirm
+        self.timeout = timeout
+        self.previous_received = datetime.now()
 
     @functools.cached_property
     def actions(self: ClientScheduler) -> Dict[SchedulerState, Callable[[], SchedulerState]]:
@@ -171,6 +180,7 @@ class ClientScheduler(StateMachine):
         try:
             self.bundle = self.queue.scheduled.get(timeout=2)
             self.queue.scheduled.task_done()
+            self.previous_received = datetime.now()
             if self.bundle is not None:
                 log.debug(f'Received {len(self.bundle)} tasks ({HOSTNAME}: {INSTANCE})')
                 return SchedulerState.UNPACK
@@ -178,7 +188,12 @@ class ClientScheduler(StateMachine):
                 log.debug('Disconnect received')
                 return SchedulerState.FINAL
         except QueueEmpty:
-            return SchedulerState.GET_REMOTE
+            waited = datetime.now() - self.previous_received
+            if waited.total_seconds() <= self.timeout:
+                return SchedulerState.GET_REMOTE
+            else:
+                log.debug(f'Timeout reached ({waited})')
+                return SchedulerState.FINAL
 
     def unpack_bundle(self: ClientScheduler) -> SchedulerState:
         """Unpack latest bundle of tasks."""
@@ -227,10 +242,11 @@ class ClientSchedulerThread(Thread):
     def __init__(self: ClientSchedulerThread,
                  queue: QueueClient,
                  local: Queue[Optional[bytes]],
-                 no_confirm: bool = False) -> None:
+                 no_confirm: bool = False,
+                 timeout: int = None) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-client-scheduler')
-        self.machine = ClientScheduler(queue=queue, local=local, no_confirm=no_confirm)
+        self.machine = ClientScheduler(queue=queue, local=local, no_confirm=no_confirm, timeout=timeout)
 
     def run_with_exceptions(self: ClientSchedulerThread) -> None:
         """Run machine."""
@@ -674,7 +690,8 @@ class ClientThread(Thread):
                  auth: str = QueueConfig.auth, template: str = DEFAULT_TEMPLATE,
                  redirect_output: IO = None, redirect_errors: IO = None,
                  heartrate: int = DEFAULT_HEARTRATE, capture: bool = False,
-                 delay_start: float = DEFAULT_DELAY, no_confirm: bool = False) -> None:
+                 delay_start: float = DEFAULT_DELAY, no_confirm: bool = False,
+                 timeout: int = None) -> None:
         """Initialize queue manager and child threads."""
         super().__init__(name='hypershell-client')
         self.num_tasks = num_tasks
@@ -684,7 +701,8 @@ class ClientThread(Thread):
         self.inbound = Queue(maxsize=bundlesize)
         self.outbound = Queue(maxsize=bundlesize)
         self.received = Queue(maxsize=1)  # NOTE: block new bundles until signaling previous
-        self.scheduler = ClientSchedulerThread(queue=self.client, local=self.inbound, no_confirm=no_confirm)
+        self.scheduler = ClientSchedulerThread(queue=self.client, local=self.inbound,
+                                               no_confirm=no_confirm, timeout=timeout)
         self.heartbeat = ClientHeartbeatThread(queue=self.client, heartrate=heartrate)
         self.collector = ClientCollectorThread(queue=self.client, local=self.outbound,
                                                bundlesize=bundlesize, bundlewait=bundlewait)
@@ -764,12 +782,14 @@ def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
                address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
                template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None,
                capture: bool = False, heartrate: int = DEFAULT_HEARTRATE,
-               delay_start: float = DEFAULT_DELAY, no_confirm: bool = False) -> None:
+               delay_start: float = DEFAULT_DELAY, no_confirm: bool = False,
+               timeout: int = None) -> None:
     """Run client until disconnect signal received."""
     thread = ClientThread.new(num_tasks=num_tasks, bundlesize=bundlesize, bundlewait=bundlewait,
                               address=address, auth=auth, template=template, capture=capture,
                               redirect_output=redirect_output, redirect_errors=redirect_errors,
-                              heartrate=heartrate, delay_start=delay_start, no_confirm=no_confirm)
+                              heartrate=heartrate, delay_start=delay_start, no_confirm=no_confirm,
+                              timeout=timeout)
     try:
         thread.join()
     except Exception:
@@ -782,7 +802,7 @@ APP_USAGE = f"""\
 Usage:
 hyper-shell client [-h] [-N NUM] [-t TEMPLATE] [-b SIZE] [-w SEC] [-d SEC]
                    [-H ADDR] [-p PORT] [-k KEY] [-c | [-o PATH] [-e PATH]]
-                   [--no-confirm] [--delay-start SEC]
+                   [--no-confirm] [--delay-start SEC] [--timeout SEC]
 
 Launch client directly, run tasks in parallel.\
 """
@@ -808,6 +828,7 @@ Options:
   -o, --output       PATH  Redirect task output (default: <stdout>).
   -e, --errors       PATH  Redirect task errors (default: <stderr>).
   -c, --capture            Capture individual task <stdout> and <stderr>.
+      --timeout      SEC   Automatically shutdown if no tasks received (default: never).
   -h, --help               Show this message and exit.\
 """
 
@@ -844,6 +865,9 @@ class ClientApp(Application):
     delay_start: float = DEFAULT_DELAY
     interface.add_argument('-d', '--delay-start', type=float, default=delay_start)
 
+    timeout: int = None
+    interface.add_argument('--timeout', type=int, default=None)
+
     no_confirm: bool = False
     interface.add_argument('--no-confirm', action='store_true')
 
@@ -872,7 +896,7 @@ class ClientApp(Application):
                        address=(self.host, self.port), auth=self.auth, template=self.template,
                        redirect_output=self.output_stream, redirect_errors=self.errors_stream,
                        capture=self.capture, delay_start=self.delay_start, no_confirm=self.no_confirm,
-                       heartrate=config.client.heartrate)
+                       heartrate=config.client.heartrate, timeout=self.timeout)
         except gaierror:
             raise HostAddressInfo(f'Could not resolve host \'{self.host}\'')
 
@@ -880,6 +904,8 @@ class ClientApp(Application):
         """Check for logical errors in command-line arguments."""
         if self.capture and (self.output_path or self.errors_path):
             raise ArgumentError('Cannot specify --capture with either --output or --errors')
+        if self.timeout is not None and self.timeout <= 0:
+            raise ArgumentError('Client --timeout should be positive integer')
 
     @functools.cached_property
     def output_stream(self: ClientApp) -> IO:
