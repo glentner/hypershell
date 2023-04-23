@@ -390,10 +390,12 @@ class ClientCollectorThread(Thread):
 
 def task_env(task: Task) -> Dict[str, str]:
     """Build environment dictionary for the given `task`."""
+    task_data = task.to_json()
+    task_data.pop('tag')  # do not include tags in environ
     return {
         **os.environ,
         **load_task_env(),
-        **Namespace.from_dict(task.to_json()).to_env().flatten(prefix='TASK'),
+        **Namespace.from_dict(task_data).to_env().flatten(prefix='TASK'),
         'TASK_CWD': config.task.cwd,
         'TASK_OUTPATH': os.path.join(default_path.lib, 'task', f'{task.id}.out'),
         'TASK_ERRPATH': os.path.join(default_path.lib, 'task', f'{task.id}.err'),
