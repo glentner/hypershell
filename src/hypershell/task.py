@@ -42,8 +42,8 @@ from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.remote import SSHConnection
 from hypershell.core.types import smart_coerce
 from hypershell.core.exceptions import get_shared_exception_mapping
-from hypershell.database.model import Task, to_json_type
-from hypershell.database import ensuredb
+from hypershell.data.model import Task, to_json_type
+from hypershell.data import ensuredb
 
 # public interface
 __all__ = ['TaskGroupApp', 'Tag', ]

@@ -55,7 +55,7 @@ from cmdkit.cli import Interface, ArgumentError
 from cmdkit.config import Namespace
 
 # internal libs
-from hypershell.database.model import Task
+from hypershell.data.model import Task
 from hypershell.core.ansi import colorize_usage
 from hypershell.core.heartbeat import Heartbeat, ClientState
 from hypershell.core.platform import default_path

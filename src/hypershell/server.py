@@ -66,8 +66,8 @@ from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueServer, QueueConfig
 from hypershell.core.heartbeat import Heartbeat, ClientState
-from hypershell.database.model import Task
-from hypershell.database import ensuredb, DATABASE_ENABLED
+from hypershell.data.model import Task
+from hypershell.data import ensuredb, DATABASE_ENABLED
 from hypershell.submit import SubmitThread, LiveSubmitThread, DEFAULT_BUNDLEWAIT
 from hypershell.client import ClientInfo
 

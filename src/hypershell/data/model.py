@@ -23,7 +23,7 @@ from sqlalchemy.dialects.postgresql import UUID as PostgresUUID, JSONB as Postgr
 
 # internal libs
 from hypershell.core.logging import HOSTNAME, Logger, INSTANCE
-from hypershell.database.core import schema, Session
+from hypershell.data.core import schema, Session
 
 # public interface
 __all__ = ['Task', 'to_json_type', 'from_json_type', 'Model', ]

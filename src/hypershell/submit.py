@@ -64,8 +64,8 @@ from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
 from hypershell.core.exceptions import get_shared_exception_mapping
-from hypershell.database.model import Task
-from hypershell.database import initdb, checkdb
+from hypershell.data.model import Task
+from hypershell.data import initdb, checkdb
 from hypershell.task import Tag
 
 # public interface

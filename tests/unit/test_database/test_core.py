@@ -11,7 +11,7 @@ import os
 import pytest
 
 # internal libs
-from hypershell.database.core import DatabaseURL, Namespace
+from hypershell.data.core import DatabaseURL, Namespace
 
 
 class TestDatabaseURL:

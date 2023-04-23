@@ -33,7 +33,7 @@ from hypershell.core.thread import Thread
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.template import DEFAULT_TEMPLATE
 from hypershell.core.exceptions import get_shared_exception_mapping
-from hypershell.database import initdb, checkdb
+from hypershell.data import initdb, checkdb
 from hypershell.client import ClientThread, DEFAULT_NUM_TASKS, DEFAULT_DELAY
 from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 from hypershell.submit import DEFAULT_BUNDLEWAIT

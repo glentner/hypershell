@@ -25,8 +25,8 @@ from hypershell.core.logging import Logger
 from hypershell.core.config import config
 from hypershell.core.exceptions import (write_traceback, handle_exception, DatabaseUninitialized,
                                         get_shared_exception_mapping)
-from hypershell.database.core import engine, in_memory, schema
-from hypershell.database.model import Model, Task
+from hypershell.data.core import engine, in_memory, schema
+from hypershell.data.model import Model, Task
 
 # public interface
 __all__ = ['InitDBApp', 'initdb', 'truncatedb', 'checkdb', 'ensuredb', 'DATABASE_ENABLED', ]

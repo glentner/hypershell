@@ -20,7 +20,7 @@ from hypershell.client import ClientApp
 from hypershell.cluster import ClusterApp
 from hypershell.task import TaskGroupApp
 from hypershell.config import ConfigApp
-from hypershell.database import InitDBApp
+from hypershell.data import InitDBApp
 
 # public interface
 __all__ = ['HyperShellApp', 'main', '__version__', '__license__']
