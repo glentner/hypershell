@@ -353,12 +353,12 @@ class ClientCollector(StateMachine):
         """Push out bundle of completed tasks."""
         if self.bundle:
             self.queue.completed.put(self.bundle)
-            log.trace(f'Returned bundle ({len(self.bundle)} tasks)')
+            log.trace(f'Bundle returned ({len(self.bundle)} tasks)')
             self.tasks.clear()
             self.bundle.clear()
             self.previous_send = datetime.now()
         else:
-            log.trace('No local tasks to return')
+            log.trace('Bundle empty')
         return CollectorState.GET_LOCAL
 
     def finalize(self: ClientCollector) -> CollectorState:
