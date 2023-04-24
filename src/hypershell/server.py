@@ -448,7 +448,7 @@ class HeartMonitor(StateMachine):
                  in_memory: bool = False, no_confirm: bool = False) -> None:
         """Initialize with queue server."""
         self.queue = queue
-        self.last_check = datetime.now()
+        self.last_check = datetime.now().astimezone()
         self.beats = {}
         self.in_memory = in_memory
         self.no_confirm = no_confirm
@@ -514,7 +514,7 @@ class HeartMonitor(StateMachine):
             return HeartbeatState.SIGNAL
         if not self.beats and self.scheduler_done:
             return HeartbeatState.FINAL
-        now = datetime.now()
+        now = datetime.now().astimezone()
         if (now - self.last_check) > self.wait_check:
             self.last_check = now
             return HeartbeatState.CHECK
