@@ -101,7 +101,7 @@ from all sources. Use `hyper-shell config which` to see where a specific
 option originates from.
 
 Arguments:
-  SECTION[...].VAR          Path to variable.
+  SECTION[...].VAR          Path to variable (default: '.').
 
 Options:
       --system              Load from system configuration.
@@ -119,7 +119,7 @@ class ConfigGetApp(Application):
                           colorize_usage(GET_HELP))
 
     varpath: str = None
-    interface.add_argument('varpath', metavar='VAR')
+    interface.add_argument('varpath', nargs='?', default='.')
 
     site_name: str = None
     site_interface = interface.add_mutually_exclusive_group()
