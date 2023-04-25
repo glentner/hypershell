@@ -17,16 +17,17 @@ from datetime import datetime
 from sqlalchemy import Column, Index
 from sqlalchemy.orm import Query
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.types import Integer, DateTime, Text, Boolean, JSON as _JSON
 from sqlalchemy.dialects.postgresql import UUID as PostgresUUID, JSONB as PostgresJSON
 
 # internal libs
-from hypershell.core.logging import HOSTNAME, Logger, INSTANCE
+from hypershell.core.logging import Logger, HOSTNAME, INSTANCE
+from hypershell.core.heartbeat import Heartbeat
 from hypershell.data.core import schema, Session
 
 # public interface
-__all__ = ['Task', 'to_json_type', 'from_json_type', 'Model', ]
+__all__ = ['Task', 'Client', 'Entity', 'to_json_type', 'from_json_type', ]
 
 # initialize logger
 log = Logger.with_name(__name__)
@@ -65,10 +66,6 @@ def from_json_type(value: RT) -> Union[RT, VT]:
         return value
 
 
-# Shared base for database objects
-Model = declarative_base()
-
-
 # Column types used by models
 UUID = Text().with_variant(PostgresUUID(as_uuid=False), 'postgresql')
 TEXT = Text()
@@ -78,11 +75,121 @@ BOOLEAN = Boolean()
 JSON = _JSON().with_variant(PostgresJSON(), 'postgresql')
 
 
-class Task(Model):
-    """Task model."""
+class EntityInterface:
+    """Core mixin class for all entities."""
 
-    __tablename__ = 'task'
-    __table_args__ = {'schema': schema}
+    columns: Dict[str, type] = {}
+
+    @declared_attr
+    def __tablename__(cls: Type[EntityInterface]) -> str:  # noqa: cls
+        """The table name should be lower-case."""
+        return cls.__name__.lower()
+
+    @declared_attr
+    def __table_args__(cls) -> Dict[str, Any]:  # noqa: cls
+        """Common table attributes."""
+        return {'schema': schema, }
+
+    def __repr__(self: EntityInterface) -> str:
+        """String representation."""
+        attrs = ', '.join([f'{name}={repr(getattr(self, name))}' for name in self.columns])
+        return f'{self.__class__.__name__}({attrs})'
+
+    def to_tuple(self: EntityInterface) -> tuple:
+        """Convert fields into standard tuple."""
+        return tuple([getattr(self, name) for name in self.columns])
+
+    def to_dict(self: EntityInterface) -> Dict[str, Any]:
+        """Convert record to dictionary."""
+        return dict(zip(self.columns, self.to_tuple()))
+
+    def to_json(self: EntityInterface) -> Dict[str, RT]:
+        """Convert record to JSON-serializable dictionary."""
+        return {key: to_json_type(value) for key, value in self.to_dict().items()}
+
+    def pack(self: EntityInterface) -> bytes:
+        """Encode as raw JSON bytes."""
+        return json.dumps(self.to_json()).encode()
+
+    @classmethod
+    def from_dict(cls: Type[EntityInterface], data: Dict[str, VT]) -> EntityInterface:
+        """Build from existing dictionary."""
+        return cls(**data)  # noqa: __init__ instrumented by declarative_base
+
+    @classmethod
+    def from_json(cls: Type[EntityInterface], data: Dict[str, RT]) -> EntityInterface:
+        """Build from JSON `text` string."""
+        return cls.from_dict({key: from_json_type(value) for key, value in data.items()})
+
+    @classmethod
+    def unpack(cls: Type[EntityInterface], data: bytes) -> EntityInterface:
+        """Unpack raw JSON byte string."""
+        return cls.from_json(json.loads(data.decode()))
+
+    @classmethod
+    def query(cls: Type[EntityInterface], *fields: Column, caching: bool = True) -> Query:
+        """Get query interface for entity with scoped session."""
+        target = fields or [cls, ]
+        if not caching:
+            Session.expire_all()
+        return Session.query(*target)
+
+    @classmethod
+    def count(cls: Type[EntityInterface]) -> int:
+        """Count of total existing records in database."""
+        return cls.query().count()
+
+    @classmethod
+    def add_all(cls: Type[EntityInterface], items: List[EntityInterface]) -> List[EntityInterface]:
+        """Add many items to the database at once."""
+        # NOTE: pull id first because access after commit could trigger query
+        item_ids = [item.id for item in items]  # noqa: id not defined on base
+        try:
+            Session.add_all(items)
+            Session.commit()
+        except Exception:
+            Session.rollback()
+            raise
+        else:
+            for item_id in item_ids:
+                log.trace(f'Added {cls.__tablename__} ({item_id})')
+            return items
+
+    @classmethod
+    def add(cls: Type[EntityInterface], item: EntityInterface) -> None:
+        """Add single item to database."""
+        cls.add_all([item, ])
+
+    @classmethod
+    def update_all(cls: Type[EntityInterface], changes: List[Dict[str, Any]]) -> None:
+        """Bulk update."""
+        if changes:
+            Session.bulk_update_mappings(cls, changes)
+            Session.commit()  # NOTE: why is this necessary?
+            log.trace(f'Updated {len(changes)} {cls.__tablename__}s')
+
+    @classmethod
+    def update(cls: Type[EntityInterface], id: str, **changes) -> None:
+        """Update by `id` with `changes`."""
+        cls.update_all([{'id': id, **changes}, ])
+
+    @classmethod
+    def from_id(cls: Type[EntityInterface], id: str) -> EntityInterface:
+        """Load by unique `id`."""
+        raise NotImplementedError()  # NOTE: non-strict requirement of base
+
+    @classmethod
+    def new(cls: Type[EntityInterface], **attrs: Any) -> EntityInterface:
+        """Create new instance with default values."""
+        raise NotImplementedError()  # NOTE: non-strict requirement of base
+
+
+# declarative base inherits common interface
+Entity = declarative_base(cls=EntityInterface)
+
+
+class Task(Entity):
+    """Database entity for task metadata."""
 
     id = Column(UUID, primary_key=True, nullable=False)
     args = Column(TEXT, nullable=False)
@@ -152,42 +259,6 @@ class Task(Model):
     class AlreadyExists(AlreadyExists):
         pass
 
-    def __repr__(self: Task) -> str:
-        """String representation of record."""
-        attrs = ', '.join([f'{name}={repr(getattr(self, name))}' for name in self.columns])
-        return f'Task({attrs})'
-
-    def to_tuple(self: Task) -> tuple:
-        """Convert fields into standard tuple."""
-        return tuple([getattr(self, name) for name in self.columns])
-
-    def to_dict(self: Task) -> Dict[str, Any]:
-        """Convert record to dictionary."""
-        return dict(zip(self.columns, self.to_tuple()))
-
-    def to_json(self: Task) -> Dict[str, RT]:
-        """Convert record to JSON-serializable dictionary."""
-        return {key: to_json_type(value) for key, value in self.to_dict().items()}
-
-    def pack(self: Task) -> bytes:
-        """Encode as raw JSON bytes."""
-        return json.dumps(self.to_json()).encode()
-
-    @classmethod
-    def from_dict(cls: Type[Task], data: Dict[str, VT]) -> Task:
-        """Build record from existing dictionary."""
-        return cls(**data)
-
-    @classmethod
-    def from_json(cls: Type[Task], data: Dict[str, RT]) -> Task:
-        """Build record from JSON `text` string."""
-        return cls.from_dict({key: from_json_type(value) for key, value in data.items()})
-
-    @classmethod
-    def unpack(cls: Type[Task], data: bytes) -> Task:
-        """Unpack raw JSON byte string."""
-        return cls.from_json(json.loads(data.decode()))
-
     @classmethod
     def from_id(cls: Type[Task], id: str, caching: bool = True) -> Task:
         """Look up task by unique `id`."""
@@ -199,39 +270,12 @@ class Task(Model):
             raise cls.NotDistinct(f'Multiple tasks with id={id}') from error
 
     @classmethod
-    def new(cls: Type[Task], args: str, attempt: int = 1, retried: bool = False, **other) -> Task:
+    def new(cls: Type[Task], args: str, attempt: int = 1, retried: bool = False,
+            tag: Dict[str, str] = None, **other) -> Task:
         """Create a new Task."""
         return Task(id=str(gen_uuid()), args=str(args).strip(),
                     submit_id=INSTANCE, submit_host=HOSTNAME, submit_time=datetime.now().astimezone(),
-                    attempt=attempt, retried=retried, **other)
-
-    @classmethod
-    def query(cls: Type[Task], *fields: Column, caching: bool = True) -> Query:
-        """Get query interface for table with scoped session."""
-        target = fields or [cls, ]
-        if not caching:
-            Session.expire_all()
-        return Session.query(*target)
-
-    @classmethod
-    def add_all(cls: Type[Task], tasks: List[Task]) -> List[Task]:
-        """Submit list of tasks to database."""
-        task_ids = [task.id for task in tasks]  # NOTE: access after commit could trigger queries
-        try:
-            Session.add_all(tasks)
-            Session.commit()
-        except Exception:
-            Session.rollback()
-            raise
-        else:
-            for task_id in task_ids:
-                log.trace(f'Added task ({task_id})')
-            return tasks
-
-    @classmethod
-    def add(cls: Type[Task], task: Task) -> None:
-        """Submit single task to database."""
-        cls.add_all([task, ])
+                    attempt=attempt, retried=retried, tag=(tag or {}), **other)
 
     @classmethod
     def select_new(cls: Type[Task], limit: int) -> List[Task]:
@@ -300,40 +344,6 @@ class Task(Model):
             cls.update_all([{'id': old_task.id, 'retried': True, 'next_id': new_task.id}
                             for old_task, new_task in zip(failed_tasks, new_tasks)])
         return tasks
-
-    @classmethod
-    def update_all(cls: Type[Task], changes: List[Dict[str, Any]]) -> None:
-        """
-        Bulk update of tasks.
-
-        Args:
-            changes (list):
-                A list of dictionaries with fields representing
-                the changes to make to the Task records. The 'id' should
-                be included in all dictionaries.
-
-        See Also:
-            `Session.bulk_update_mappings`
-
-        Example:
-            >>> Task.update_all([
-            ...     {'id': '0b1944e8-a4dd-4964-80a8-3383e187b908', ... },
-            ...     {'id': '85075d9a-267d-4e0c-bbf2-7b0919de4cf0', ... }])
-        """
-        if changes:
-            Session.bulk_update_mappings(cls, changes)
-            Session.commit()  # NOTE: why is this necessary?
-            log.trace(f'Updated {len(changes)} tasks')
-
-    @classmethod
-    def update(cls: Type[Task], id: str, **changes) -> None:
-        """Update single task by `id` with `changes`."""
-        cls.update_all([{'id': id, **changes}, ])
-
-    @classmethod
-    def count(cls: Type[Task]) -> int:
-        """Count of tasks in database."""
-        return cls.query().count()
 
     @classmethod
     def count_remaining(cls: Type[Task]) -> int:
@@ -408,3 +418,66 @@ class Task(Model):
 index_scheduled = Index('task_scheduled_index', Task.schedule_time)
 index_retried = Index('task_retries_index', Task.exit_status, Task.retried)
 index_client_completed = Index('task_client_completed_index', Task.client_id, Task.completion_time)
+
+
+class Client(Entity):
+    """Database entity for client metadata."""
+
+    id = Column(UUID, primary_key=True, nullable=False)
+    host = Column(TEXT, nullable=False)
+
+    server_id = Column(UUID, nullable=False)
+    server_host = Column(TEXT, nullable=False)
+
+    connected_at = Column(DATETIME, nullable=True)
+    disconnected_at = Column(DATETIME, nullable=True)
+    evicted = Column(BOOLEAN, nullable=False)
+
+    columns = {
+        'id': str,
+        'host': str,
+        'server_id': str,
+        'server_host': str,
+        'connected_at': datetime,
+        'disconnected_at': datetime,
+        'evicted': bool,
+    }
+
+    class NotFound(NotFound):
+        pass
+
+    class NotDistinct(NotDistinct):
+        pass
+
+    class AlreadyExists(AlreadyExists):
+        pass
+
+    @classmethod
+    def from_id(cls: Type[Client], id: str, caching: bool = True) -> Client:
+        """Look up client by unique `id`."""
+        try:
+            return cls.query(caching=caching).filter_by(id=id).one()
+        except NoResultFound as error:
+            raise cls.NotFound(f'No client with id={id}') from error
+
+    @classmethod
+    def from_heartbeat(cls: Type[Client], hb: Heartbeat) -> Client:
+        """Initialize entity from client heartbeat message."""
+        return cls.new(id=hb.uuid, host=hb.host, connected_at=hb.time)
+
+    @classmethod
+    def new(cls: Type[Client],
+            id: str = None,
+            host: str = HOSTNAME,
+            server_id: str = INSTANCE,
+            server_host: str = HOSTNAME,
+            evicted: bool = False,
+            **other) -> Client:
+        """Create a new client."""
+        return cls(id=(id or str(gen_uuid())), host=host,
+                   server_id=server_id, server_host=server_host,
+                   evicted=evicted, **other)
+
+
+# Indices for efficient queries
+index_client_disconnect = Index('client_disconnected_at', Client.disconnected_at)

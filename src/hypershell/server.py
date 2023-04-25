@@ -66,7 +66,7 @@ from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueServer, QueueConfig
 from hypershell.core.heartbeat import Heartbeat, ClientState
-from hypershell.data.model import Task
+from hypershell.data.model import Task, Client
 from hypershell.data import ensuredb, DATABASE_ENABLED
 from hypershell.submit import SubmitThread, LiveSubmitThread, DEFAULT_BUNDLEWAIT
 from hypershell.client import ClientInfo
@@ -495,6 +495,7 @@ class HeartMonitor(StateMachine):
         hb = self.latest_heartbeat
         if hb.state is not ClientState.FINISHED:
             if hb.uuid not in self.beats:
+                Client.add(Client.from_heartbeat(hb))
                 log.debug(f'Registered client ({hb.host}: {hb.uuid})')
             else:
                 log.trace(f'Heartbeat - running ({hb.host}: {hb.uuid})')
@@ -503,6 +504,7 @@ class HeartMonitor(StateMachine):
         else:
             log.trace(f'Client disconnected ({hb.host}: {hb.uuid})')
             if hb.uuid in self.beats:
+                Client.update(hb.uuid, disconnected_at=datetime.now().astimezone())
                 self.beats.pop(hb.uuid)
             return HeartbeatState.SWITCH
 
@@ -529,6 +531,7 @@ class HeartMonitor(StateMachine):
             age = self.last_check - hb.time
             if age > self.evict_after:
                 log.warning(f'Evicting client ({hb.host}: {uuid})')
+                Client.update(hb.uuid, disconnected_at=datetime.now().astimezone(), evicted=True)
                 self.beats.pop(uuid)
                 if not self.in_memory and not self.no_confirm:
                     log.warning(f'Reverting orphaned tasks ({hb.host}: {uuid})')

@@ -26,7 +26,7 @@ from hypershell.core.config import config
 from hypershell.core.exceptions import (write_traceback, handle_exception, DatabaseUninitialized,
                                         get_shared_exception_mapping)
 from hypershell.data.core import engine, in_memory, schema
-from hypershell.data.model import Model, Task
+from hypershell.data.model import Entity, Task
 
 # public interface
 __all__ = ['InitDBApp', 'initdb', 'truncatedb', 'checkdb', 'ensuredb', 'DATABASE_ENABLED', ]
@@ -47,7 +47,7 @@ except Exception as error:
 
 def initdb() -> None:
     """Initialize database tables."""
-    Model.metadata.create_all(engine)
+    Entity.metadata.create_all(engine)
 
 
 def truncatedb() -> None:
@@ -55,9 +55,9 @@ def truncatedb() -> None:
     # NOTE: We still might hang here if other sessions exist outside this app instance
     close_all_sessions()
     log.trace('Dropping all tables')
-    Model.metadata.drop_all(engine)
+    Entity.metadata.drop_all(engine)
     log.trace('Creating all tables')
-    Model.metadata.create_all(engine)
+    Entity.metadata.create_all(engine)
     log.warning(f'Truncated database')
 
 
