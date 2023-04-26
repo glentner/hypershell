@@ -61,7 +61,11 @@ def to_json_type(value: VT) -> Union[VT, RT]:
 def from_json_type(value: RT) -> Union[RT, VT]:
     """Convert `value` to richer type if possible."""
     try:
-        return datetime.fromisoformat(str(value))
+        # NOTE: minor detail in PyPy datetime implementation
+        if isinstance(value, str) and len(value) > 5:
+            return datetime.fromisoformat(value)
+        else:
+            return value
     except ValueError:
         return value
 
