@@ -495,8 +495,9 @@ class HeartMonitor(StateMachine):
         hb = self.latest_heartbeat
         if hb.state is not ClientState.FINISHED:
             if hb.uuid not in self.beats:
-                Client.add(Client.from_heartbeat(hb))
                 log.debug(f'Registered client ({hb.host}: {hb.uuid})')
+                if not self.in_memory:
+                    Client.add(Client.from_heartbeat(hb))
             else:
                 log.trace(f'Heartbeat - running ({hb.host}: {hb.uuid})')
             self.beats[hb.uuid] = hb
@@ -504,8 +505,9 @@ class HeartMonitor(StateMachine):
         else:
             log.trace(f'Client disconnected ({hb.host}: {hb.uuid})')
             if hb.uuid in self.beats:
-                Client.update(hb.uuid, disconnected_at=datetime.now().astimezone())
                 self.beats.pop(hb.uuid)
+                if not self.in_memory:
+                    Client.update(hb.uuid, disconnected_at=datetime.now().astimezone())
             return HeartbeatState.SWITCH
 
     def switch_mode(self: HeartMonitor) -> HeartbeatState:
@@ -531,8 +533,9 @@ class HeartMonitor(StateMachine):
             age = self.last_check - hb.time
             if age > self.evict_after:
                 log.warning(f'Evicting client ({hb.host}: {uuid})')
-                Client.update(hb.uuid, disconnected_at=datetime.now().astimezone(), evicted=True)
                 self.beats.pop(uuid)
+                if not self.in_memory:
+                    Client.update(hb.uuid, disconnected_at=datetime.now().astimezone(), evicted=True)
                 if not self.in_memory and not self.no_confirm:
                     log.warning(f'Reverting orphaned tasks ({hb.host}: {uuid})')
                     Task.revert_orphaned(uuid)
