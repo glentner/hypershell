@@ -9,6 +9,8 @@ from __future__ import annotations
 from typing import Dict, Callable, Type
 
 # standard libs
+# import time  # NOTE: commented section below
+# import random
 from enum import Enum
 from abc import ABC
 
@@ -50,6 +52,8 @@ class StateMachine(ABC):
             write_traceback(error, logger=log, module=__name__)
             raise
         else:
+            # NOTE: Development aids not typically engaged
+            # time.sleep(random.uniform(0, 5))  # FUZZ
             log.devel(f'{self.__class__.__name__}: {previous_state} -> {next_state}')
             return next_state
 
