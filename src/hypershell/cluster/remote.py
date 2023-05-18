@@ -28,7 +28,7 @@ from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 __all__ = ['run_cluster', 'RemoteCluster']
 
 # initialize logger
-log = Logger.with_name('cluster')
+log = Logger.with_name('hypershell.cluster')
 
 
 def run_cluster(**options) -> None:

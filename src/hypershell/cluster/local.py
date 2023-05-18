@@ -24,7 +24,7 @@ from hypershell.client import ClientThread, DEFAULT_DELAY
 __all__ = ['run_local', 'LocalCluster']
 
 # initialize logger
-log = Logger.with_name(__name__)
+log = Logger.with_name('hypershell.cluster')
 
 
 def run_local(**options) -> None:

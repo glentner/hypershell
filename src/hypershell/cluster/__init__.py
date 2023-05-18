@@ -38,7 +38,7 @@ __all__ = ['run_local', 'run_cluster', 'run_ssh',
            'ClusterApp', ]
 
 # initialize logger
-log = Logger.with_name('cluster')
+log = Logger.with_name(__name__)
 
 
 APP_NAME = 'hyper-shell cluster'

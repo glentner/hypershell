@@ -32,7 +32,7 @@ from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 __all__ = ['run_ssh', 'SSHCluster', 'NodeList']
 
 # initialize logger
-log = Logger.with_name('cluster')
+log = Logger.with_name('hypershell.cluster')
 
 
 def run_ssh(**options) -> None:
