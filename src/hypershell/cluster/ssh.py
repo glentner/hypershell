@@ -53,14 +53,28 @@ class SSHCluster(Thread):
     client_argv: List[str]
 
     def __init__(self: SSHCluster,
-                 source: Iterable[str] = None, num_tasks: int = 1, template: str = DEFAULT_TEMPLATE,
-                 forever_mode: bool = False, restart_mode: bool = False,
-                 bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port), remote_exe: str = 'hyper-shell',
-                 launcher: str = 'ssh', launcher_args: List[str] = None, nodelist: List[str] = None,
-                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False, in_memory: bool = False,
-                 no_confirm: bool = False, redirect_failures: IO = None, export_env: bool = False,
-                 delay_start: float = DEFAULT_DELAY, capture: bool = False) -> None:
+                 source: Iterable[str] = None,
+                 num_tasks: int = 1,
+                 template: str = DEFAULT_TEMPLATE,
+                 forever_mode: bool = False,
+                 restart_mode: bool = False,
+                 bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port),
+                 remote_exe: str = 'hyper-shell',
+                 launcher: str = 'ssh',
+                 launcher_args: List[str] = None,
+                 nodelist: List[str] = None,
+                 bundlesize: int = DEFAULT_BUNDLESIZE,
+                 bundlewait: int = DEFAULT_BUNDLEWAIT,
+                 max_retries: int = DEFAULT_ATTEMPTS,
+                 eager: bool = False,
+                 in_memory: bool = False,
+                 no_confirm: bool = False,
+                 redirect_failures: IO = None,
+                 export_env: bool = False,
+                 delay_start: float = DEFAULT_DELAY,
+                 capture: bool = False,
+                 client_timeout: int = None,
+                 task_timeout: int = None) -> None:
         """Initialize server and client threads."""
         if nodelist is None:
             raise AttributeError('Expected nodelist')
@@ -80,6 +94,10 @@ class SSHCluster(Thread):
             client_args += ' --capture'
         if no_confirm:
             client_args += ' --no-confirm'
+        if client_timeout is not None:
+            client_args += f' -T {client_timeout}'
+        if task_timeout is not None:
+            client_args += f' -W {task_timeout}'
         self.client_argv = [f'{launcher} {launcher_args} {host} {launcher_env} {remote_exe} '
                             f'client -H {HOSTNAME} -p {bind[1]} -N {num_tasks} -b {bundlesize} -w {bundlewait} '
                             f'-t \'"{template}"\' -k {auth} -d {delay_start} {client_args}'

@@ -133,7 +133,7 @@ class ClientScheduler(StateMachine):
     bundle: List[bytes]
     client_info: Optional[bytes]
     no_confirm: bool
-    timeout: Optional[int]
+    timeout: Optional[timedelta]
 
     previous_received: datetime
 
@@ -155,7 +155,7 @@ class ClientScheduler(StateMachine):
         self.tasks = []
         self.client_info = None
         self.no_confirm = no_confirm
-        self.timeout = timeout
+        self.timeout = None if not timeout else timedelta(seconds=timeout)
         self.previous_received = datetime.now()
 
     @functools.cached_property
@@ -170,10 +170,10 @@ class ClientScheduler(StateMachine):
             SchedulerState.FINAL: self.finalize,
         }
 
-    @staticmethod
-    def start() -> SchedulerState:
+    def start(self: ClientScheduler) -> SchedulerState:
         """Jump to GET_REMOTE state."""
-        log.debug('Started (scheduler)')
+        timeout_label = self.timeout or 'no'
+        log.debug(f'Started (scheduler: {timeout_label} timeout)')
         return SchedulerState.GET_REMOTE
 
     def get_remote(self: ClientScheduler) -> SchedulerState:
@@ -190,7 +190,7 @@ class ClientScheduler(StateMachine):
                 return SchedulerState.FINAL
         except QueueEmpty:
             waited = datetime.now() - self.previous_received
-            if self.timeout is None or waited.total_seconds() < self.timeout:
+            if self.timeout is None or waited < self.timeout:
                 return SchedulerState.GET_REMOTE
             else:
                 log.debug(f'Timeout reached ({waited})')
@@ -767,7 +767,7 @@ class ClientThread(Thread):
                  capture: bool = False,
                  delay_start: float = DEFAULT_DELAY,
                  no_confirm: bool = False,
-                 scheduler_timeout: int = None,
+                 client_timeout: int = None,
                  task_timeout: int = None) -> None:
         """Initialize queue manager and child threads."""
         super().__init__(name='hypershell-client')
@@ -778,7 +778,7 @@ class ClientThread(Thread):
         self.inbound = Queue(maxsize=bundlesize)
         self.outbound = Queue(maxsize=bundlesize)
         self.scheduler = ClientSchedulerThread(queue=self.client, local=self.inbound,
-                                               no_confirm=no_confirm, timeout=scheduler_timeout)
+                                               no_confirm=no_confirm, timeout=client_timeout)
         self.heartbeat = ClientHeartbeatThread(queue=self.client, heartrate=heartrate)
         self.collector = ClientCollectorThread(queue=self.client, local=self.outbound,
                                                bundlesize=bundlesize, bundlewait=bundlewait)
@@ -859,13 +859,13 @@ def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
                template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None,
                capture: bool = False, heartrate: int = DEFAULT_HEARTRATE,
                delay_start: float = DEFAULT_DELAY, no_confirm: bool = False,
-               scheduler_timeout: int = None, task_timeout: int = None) -> None:
+               client_timeout: int = None, task_timeout: int = None) -> None:
     """Run client until disconnect signal received."""
     thread = ClientThread.new(num_tasks=num_tasks, bundlesize=bundlesize, bundlewait=bundlewait,
                               address=address, auth=auth, template=template, capture=capture,
                               redirect_output=redirect_output, redirect_errors=redirect_errors,
                               heartrate=heartrate, delay_start=delay_start, no_confirm=no_confirm,
-                              scheduler_timeout=scheduler_timeout, task_timeout=task_timeout)
+                              client_timeout=client_timeout, task_timeout=task_timeout)
     try:
         thread.join()
     except Exception:
@@ -904,8 +904,8 @@ Options:
   -o, --output        PATH  Redirect task output (default: <stdout>).
   -e, --errors        PATH  Redirect task errors (default: <stderr>).
   -c, --capture             Capture individual task <stdout> and <stderr>.
-      --timeout       SEC   Automatically shutdown if no tasks received (default: never).
-      --task-timeout  SEC   Task-level walltime limit.
+  -T, --timeout       SEC   Automatically shutdown if no tasks received (default: never).
+  -W, --task-timeout  SEC   Task-level walltime limit (default: none).
   -h, --help                Show this message and exit.\
 """
 
@@ -942,10 +942,10 @@ class ClientApp(Application):
     delay_start: float = DEFAULT_DELAY
     interface.add_argument('-d', '--delay-start', type=float, default=delay_start)
 
-    task_timeout: int = None
-    scheduler_timeout: int = None
-    interface.add_argument('--timeout', type=int, default=None, dest='scheduler_timeout')
-    interface.add_argument('--task-timeout', type=int, default=None, dest='task_timeout')
+    task_timeout: int = config.task.timeout
+    client_timeout: int = config.client.timeout
+    interface.add_argument('-T', '--timeout', type=int, default=client_timeout, dest='client_timeout')
+    interface.add_argument('-W', '--task-timeout', type=int, default=task_timeout, dest='task_timeout')
 
     no_confirm: bool = False
     interface.add_argument('--no-confirm', action='store_true')
@@ -983,7 +983,7 @@ class ClientApp(Application):
                        delay_start=self.delay_start,
                        no_confirm=self.no_confirm,
                        heartrate=config.client.heartrate,
-                       scheduler_timeout=self.scheduler_timeout,
+                       client_timeout=self.client_timeout,
                        task_timeout=self.task_timeout)
         except gaierror:
             raise HostAddressInfo(f'Could not resolve host \'{self.host}\'')
@@ -992,7 +992,7 @@ class ClientApp(Application):
         """Check for logical errors in command-line arguments."""
         if self.capture and (self.output_path or self.errors_path):
             raise ArgumentError('Cannot specify --capture with either --output or --errors')
-        if self.scheduler_timeout is not None and self.scheduler_timeout <= 0:
+        if self.client_timeout is not None and self.client_timeout <= 0:
             raise ArgumentError('Client --timeout should be positive integer')
         if self.task_timeout is not None and self.task_timeout <= 0:
             raise ArgumentError('Client --task-timeout should be positive integer')

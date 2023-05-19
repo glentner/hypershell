@@ -83,7 +83,10 @@ Options
     Mutually exclusive with both ``--output`` and ``--errors``.
 
 ``--timeout`` *SEC*
-    Timeout in seconds. Automatically shutdown if no tasks received (default: none).
+    Timeout in seconds for client. Automatically shutdown if no tasks received (default: never).
+
+    This feature allows for gracefully scaling down a cluster when task throughput subsides.
+
 
 ``--task-timeout`` *SEC*
     Task-level walltime limit (default: none).

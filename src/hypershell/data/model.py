@@ -6,7 +6,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import List, Dict, Any, Type, TypeVar, Union
+from typing import List, Dict, Any, Type, TypeVar, Union, Optional
 
 # standard libs
 import json
@@ -14,7 +14,7 @@ from uuid import uuid4 as gen_uuid
 from datetime import datetime
 
 # external libs
-from sqlalchemy import Column, Index
+from sqlalchemy import Column, Index, func
 from sqlalchemy.orm import Query
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
@@ -410,15 +410,7 @@ class Task(Entity):
     def revert_interrupted(cls: Type[Task]) -> None:
         """Revert scheduled but incomplete tasks to un-scheduled state."""
         while tasks := cls.select_interrupted(100):
-            for task in tasks:
-                task.schedule_time = None
-                task.server_host = None
-                task.server_id = None
-                task.client_host = None
-                task.client_id = None
-            Session.commit()
-            for task in tasks:
-                log.trace(f'Reverted previous task ({task.id})')
+            cls.revert_all([task.id for task in tasks])
 
     @classmethod
     def select_orphaned(cls: Type[Task], client_id: str, limit: int) -> List[Task]:
@@ -437,15 +429,85 @@ class Task(Entity):
     def revert_orphaned(cls: Type[Task], client_id: str) -> None:
         """Revert orphaned tasks from an evicted client to un-scheduled state."""
         while tasks := cls.select_orphaned(client_id, 100):
-            for task in tasks:
-                task.schedule_time = None
-                task.server_host = None
-                task.server_id = None
-                task.client_host = None
-                task.client_id = None
-            Session.commit()
-            for task in tasks:
-                log.trace(f'Reverted previous task ({task.id})')
+            cls.revert_all([task.id for task in tasks])
+
+    @classmethod
+    def latest_server(cls: Type[Client]) -> Optional[str]:
+        """Unique ID of most recent active server (if reusing database)."""
+        if records := (
+                cls.query(cls.server_id)
+                .filter(cls.schedule_time.isnot(None))
+                .order_by(func.max(cls.schedule_time).desc())
+                .group_by(cls.server_id)
+                .first()
+        ):
+            return records[0]
+        else:
+            return None
+
+    @classmethod
+    def effective_rate_by_client(cls: Type[Task]) -> Optional[Dict[str, float]]:
+        """Effective completion rate in tasks per second by client."""
+        if server_id := cls.latest_server():
+            return {id: 1 / dt.total_seconds() for id, dt in (
+                cls.query(
+                    cls.client_id,
+                    (func.max(cls.completion_time) - func.min(cls.start_time)) / func.count(cls.id)
+                )
+                .join(Client, Task.client_id == Client.id)
+                .filter(cls.server_id == server_id)
+                .filter(cls.completion_time.isnot(None))
+                .filter(Client.disconnected_at == None)  # noqa: comparison to None
+                .group_by(cls.client_id)
+                .all()
+            )}
+        else:
+            return None
+
+    @classmethod
+    def effective_rate(cls: Type[Task]) -> Optional[float]:
+        """Effective completion rate in tasks per second."""
+        if by_client := cls.effective_rate_by_client():
+            return sum(by_client.values())
+        else:
+            return None
+
+    @classmethod
+    def avg_duration(cls: Type[Task]) -> Optional[float]:
+        """Average task duration by active clients."""
+        if server_id := cls.latest_server():
+            if duration := (
+                cls.query(func.avg(cls.duration))
+                .join(Client, Task.client_id == Client.id)
+                .filter(cls.server_id == server_id)
+                .filter(cls.duration.isnot(None))
+                .filter(Client.disconnected_at == None)  # noqa: comparison to None
+                .one()[0]
+            ):
+                return float(duration)
+            else:
+                return None
+        else:
+            return None
+
+    @classmethod
+    def time_to_completion(cls: Type[Task]) -> Optional[float]:
+        """Estimated time in seconds until all unscheduled tasks are completed."""
+        if rate := cls.effective_rate():
+            return cls.count_remaining() / rate
+        else:
+            return None
+
+    @classmethod
+    def task_pressure(cls: Type[Task], factor: float) -> Optional[float]:
+        """Ratio of current ETC to relative `factor` of task duration."""
+        if avg_duration := cls.avg_duration():
+            if toc := cls.time_to_completion():
+                return toc / (factor * avg_duration)
+            else:
+                return None
+        else:
+            return None
 
 
 # Indices for efficient queries
@@ -511,6 +573,14 @@ class Client(Entity):
         return cls(id=(id or str(gen_uuid())), host=host,
                    server_id=server_id, server_host=server_host,
                    evicted=evicted, **other)
+
+    @classmethod
+    def count_connected(cls: Type[Client]) -> int:
+        """Count active clients."""
+        if server_id := Task.latest_server():
+            return cls.query().filter_by(server_id=server_id, disconnected_at=None).count()
+        else:
+            return 0
 
 
 # Indices for efficient queries

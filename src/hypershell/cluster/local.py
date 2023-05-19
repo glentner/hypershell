@@ -44,13 +44,24 @@ class LocalCluster(Thread):
     client: ClientThread
 
     def __init__(self: LocalCluster,
-                 source: Iterable[str] = None, num_tasks: int = 1, template: str = DEFAULT_TEMPLATE,
-                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-                 in_memory: bool = False, no_confirm: bool = False,
-                 forever_mode: bool = False, restart_mode: bool = False,
-                 max_retries: int = DEFAULT_ATTEMPTS, eager: bool = False,
-                 redirect_failures: IO = None, redirect_output: IO = None, redirect_errors: IO = None,
-                 delay_start: float = DEFAULT_DELAY, capture: bool = False) -> None:
+                 source: Iterable[str] = None,
+                 num_tasks: int = 1,
+                 template: str = DEFAULT_TEMPLATE,
+                 bundlesize: int = DEFAULT_BUNDLESIZE,
+                 bundlewait: int = DEFAULT_BUNDLEWAIT,
+                 in_memory: bool = False,
+                 no_confirm: bool = False,
+                 forever_mode: bool = False,
+                 restart_mode: bool = False,
+                 max_retries: int = DEFAULT_ATTEMPTS,
+                 eager: bool = False,
+                 redirect_failures: IO = None,
+                 redirect_output: IO = None,
+                 redirect_errors: IO = None,
+                 delay_start: float = DEFAULT_DELAY,
+                 capture: bool = False,
+                 client_timeout: int = None,
+                 task_timeout: int = None) -> None:
         """Initialize server and client threads."""
         auth = secrets.token_hex(64)
         self.server = ServerThread(source=source, auth=auth, in_memory=in_memory, no_confirm=no_confirm,
@@ -60,7 +71,7 @@ class LocalCluster(Thread):
         self.client = ClientThread(num_tasks=num_tasks, template=template, auth=auth, no_confirm=no_confirm,
                                    bundlesize=bundlesize, bundlewait=bundlewait, delay_start=delay_start,
                                    redirect_output=redirect_output, redirect_errors=redirect_errors,
-                                   capture=capture)
+                                   capture=capture, client_timeout=client_timeout, task_timeout=task_timeout)
         super().__init__(name='hypershell-cluster')
 
     def run_with_exceptions(self: LocalCluster) -> None:
