@@ -377,6 +377,36 @@ class Task(Entity):
         )
 
     @classmethod
+    def revert_all(cls: Type[Task], ids: List[str]) -> None:
+        """Revert all tasks identified by `ids`."""
+        cls.update_all([
+            {
+                'id': id,
+                'schedule_time': None,
+                'server_host': None,
+                'server_id': None,
+                'client_host': None,
+                'client_id': None,
+                'command': None,
+                'start_time': None,
+                'completion_time': None,
+                'exit_status': None,
+                'outpath': None,
+                'errpath': None,
+                'waited': None,
+                'duration': None,
+             }
+            for id in ids
+        ])
+        for id in ids:
+            log.trace(f'Reverted previous task ({id})')
+
+    @classmethod
+    def revert(cls: Type[Task], id: str) -> None:
+        """Revert single task by `id`."""
+        cls.revert_all([id, ])
+
+    @classmethod
     def revert_interrupted(cls: Type[Task]) -> None:
         """Revert scheduled but incomplete tasks to un-scheduled state."""
         while tasks := cls.select_interrupted(100):
