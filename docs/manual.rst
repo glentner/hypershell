@@ -207,6 +207,16 @@ Environment Variables
 
 .. include:: _include/config_task_env_alt.rst
 
+We also respect setting the following environment variables to force disable/enable
+the use of colors in all console output.
+
+``NO_COLOR``
+    If this variable is set to anything but a blank string, all colors are disabled.
+
+``FORCE_COLOR``
+    If this variable is set to anything but a blank string, colors will be enabled
+    regardless of whether `stdout` or `stderr` are a TTY.
+
 
 Exit Status
 -----------
