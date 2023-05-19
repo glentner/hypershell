@@ -777,7 +777,6 @@ class ClientThread(Thread):
         self.client = QueueClient(config=QueueConfig(host=address[0], port=address[1], auth=auth))
         self.inbound = Queue(maxsize=bundlesize)
         self.outbound = Queue(maxsize=bundlesize)
-        self.received = Queue(maxsize=1)  # NOTE: block new bundles until signaling previous
         self.scheduler = ClientSchedulerThread(queue=self.client, local=self.inbound,
                                                no_confirm=no_confirm, timeout=scheduler_timeout)
         self.heartbeat = ClientHeartbeatThread(queue=self.client, heartrate=heartrate)
