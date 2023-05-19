@@ -92,7 +92,8 @@ class TaskSubmitApp(Application):
     def run(self: TaskSubmitApp) -> None:
         """Submit task to database."""
         ensuredb()
-        task = Task.new(args=' '.join(self.argv), tag=Tag.parse_cmdline_list(self.taglist))
+        task = Task.new(args=' '.join(self.argv),
+                        tag=(None if not self.taglist else Tag.parse_cmdline_list(self.taglist)))
         Task.add(task)
         print(task.id)
 
