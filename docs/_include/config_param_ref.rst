@@ -3,19 +3,44 @@
 
     ``.level``
         One of ``DEVEL``, ``TRACE``, ``DEBUG``, ``INFO``, ``WARNING``,
-        ``ERROR``, or ``CRITICAL`` (default: `WARNING`)
+        ``ERROR``, or ``CRITICAL`` (default: ``WARNING``)
+
+        ``INFO`` level messages are reserved for clients when tasks begin running.
+        There are numerous WARNING events (e.g., non-zero exit status of a task).
+        ``DEBUG`` level messages signal component thread start/stop and individual task
+        level behavior. ``TRACE`` contains detailed information on all other behavior,
+        particular iterative messages while components are waiting for something.
+
+        ``ERROR`` messages track when things fail but the application can continue; e.g.,
+        when command template expansion fails on an individual task.
+
+        ``CRITICAL`` messages are emitted when the application will halt or crash.
+        Some of these are expected (such as incorrect command-line arguments) but in
+        the event of an uncaught exception within the application a full traceback is
+        written to a file and logged.
+
+        ``DEVEL`` messages are meant for development purposes and track every single
+        state-transition in all component threads.
 
     ``.datefmt``
-        Date/time format, standard codes apply (default: `'%Y-%m-%d %H:%M:%S'`)
+        Date/time format, standard codes apply (default: ``'%Y-%m-%d %H:%M:%S'```)
 
     ``.format``
-        Log message format. Default set by the `default` ``logging.style``.
+        Log message format.
+
+        Default set by the "default" ``logging.style``.
         See the `available attributes <https://docs.python.org/3/library/logging.html#logrecord-attributes>`_
         defined by the underlying Python logging interface.
 
+        Additional attributes provided beyond the standard include `app_id`, `hostname`, `hostname_short`,
+        `relative_name`, time formats in `elapsed`, `elapsed_ms`, `elapsed_delta`, and `elapsed_hms`,
+        as well as all ANSI colors and formats as `ansi_x` where x is one of `reset`, `bold`, `faint`,
+        `italic`, `underline`, `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, and
+        `ansi_level` contains the standard color for the current message severity level.
+
     ``.style``
         Presets for ``logging.format`` which can be difficult to define correctly.
-        Options are `default`, `detailed`, and `system`.
+        Options are `default`, `detailed`, `detailed-compact`, and `system`.
 
 
 ``[database]``
