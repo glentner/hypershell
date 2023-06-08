@@ -268,6 +268,6 @@ Options
     Maximum size of cluster (default: 2).
 
     For a *dynamic* autoscaling policy, this sets an upper limit on the number of launched
-    clients. WHen this number is reached, scaling stops regardless of task pressure.
+    clients. When this number is reached, scaling stops regardless of task pressure.
 
     Only valid with ``--autoscaling``.
