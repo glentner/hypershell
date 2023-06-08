@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "HYPER-SHELL" "1" "Apr 13, 2023" "2.3.0" "hyper-shell"
+.TH "HYPER-SHELL" "1" "Jun 08, 2023" "2.4.0" "hyper-shell"
 .SH NAME
 hyper-shell \- Process shell commands over a distributed, asynchronous queue
 .SH SYNOPSIS
@@ -76,15 +76,14 @@ to manage task scheduling and persistence. Stand up the \fBserver\fP on its own 
 .INDENT 0.0
 .TP
 .B \fBhyper\-shell cluster [\-h]\fP
-\fB[FILE | \-\-restart | \-\-forever]\fP
-\fB[\-N NUM]\fP \fB[\-t CMD]\fP \fB[\-b SIZE]\fP \fB[\-w SEC]\fP \fB[\-p PORT]\fP
-\fB[\-r NUM [\-\-eager]]\fP \fB[\-f PATH]\fP \fB[\-\-capture | [\-o PATH] [\-e PATH]]\fP
+\fB[\-p PORT]\fP \fB[\-r NUM [\-\-eager]]\fP \fB[\-f PATH]\fP \fB[\-\-capture | [\-o PATH] [\-e PATH]]\fP
+\fB[\-\-no\-db | \-\-initdb]\fP \fB[\-\-no\-confirm]\fP \fB[\-\-delay\-start SEC]\fP \fB[\-T SEC]\fP \fB[\-W SEC]\fP
 \fB[\-\-ssh [HOST... | \-\-ssh\-group NAME] [\-\-env] | \-\-mpi | \-\-launcher=ARGS...]\fP
-\fB[\-\-no\-db | \-\-initdb]\fP \fB[\-\-no\-confirm]\fP \fB[\-\-delay\-start SEC]\fP
+\fB[\-\-autoscaling [MODE] [\-P SEC] [\-F VALUE] [\-I NUM] [\-X NUM] [\-Y NUM]]\fP
 .UNINDENT
 .sp
-Start the cluster either locally or with remote clients over \fIssh\fP or a custom \fIlauncher\fP\&. This
-mode should be the most common entry\-point for general usage. It fully encompasses all of the
+Start the cluster either locally or with remote clients with \fIssh\fP or a custom \fIlauncher\fP\&.
+This mode should be the most common entry\-point for general usage. It fully encompasses all of the
 different agents in the system in a concise workflow.
 .sp
 The input source for tasks is file\-like, either a local path, or from \fIstdin\fP if no argument is
@@ -95,6 +94,9 @@ For large, long running workflows, it might be a good idea to configure a databa
 initial \fBsubmit\fP job to populate the database, and then run the cluster with \fB\-\-restart\fP and no
 input \fIFILE\fP\&. If the cluster is interrupted for whatever reason it can gracefully restart where it
 left off.
+.sp
+Use \fB\-\-autoscaling\fP with either \fIfixed\fP or \fIdynamic\fP to run a persistent, elastically scalable
+cluster using an external \fB\-\-launcher\fP to bring up clients as needed.
 .SS Arguments
 .INDENT 0.0
 .TP
@@ -282,6 +284,92 @@ File path to write failed task args (default: <none>).
 The \fIserver\fP acts like a sieve, reading task args from \fIstdin\fP and redirecting those original
 args to \fIstdout\fP if the task had a non\-zero exit status. The \fIcluster\fP will run the \fIserver\fP
 for you and if \fB\-\-failures\fP is enabled these task args will be sent to a local file \fIPATH\fP\&.
+.TP
+.B \fB\-\-timeout\fP \fISEC\fP
+Timeout in seconds for clients. Automatically shutdown if no tasks received (default: never).
+.sp
+This option is only valid for an \fB\-\-autoscaling\fP cluster. This feature allows for gracefully
+scaling down a cluster when task throughput subsides.
+.TP
+.B \fB\-\-task\-timeout\fP \fISEC\fP
+Task\-level walltime limit (default: none).
+.sp
+Executors will send a progression of SIGINT, SIGTERM, and SIGKILL.
+If the process still persists the executor itself will shutdown.
+.TP
+.B \fB\-A\fP, \fB\-\-autoscaling\fP [\fIMODE\fP]
+Enable autoscaling (default: disabled). Used with \fB\-\-launcher\fP\&.
+.sp
+Specifying this option on its own triggers the use of the autoscaler, with the default
+\fIpolicy\fP or the configured policy. The \fIpolicy\fP can be specified directly here
+as either \fIfixed\fP or \fIdynamic\fP (e.g., \fB\-\-autoscaling=dynamic\fP). The default is \fIfixed\fP\&.
+.sp
+The specified \fB\-\-launcher\fP is used to bring up each individual instance of the client
+as a discrete scaling unit. This is different than using \fB\-\-launcher\fP on its own where
+it specifies a single invocation that should launch all clients (e.g., like an \fBmpirun\fP).
+Without this option, clients will simply be run locally.
+.sp
+A \fIfixed\fP policy will seek to maintain a definite size and allows for recovery in the
+event that clients halt for some reason (e.g., due to expected faults or timeouts).
+.sp
+A \fIdynamic\fP policy maintains a \fB\-\-min\-size\fP (default: 0) and grows up to some
+\fB\-\-max\-size\fP depending on the observed \fItask pressure\fP given the specified scaling
+\fB\-\-factor\fP\&.
+.sp
+See also \fB\-\-factor\fP, \fB\-\-period\fP, \fB\-\-init\-size\fP, \fB\-\-min\-size\fP, and \fB\-\-max\-size\fP\&.
+.TP
+.B \fB\-F\fP, \fB\-\-factor\fP \fIVALUE\fP
+Scaling factor (default: 1).
+.sp
+A configurable, dimensionless quantity used by the \fB\-\-autoscaling=dynamic\fP policy.
+This value expresses some multiple of the average task duration in seconds.
+.sp
+The autoscaler periodically checks \fBtoc / (factor x avg_duration)\fP, where
+\fBtoc\fP is the estimated time of completion for all remaining tasks given current
+throughput of active clients. This ratio is referred to as \fItask pressure\fP, and if
+it exceeds 1, the pressure is considered \fIhigh\fP and we will add another client if
+we are not already at the given \fB\-\-max\-size\fP of the cluster.
+.sp
+For example, if the average task length is 30 minutes, and we set \fB\-\-factor=2\fP, then if
+the estimated time of completion of remaining tasks given currently connected executors
+exceeds 1 hour, we will scale up by one unit.
+.sp
+See also \fB\-\-period\fP\&.  Only valid with \fB\-\-autoscaling\fP\&.
+.TP
+.B \fB\-P\fP, \fB\-\-period\fP \fISEC\fP
+Scaling period in seconds (default: 60).
+.sp
+The autoscaler waits for this period of time in between checks and scaling events.
+A shorter period makes the scaling behavior more responsive but can effect database
+performance if checks happen too rapidly.
+.sp
+Only valid with \fB\-\-autoscaling\fP\&.
+.TP
+.B \fB\-I\fP, \fB\-\-init\-size\fP \fISIZE\fP
+Initial size of cluster (default: 1).
+.sp
+When the cluster starts, this number of clients will be launched.
+For a \fIfixed\fP policy cluster, this should be given with a \fB\-\-min\-size\fP, and likely
+the same value.
+.sp
+Only valid with \fB\-\-autoscaling\fP\&.
+.TP
+.B \fB\-X\fP, \fB\-\-min\-size\fP \fISIZE\fP
+Minimum size of cluster (default: 0).
+.sp
+Regardless of autoscaling policy, if the number of launched clients drops below this
+value we will scale up by one. Allowing \fB\-\-min\-size=0\fP is an important feature for
+efficient use of computing resources in the absence of tasks.
+.sp
+Only valid with \fB\-\-autoscaling\fP\&.
+.TP
+.B \fB\-Y\fP, \fB\-\-max\-size\fP \fISIZE\fP
+Maximum size of cluster (default: 2).
+.sp
+For a \fIdynamic\fP autoscaling policy, this sets an upper limit on the number of launched
+clients. When this number is reached, scaling stops regardless of task pressure.
+.sp
+Only valid with \fB\-\-autoscaling\fP\&.
 .UNINDENT
 .SH SERVER USAGE
 .INDENT 0.0
@@ -297,7 +385,7 @@ Launch server, schedule directly or asynchronously from database.
 The server includes a scheduler component that pulls tasks from the database and offers
 them up on a distributed queue to clients. It also has a receiver that collects the results
 of finished tasks. Optionally, the server can submit tasks (\fIFILE\fP). When submitting tasks,
-the \fB\-w\fP/\fB\-\-bundlewait\fP and \fB\-b\fP/\fBbundlesize\fP options are the same as for the
+the \fB\-w\fP/\fB\-\-bundlewait\fP and \fB\-b\fP/\fB\-\-bundlesize\fP options are the same as for the
 \fIsubmit\fP workflow.
 .sp
 With \fB\-\-max\-retries\fP greater than zero, the scheduler will check for a non\-zero exit status
@@ -432,9 +520,9 @@ Mutually exclusive to \fB\-\-print\fP\&.
 .INDENT 0.0
 .TP
 .B \fBhyper\-shell\fP \fBclient\fP \fB[\-h]\fP
-\fB[\-N NUM]\fP \fB[\-t CMD]\fP \fB[\-b SIZE]\fP \fB[\-w SEC]\fP \fB[\-d SEC]\fP
-\fB[\-H ADDR]\fP \fB[\-p PORT]\fP \fB[\-k KEY]\fP \fB[\-c | [\-o PATH] [\-e PATH]]\fP
-\fB[\-\-no\-confirm]\fP \fB[\-\-delay\-start SEC]\fP
+\fB[\-N NUM]\fP \fB[\-t TEMPLATE]\fP \fB[\-b SIZE]\fP \fB[\-w SEC]\fP \fB[\-H ADDR]\fP \fB[\-p PORT]\fP
+\fB[\-k KEY]\fP \fB[\-\-capture | [\-o PATH] [\-e PATH]]\fP \fB[\-\-no\-confirm]\fP
+\fB[\-\-delay\-start SEC]\fP \fB[\-\-timeout SEC]\fP \fB[\-\-task\-timeout SEC]\fP
 .UNINDENT
 .sp
 Launch client directly, run tasks in parallel.
@@ -528,12 +616,24 @@ These are stored local to the \fIclient\fP under \fI<prefix>/lib/task/<uuid>.[ou
 Task outputs can be automatically retrieved via SFTP, see \fItask\fP usage.
 .sp
 Mutually exclusive with both \fB\-\-output\fP and \fB\-\-errors\fP\&.
+.TP
+.B \fB\-\-timeout\fP \fISEC\fP
+Timeout in seconds for client. Automatically shutdown if no tasks received (default: never).
+.sp
+This feature allows for gracefully scaling down a cluster when task throughput subsides.
+.TP
+.B \fB\-\-task\-timeout\fP \fISEC\fP
+Task\-level walltime limit (default: none).
+.sp
+Executors will send a progression of SIGINT, SIGTERM, and SIGKILL.
+If the process still persists the executor itself will shutdown.
 .UNINDENT
 .SH SUBMIT USAGE
 .INDENT 0.0
 .TP
 .B \fBhyper\-shell\fP \fBsubmit\fP \fB[\-h]\fP
 \fB[FILE]\fP \fB[\-b NUM]\fP \fB[\-w SEC]\fP \fB[\-t CMD]\fP \fB[\-\-initdb]\fP
+\fB[\-\-tag TAG [TAG...]]\fP
 .UNINDENT
 .sp
 Submit tasks from a file.
@@ -544,6 +644,7 @@ size of these bundles and how long to wait before flushing tasks regardless of
 how many have accumulated.
 .sp
 Pre\-format tasks at \fIsubmit\fP\-time with template expansion using \fB\-t\fP/\fB\-\-template\fP\&.
+Any tags specified with \fB\-\-tag\fP are applied to all tasks submitted.
 .SS Arguments
 .INDENT 0.0
 .TP
@@ -589,6 +690,14 @@ tables if they don\(aqt already exist. This is a short\-hand for pre\-creating t
 \fBhyper\-shell initdb\fP command. This happens by default with SQLite databases.
 .sp
 See \fBhyper\-shell initdb\fP command.
+.TP
+.B \fB\-\-tag\fP \fITAG\fP\&...
+Assign one or more tags
+.sp
+Tags allow for user\-defined tracking of information related to individual tasks or large
+groups of tasks. They are defined with both a \fIkey\fP and \fIvalue\fP (e.g., \fB\-\-tag file:a\fP).
+The default \fIvalue\fP for tags is blank. When searching with tags, not specifying a \fIvalue\fP
+will return any task with that \fIkey\fP defined regardless of \fIvalue\fP (including blank).
 .UNINDENT
 .SH INITDB USAGE
 .sp
@@ -706,7 +815,7 @@ Path to variable.
 .UNINDENT
 .SH TASK SUBMIT USAGE
 .sp
-\fBhyper\-shell\fP \fBtask\fP \fBsubmit\fP \fB[\-h]\fP \fBARGS...\fP
+\fBhyper\-shell\fP \fBtask\fP \fBsubmit\fP \fB[\-h]\fP \fB[\-t TAG [TAG...]]\fP \fBARGS...\fP
 .sp
 Submit individual task to the database.
 .sp
@@ -723,11 +832,22 @@ Command\-line arguments.
 The full command\-line for some shell task.
 To use options, preface with leading \fB\-\-\fP\&.
 .UNINDENT
+.SS Options
+.INDENT 0.0
+.TP
+.B \fB\-t\fP, \fB\-\-tag\fP \fITAG\fP\&...
+Assign one or more tags
+.sp
+Tags allow for user\-defined tracking of information related to individual tasks or large
+groups of tasks. They are defined with both a \fIkey\fP and \fIvalue\fP (e.g., \fB\-\-tag file:a\fP).
+The default \fIvalue\fP for tags is blank. When searching with tags, not specifying a \fIvalue\fP
+will return any task with that \fIkey\fP defined regardless of \fIvalue\fP (including blank).
+.UNINDENT
 .SH TASK INFO USAGE
 .INDENT 0.0
 .TP
 .B \fBhyper\-shell\fP \fBtask\fP \fBinfo\fP \fB[\-h]\fP
-\fBID\fP \fB[\-\-yaml | \-\-json | \-\-stdout | \-\-stderr | \-\-x FIELD]\fP
+\fBID\fP \fB[\-\-stdout | \-\-stderr | \-x FIELD]\fP \fB[\-f FORMAT]\fP
 .UNINDENT
 .sp
 Get metadata and/or task outputs.
@@ -747,11 +867,14 @@ Unique task UUID.
 .SS Options
 .INDENT 0.0
 .TP
-.B \fB\-\-yaml\fP
-Format metadata output as YAML.
+.B \fB\-f\fP, \fB\-\-format\fP \fIFORMAT\fP
+Format task info ([normal], json, yaml).
 .TP
 .B \fB\-\-json\fP
 Format metadata output as JSON.
+.TP
+.B \fB\-\-yaml\fP
+Format metadata output as YAML.
 .TP
 .B \fB\-x\fP/\fB\-\-extract\fP \fIFIELD\fP
 Print this field only (e.g., \fB\-x submit_time\fP).
@@ -766,7 +889,7 @@ Print <stderr> of task if captured, fetch from client if necessary.
 .INDENT 0.0
 .TP
 .B \fBhyper\-shell\fP \fBtask\fP \fBwait\fP \fB[\-h]\fP
-\fBID\fP \fB[\-n SEC]\fP \fB[\-\-info [\-\-json] | \-\-status]\fP
+\fBID\fP \fB[\-n SEC]\fP \fB[\-\-info [\-f FORMAT] | \-\-status | \-\-return]\fP
 .UNINDENT
 .sp
 Wait for task to complete.
@@ -787,16 +910,25 @@ Unique task UUID.
 .B \fB\-n\fP, \fB\-\-interval\fP \fISEC\fP
 Time in seconds to wait between polling (default: 5).
 .TP
-.B \fB\-\-info\fP
+.B \fB\-i\fP, \fB\-\-info\fP
 Print task info after completion.
 .sp
 See \fBtask info\fP command.
 .TP
+.B \fB\-f\fP, \fB\-\-format\fP \fIFORMAT\fP
+Format task info ([normal], json, yaml).
+.TP
 .B \fB\-\-json\fP
 Format metadata output as JSON.
 .TP
-.B \fB\-\-status\fP
+.B \fB\-\-yaml\fP
+Format metadata output as YAML.
+.TP
+.B \fB\-s\fP, \fB\-\-status\fP
 Print task exit status only.
+.TP
+.B \fB\-r\fP, \fB\-\-return\fP
+Use exit status from task.
 .UNINDENT
 .SH TASK RUN USAGE
 .sp
@@ -828,7 +960,7 @@ Time in seconds to wait between polling (default: 5).
 .INDENT 0.0
 .TP
 .B \fBhyper\-shell\fP \fBtask\fP \fBsearch\fP \fB[\-h]\fP
-\fB[FIELD [FIELD ...]]\fP \fB[\-\-where COND [COND ...]]\fP
+\fB[FIELD [FIELD ...]]\fP \fB[\-w COND [COND ...]]\fP \fB[\-t TAG [TAG...]]\fP
 \fB[\-\-order\-by FIELD [\-\-desc]]\fP \fB[\-\-count | \-\-limit NUM]\fP
 \fB[\-\-format FORMAT | \-\-json | \-\-csv]\fP \fB[\-d CHAR]\fP
 .UNINDENT
@@ -836,10 +968,10 @@ Time in seconds to wait between polling (default: 5).
 Search for tasks in database.
 .sp
 A database must be configured.
-Fields will be columns in the output.
-Options relate to SQL concepts.
-For single column output, use \fB\-x\fP/\fB\-\-extract\fP to disable
-formatting and quotations (useful for piping output).
+Specifying \fIFIELD\fP names defines what is included in the output
+(by default all fields are included).
+.sp
+This command maps directly to underlying SQL queries.
 .SS Arguments
 .INDENT 0.0
 .TP
@@ -851,10 +983,19 @@ Default is to include all fields.
 .INDENT 0.0
 .TP
 .B \fB\-w\fP, \fB\-\-where\fP \fICOND...\fP
-List of conditional statements to filter results (e.g., \fB\-w \(aqexit_status != 0\(aq\fP).
+List of conditional statements to filter results (e.g., \fB\-w \(aqduration >= 600\(aq\fP).
+.sp
+Operators include \fB==\fP, \fB!=\fP, \fB>=\fP, \fB<=\fP, \fB>\fP, \fB<\fP, \fB~\fP\&.
+The \fB~\fP operator applies a regular expression.
 .TP
-.B \fB\-s\fP, \fB\-\-order\-by\fP \fIFIELD\fP
-Order results by field.
+.B \fB\-t\fP, \fB\-\-tag\fP \fITAG\fP\&...
+Filter on one or more tags. (e.g., \fB\-t special\fP or \fB\-t file:a\fP).
+.sp
+Leaving the \fIvalue\fP unspecified will return any task for which the \fIkey\fP exists.
+Specifying a full \fIkey\fP:\fIvalue\fP pair will match on both.
+.TP
+.B \fB\-s\fP, \fB\-\-order\-by\fP \fIFIELD\fP \fB[\-\-desc]\fP
+Order results by field. Optionally, in descending order.
 .TP
 .B \fB\-\-failed\fP
 Alias for \fB\-w \(aqexit_status != 0\(aq\fP\&.
@@ -868,11 +1009,20 @@ Alias for \fB\-w \(aqexit_status != null\(aq\fP\&.
 .B \fB\-\-remaining\fP
 Alias for \fB\-w \(aqexit_status == null\(aq\fP\&.
 .TP
-.B \fB\-\-json\fP
-Format output as JSON.
+.B \fB\-\-format\fP \fIFORMAT\fP
+Specify output format (either \fBnormal\fP, \fBplain\fP, \fBtable\fP, \fBcsv\fP, \fBjson\fP).
+.sp
+Default is \fBnormal\fP for whole\-task output. If any \fIFIELD\fP names are given, output is
+formatted in simple \fBplain\fP text; use \fBcsv\fP for compliant output. The pretty\-printed
+\fBtable\fP formatting is good for presentation on wide screens.
+.sp
+See \fB\-\-csv\fP, \fB\-\-json\fP, and \fB\-\-delimiter\fP\&.
 .TP
 .B \fB\-\-csv\fP
-Format output as CSV.
+Format output as CSV. (Shorthand for \fB\-\-format=csv\fP).
+.TP
+.B \fB\-\-json\fP
+Format output as JSON. (Shorthand for \fB\-\-format=json\fP).
 .TP
 .B \fB\-d\fP, \fB\-\-delimiter\fP \fICHAR\fP
 Field seperator for plain/csv formats.
@@ -903,6 +1053,9 @@ Task field name (e.g., \(dqargs\(dq).
 .TP
 .B VALUE
 New value.
+.sp
+Use \fBkey:value\fP notation for tasks.
+Updating \fBtag\fP will add or update any pre\-existing tag with that \fBkey\fP\&.
 .UNINDENT
 .SH TEMPLATES
 .sp
@@ -1150,19 +1303,44 @@ Logging configuration. See also \fI\%logging\fP section.
 .TP
 .B \fB\&.level\fP
 One of \fBDEVEL\fP, \fBTRACE\fP, \fBDEBUG\fP, \fBINFO\fP, \fBWARNING\fP,
-\fBERROR\fP, or \fBCRITICAL\fP (default: \fIWARNING\fP)
+\fBERROR\fP, or \fBCRITICAL\fP (default: \fBWARNING\fP)
+.sp
+\fBINFO\fP level messages are reserved for clients when tasks begin running.
+There are numerous WARNING events (e.g., non\-zero exit status of a task).
+\fBDEBUG\fP level messages signal component thread start/stop and individual task
+level behavior. \fBTRACE\fP contains detailed information on all other behavior,
+particular iterative messages while components are waiting for something.
+.sp
+\fBERROR\fP messages track when things fail but the application can continue; e.g.,
+when command template expansion fails on an individual task.
+.sp
+\fBCRITICAL\fP messages are emitted when the application will halt or crash.
+Some of these are expected (such as incorrect command\-line arguments) but in
+the event of an uncaught exception within the application a full traceback is
+written to a file and logged.
+.sp
+\fBDEVEL\fP messages are meant for development purposes and track every single
+state\-transition in all component threads.
 .TP
 .B \fB\&.datefmt\fP
-Date/time format, standard codes apply (default: \fI\(aq%Y\-%m\-%d %H:%M:%S\(aq\fP)
+Date/time format, standard codes apply (default: \fB\(aq%Y\-%m\-%d %H:%M:%S\(aq\(ga\fP)
 .TP
 .B \fB\&.format\fP
-Log message format. Default set by the \fIdefault\fP \fBlogging.style\fP\&.
+Log message format.
+.sp
+Default set by the \(dqdefault\(dq \fBlogging.style\fP\&.
 See the \fI\%available attributes\fP
 defined by the underlying Python logging interface.
+.sp
+Additional attributes provided beyond the standard include \fIapp_id\fP, \fIhostname\fP, \fIhostname_short\fP,
+\fIrelative_name\fP, time formats in \fIelapsed\fP, \fIelapsed_ms\fP, \fIelapsed_delta\fP, and \fIelapsed_hms\fP,
+as well as all ANSI colors and formats as \fIansi_x\fP where x is one of \fIreset\fP, \fIbold\fP, \fIfaint\fP,
+\fIitalic\fP, \fIunderline\fP, \fIblack\fP, \fIred\fP, \fIgreen\fP, \fIyellow\fP, \fIblue\fP, \fImagenta\fP, \fIcyan\fP, \fIwhite\fP, and
+\fIansi_level\fP contains the standard color for the current message severity level.
 .TP
 .B \fB\&.style\fP
 Presets for \fBlogging.format\fP which can be difficult to define correctly.
-Options are \fIdefault\fP, \fIdetailed\fP, and \fIsystem\fP\&.
+Options are \fIdefault\fP, \fIdetailed\fP, \fIdetailed\-compact\fP, and \fIsystem\fP\&.
 .UNINDENT
 .TP
 .B \fB[database]\fP
@@ -1327,6 +1505,11 @@ See also \fB\-w\fP/\fB\-\-bundlewait\fP command\-line option.
 Interval in seconds between heartbeats sent to server (default \fI10\fP).
 .sp
 Even on the largest scales the default interval should be fine.
+.TP
+.B \fB\&.timeout\fP
+Timeout in seconds for client. Automatically shutdown if no tasks received (default: never).
+.sp
+This feature allows for gracefully scaling down a cluster when task throughput subsides.
 .UNINDENT
 .TP
 .B \fB[submit]\fP
@@ -1357,6 +1540,12 @@ Section for task runtime settings.
 .TP
 .B \fB\&.cwd\fP
 Explicitly set the working directory for all tasks.
+.TP
+.B \fB\&.timeout\fP
+Task\-level walltime limit (default: none).
+.sp
+Executors will send a progression of SIGINT, SIGTERM, and SIGKILL.
+If the process still persists the executor itself will shutdown.
 .UNINDENT
 .TP
 .B \fB[ssh]\fP
@@ -1367,14 +1556,107 @@ SSH configuration section.
 SSH connection arguments; e.g., \fB\-i ~/.ssh/some.key\fP\&.
 It is preferable to configure SSH directly however, in \fB~/.ssh/config\fP\&.
 .TP
-.B \fB[group]\fP
-Setting a \fIlist\fP for the \fB\&.group\fP allows for a global list of available client hosts.
-Or, set one or more named groups and reference them by name with \fB\-\-ssh\-group\fP\&.
+.B \fB[nodelist]\fP
+This can be a single list of hostnames or a section when multiple named lists.
+Reference named groups from the command\-line with \fB\-\-ssh\-group\fP\&.
 .sp
-\fB\&.<name> = [\(aqhost\-01\(aq, \(aqhost\-02\(aq, \(aqhost\-03\(aq]\fP
+Such as,
+.sp
+\fB\&.mycluster = [\(aqmycluster\-01\(aq, \(aqmycluster\-02\(aq, \(aqmycluster\-03\(aq]\fP
+.UNINDENT
+.TP
+.B \fB[autoscale]\fP
+Define an autoscaling policy and parameters.
+.INDENT 7.0
+.TP
+.B \fB\&.policy\fP
+Either \fIfixed\fP or \fIdynamic\fP\&.
+.sp
+A \fIfixed\fP policy will seek to maintain a definite size and allows for recovery in the
+event that clients halt for some reason (e.g., due to expected faults or timeouts).
+.sp
+A \fIdynamic\fP policy maintains a minimum size and grows up to some maximum size
+depending on the observed \fItask pressure\fP given the specified scaling factor.
+.sp
+See also \fB\&.factor\fP, \fB\&.period\fP, \fB\&.size.init\fP, \fB\&.size.min\fP, and \fB\&.size.max\fP\&.
+.TP
+.B \fB\&.factor\fP
+Scaling factor (default: 1).
+.sp
+A dimensionless quantity used by the \fIdynamic\fP policy.
+This value expresses some multiple of the average task duration in seconds.
+.sp
+The autoscaler periodically checks \fBtoc / (factor x avg_duration)\fP, where
+\fBtoc\fP is the estimated time of completion for all remaining tasks given current
+throughput of active clients. This ratio is referred to as \fItask pressure\fP, and if
+it exceeds 1, the pressure is considered \fIhigh\fP and we will add another client if
+we are not already at the maximum size of the cluster.
+.sp
+For example, if the average task length is 30 minutes, and we set \fBfactor = 2\fP, then if
+the estimated time of completion of remaining tasks given currently connected executors
+exceeds 1 hour, we will scale up by one unit.
+.sp
+See also \fB\&.period\fP\&.
+.TP
+.B \fB\&.period\fP
+Scaling period in seconds (default: 60).
+.sp
+The autoscaler waits for this period of time in between checks and scaling events.
+A shorter period makes the scaling behavior more responsive but can effect database
+performance if checks happen too rapidly.
+.TP
+.B \fB[size]\fP
+.INDENT 7.0
+.TP
+.B \fB\&.init\fP
+Initial size of cluster (default: 1).
+.sp
+When the the cluster starts, this number of clients will be launched.
+For a \fIfixed\fP policy cluster, this should be given with a \fB\&.min\fP size, and likely
+the same value.
+.TP
+.B \fB\&.min\fP
+Minimum size of cluster (default: 0).
+.sp
+Regardless of autoscaling policy, if the number of launched clients drops below this
+value we will scale up by one. Allowing \fBmin = 0\fP is an important feature for
+efficient use of computing resources in the absence of tasks.
+.TP
+.B \fB\&.max\fP
+Maximum size of cluster (default: 2).
+.sp
+For a \fIdynamic\fP autoscaling policy, this sets an upper limit on the number of launched
+clients. WHen this number is reached, scaling stops regardless of task pressure.
+.UNINDENT
+.UNINDENT
+.TP
+.B \fB[console]\fP
+Rich text display and output parameters.
+.INDENT 7.0
+.TP
+.B \fB\&.theme\fP
+Color scheme to use by default in output (such as with \fBtask info\fP and \fBtask search\fP).
+.sp
+This option is passed to the \fIrich\fP library.
+.UNINDENT
+.TP
+.B \fB[export]\fP
+Any variable defined here is injected as an environment variable for tasks.
+.sp
+Example,
+.INDENT 7.0
+.TP
+.B \fBfoo = 1\fP
+The environment variable \fBFOO=1\fP would defined for all tasks.
 .UNINDENT
 .UNINDENT
 .SH ENVIRONMENT VARIABLES
+.sp
+As stated for configuration, any environment variable prefixed as \fBHYPERSHELL_\fP
+where the name aligns to the path to some option, delimited by underscores,
+will set that option.
+.sp
+Example, \fBHYPERSHELL_CLIENT_TIMEOUT\fP maps to the corresponding configuration option.
 .sp
 A few common environment variables are defined for every task.
 .INDENT 0.0
@@ -1452,6 +1734,18 @@ path = [\(dq/some/bin\(dq, \(dq/some/other/bin\(dq]
 .ft P
 .fi
 .UNINDENT
+.UNINDENT
+.sp
+We also respect setting the following environment variables to force disable/enable
+the use of colors in all console output.
+.INDENT 0.0
+.TP
+.B \fBNO_COLOR\fP
+If this variable is set to anything but a blank string, all colors are disabled.
+.TP
+.B \fBFORCE_COLOR\fP
+If this variable is set to anything but a blank string, colors will be enabled
+regardless of whether \fIstdout\fP or \fIstderr\fP are a TTY.
 .UNINDENT
 .SH EXIT STATUS
 .INDENT 0.0
