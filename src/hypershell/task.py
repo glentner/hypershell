@@ -37,11 +37,10 @@ from sqlalchemy.sql.elements import BinaryExpression
 from hypershell.core.ansi import colorize_usage
 from hypershell.core.platform import default_path
 from hypershell.core.config import config
-from hypershell.core.exceptions import handle_exception
+from hypershell.core.exceptions import handle_exception, handle_exception_silently, get_shared_exception_mapping
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.remote import SSHConnection
 from hypershell.core.types import smart_coerce
-from hypershell.core.exceptions import get_shared_exception_mapping
 from hypershell.data.model import Task, to_json_type
 from hypershell.data import ensuredb
 
@@ -113,7 +112,7 @@ def check_uuid(value: str) -> None:
 INFO_PROGRAM = 'hyper-shell task info'
 INFO_USAGE = f"""\
 Usage: 
-{INFO_PROGRAM} [-h] ID [--yaml | --json | --stdout | --stderr | -x FIELD]
+{INFO_PROGRAM} [-h] ID [--stdout | --stderr | -x FIELD] [-f FORMAT]
 
 Get metadata and/or task outputs.\
 """
@@ -122,15 +121,16 @@ INFO_HELP = f"""\
 {INFO_USAGE}
 
 Arguments:
-  ID                    Unique task UUID.
+  ID                     Unique task UUID.
 
 Options:
-      --yaml            Format task metadata as YAML.
-      --json            Format task metadata as JSON.
-  -x, --extract  FIELD  Print single field.
-      --stdout          Fetch <stdout> from task.
-      --stderr          Fetch <stderr> from task.
-  -h, --help            Show this message and exit.\
+  -f, --format   FORMAT  Format task info ([normal], json, yaml).
+      --json             Format task metadata as JSON.
+      --yaml             Format task metadata as YAML.
+  -x, --extract  FIELD   Print single field.
+      --stdout           Print <stdout> from task.
+      --stderr           Print <stderr> from task.
+  -h, --help             Show this message and exit.\
 """
 
 
@@ -147,15 +147,17 @@ class TaskInfoApp(Application):
     print_stdout: bool = False
     print_stderr: bool = False
     extract_field: str = None
+    print_interface = interface.add_mutually_exclusive_group()
+    print_interface.add_argument('--stdout', action='store_true', dest='print_stdout')
+    print_interface.add_argument('--stderr', action='store_true', dest='print_stderr')
+    print_interface.add_argument('-x', '--extract', default=None, choices=Task.columns, dest='extract_field')
+
     output_format: str = 'normal'
     output_formats: List[str] = ['normal', 'json', 'yaml']
     output_interface = interface.add_mutually_exclusive_group()
-    output_interface.add_argument('--format', default=output_format, dest='output_format', choices=output_formats)
+    output_interface.add_argument('-f', '--format', default=output_format, dest='output_format', choices=output_formats)
     output_interface.add_argument('--json', action='store_const', const='json', dest='output_format')
     output_interface.add_argument('--yaml', action='store_const', const='yaml', dest='output_format')
-    output_interface.add_argument('--stdout', action='store_true', dest='print_stdout')
-    output_interface.add_argument('--stderr', action='store_true', dest='print_stderr')
-    output_interface.add_argument('-x', '--extract', default=None, choices=Task.columns, dest='extract_field')
 
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
@@ -179,7 +181,19 @@ class TaskInfoApp(Application):
 
     def print_field(self: TaskInfoApp) -> None:
         """Print single field."""
-        print(json.dumps(self.task.to_json().get(self.extract_field)).strip('"'))
+        if self.extract_field != 'tag':
+            print(json.dumps(self.task.to_json().get(self.extract_field)).strip('"'))
+        elif self.output_format == 'normal':
+            print(', '.join(f'{k}:{v}' if v else k for k, v in self.task.tag.items()))
+        else:
+            formatter = self.format_method[self.output_format]
+            output = formatter(self.task.tag)
+            if sys.stdout.isatty():
+                output = Syntax(output, self.output_format, word_wrap=True,
+                                theme=config.console.theme, background_color='default')
+                Console().print(output)
+            else:
+                print(output, file=sys.stdout, flush=True)
 
     def print_formatted(self: TaskInfoApp) -> None:
         """Format and print task metadata to console."""
@@ -239,7 +253,7 @@ DEFAULT_INTERVAL = 5
 WAIT_PROGRAM = 'hyper-shell task wait'
 WAIT_USAGE = f"""\
 Usage: 
-{WAIT_PROGRAM} [-h] ID [-n SEC] [--info [--json] | --status]
+{WAIT_PROGRAM} [-h] ID [-n SEC] [--info [-f FORMAT] | --status | --return]
 
 Wait for task to complete.\
 """
@@ -248,14 +262,17 @@ WAIT_HELP = f"""\
 {WAIT_USAGE}
 
 Arguments:
-  ID                    Unique UUID.
+  ID                     Unique UUID.
 
 Options:
-  -n, --interval  SEC   Time to wait between polling (default: {DEFAULT_INTERVAL}).
-      --info            Print info on task.
-      --json            Format info as JSON.
-      --status          Print exit status for task.
-  -h, --help            Show this message and exit.\
+  -n, --interval  SEC    Time to wait between polling (default: {DEFAULT_INTERVAL}).
+  -i, --info             Print info on task.
+  -f, --format   FORMAT  Format task info ([normal], json, yaml).
+      --json             Format info as JSON.
+      --yaml             Format info as YAML.
+  -s, --status           Print exit status for task.
+  -r, --return           Use exit status from task.
+  -h, --help             Show this message and exit.\
 """
 
 
@@ -273,15 +290,27 @@ class TaskWaitApp(Application):
     interface.add_argument('-n', '--interval', type=int, default=interval)
 
     print_info: bool = False
-    format_json: bool = False
     print_status: bool = False
+    return_status: bool = False
+    print_interface = interface.add_mutually_exclusive_group()
+    print_interface.add_argument('-i', '--info', action='store_true', dest='print_info')
+    print_interface.add_argument('-s', '--status', action='store_true', dest='print_status')
+    print_interface.add_argument('-r', '--return', action='store_true', dest='return_status')
+
+    output_format: str = 'normal'
+    output_formats: List[str] = ['normal', 'json', 'yaml']
     output_interface = interface.add_mutually_exclusive_group()
-    output_interface.add_argument('--info', action='store_true', dest='print_info')
-    output_interface.add_argument('--json', action='store_true', dest='format_json')
-    output_interface.add_argument('--status', action='store_true', dest='print_status')
+    output_interface.add_argument('-f', '--format', default=output_format,
+                                  dest='output_format', choices=output_formats)
+    output_interface.add_argument('--json', action='store_const', const='json', dest='output_format')
+    output_interface.add_argument('--yaml', action='store_const', const='yaml', dest='output_format')
+
+    class NonZeroStatus(Exception):
+        """Exception holds non-zero exit status of returned task."""
 
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        NonZeroStatus: handle_exception_silently,
         **get_shared_exception_mapping(__name__)
     }
 
@@ -290,10 +319,13 @@ class TaskWaitApp(Application):
         ensuredb()
         check_uuid(self.uuid)
         self.wait_task()
-        if self.print_info or self.format_json:
-            TaskInfoApp(uuid=self.uuid, format_json=self.format_json).run()
+        if self.print_info:
+            TaskInfoApp(uuid=self.uuid, output_format=self.output_format).run()
         elif self.print_status:
             TaskInfoApp(uuid=self.uuid, extract_field='exit_status').run()
+        elif self.return_status:
+            if status := Task.from_id(self.uuid).exit_status:
+                raise self.NonZeroStatus(status)
 
     def wait_task(self: TaskWaitApp):
         """Wait for the task to complete."""

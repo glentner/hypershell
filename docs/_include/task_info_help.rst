@@ -7,11 +7,14 @@ ID
 Options
 ^^^^^^^
 
-``--yaml``
-    Format metadata output as YAML.
+``-f``, ``--format`` *FORMAT*
+    Format task info ([normal], json, yaml).
 
 ``--json``
     Format metadata output as JSON.
+
+``--yaml``
+    Format metadata output as YAML.
 
 ``-x``/``--extract`` *FIELD*
     Print this field only (e.g., ``-x submit_time``).
