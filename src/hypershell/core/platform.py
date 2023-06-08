@@ -78,6 +78,15 @@ else:
 
 
 # Automatically initialize default site directories
-os.makedirs(default_path.lib, exist_ok=True)
-os.makedirs(default_path.log, exist_ok=True)
-os.makedirs(os.path.join(default_path.lib, 'task'), exist_ok=True)
+default_dirs = [
+    default_path.lib,
+    default_path.log,
+    os.path.join(default_path.lib, 'task'),
+]
+
+
+for default_dir in default_dirs:
+    try:
+        os.makedirs(default_dir, exist_ok=True)
+    except PermissionError:
+        pass
