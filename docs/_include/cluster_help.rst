@@ -249,7 +249,7 @@ Options
 ``-I``, ``--init-size`` *SIZE*
     Initial size of cluster (default: 1).
 
-    When the the cluster starts, this number of clients will be launched.
+    When the cluster starts, this number of clients will be launched.
     For a *fixed* policy cluster, this should be given with a ``--min-size``, and likely
     the same value.
 
