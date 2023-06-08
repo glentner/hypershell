@@ -64,8 +64,9 @@ from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
 from hypershell.core.exceptions import get_shared_exception_mapping
-from hypershell.database.model import Task
-from hypershell.database import initdb, checkdb
+from hypershell.data.model import Task
+from hypershell.data import initdb, checkdb
+from hypershell.task import Tag
 
 # public interface
 __all__ = ['submit_from', 'submit_file', 'SubmitThread', 'LiveSubmitThread',
@@ -92,15 +93,21 @@ class Loader(StateMachine):
     queue: Queue[Optional[Task]]
     template: Template
     count: int
+    tags: Dict[str, str]
 
     state = LoaderState.START
     states = LoaderState
 
-    def __init__(self: Loader, source: Iterable[str], queue: Queue[Optional[Task]], template: str = DEFAULT_TEMPLATE) -> None:
+    def __init__(self: Loader,
+                 source: Iterable[str],
+                 queue: Queue[Optional[Task]],
+                 template: str = DEFAULT_TEMPLATE,
+                 tags: Dict[str, str] = None) -> None:
         """Initialize source to read tasks and submit to database."""
         self.template = Template(template)
         self.source = map(self.template.expand, map(str.strip, map(str, source)))
         self.queue = queue
+        self.tags = tags
         self.count = 0
 
     @functools.cached_property
@@ -121,7 +128,7 @@ class Loader(StateMachine):
     def get_task(self: Loader) -> LoaderState:
         """Get the next task from the source."""
         try:
-            self.task = Task.new(args=next(self.source))
+            self.task = Task.new(args=next(self.source), tag=self.tags)
             log.trace(f'Loaded task ({self.task.args})')
             return LoaderState.PUT
         except StopIteration:
@@ -149,10 +156,11 @@ class LoaderThread(Thread):
     def __init__(self: LoaderThread,
                  source: Iterable[str],
                  queue: Queue[Optional[Task]],
-                 template: str = DEFAULT_TEMPLATE) -> None:
+                 template: str = DEFAULT_TEMPLATE,
+                 tags: Dict[str, str] = None) -> None:
         """Initialize machine."""
         super().__init__(name='hypershell-submit-loader')
-        self.machine = Loader(source=source, queue=queue, template=template)
+        self.machine = Loader(source=source, queue=queue, template=template, tags=tags)
 
     def run_with_exceptions(self: LoaderThread) -> None:
         """Run machine."""
@@ -278,11 +286,12 @@ class SubmitThread(Thread):
     committer: DatabaseCommitterThread
 
     def __init__(self: SubmitThread, source: Iterable[str], bundlesize: int = DEFAULT_BUNDLESIZE,
-                 bundlewait: int = DEFAULT_BUNDLEWAIT, template: str = DEFAULT_TEMPLATE) -> None:
+                 bundlewait: int = DEFAULT_BUNDLEWAIT, template: str = DEFAULT_TEMPLATE,
+                 tags: Dict[str, str] = None) -> None:
         """Initialize queue and child threads."""
         self.source = source
         self.queue = Queue(maxsize=bundlesize)
-        self.loader = LoaderThread(source=source, queue=self.queue, template=template)
+        self.loader = LoaderThread(source=source, queue=self.queue, template=template, tags=tags)
         self.committer = DatabaseCommitterThread(queue=self.queue, bundlesize=bundlesize, bundlewait=bundlewait)
         super().__init__(name='hypershell-submit')
 
@@ -452,11 +461,12 @@ class LiveSubmitThread(Thread):
                  queue_config: QueueConfig,
                  template: str = DEFAULT_TEMPLATE,
                  bundlesize: int = DEFAULT_BUNDLESIZE,
-                 bundlewait: int = DEFAULT_BUNDLEWAIT) -> None:
+                 bundlewait: int = DEFAULT_BUNDLEWAIT,
+                 tags: Dict[str, str] = None) -> None:
         """Initialize queue and child threads."""
         self.source = source
         self.local = Queue(maxsize=bundlesize)
-        self.loader = LoaderThread(source=source, queue=self.local, template=template)
+        self.loader = LoaderThread(source=source, queue=self.local, template=template, tags=tags)
         self.client = QueueClient(config=queue_config)
         self.committer = QueueCommitterThread(local=self.local, client=self.client,
                                               bundlesize=bundlesize, bundlewait=bundlewait)
@@ -501,14 +511,14 @@ class LiveSubmitThread(Thread):
 
 def submit_from(source: Iterable[str], queue_config: QueueConfig = None,
                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-                template: str = DEFAULT_TEMPLATE) -> int:
+                template: str = DEFAULT_TEMPLATE, tags: Dict[str, str] = None) -> int:
     """Submit all task arguments from `source`, return count of submitted tasks."""
     if not queue_config:
         thread = SubmitThread.new(source=source, bundlesize=bundlesize, bundlewait=bundlewait,
-                                  template=template)
+                                  template=template, tags=tags)
     else:
         thread = LiveSubmitThread.new(source=source, queue_config=queue_config, template=template,
-                                      bundlesize=bundlesize, bundlewait=bundlewait)
+                                      bundlesize=bundlesize, bundlewait=bundlewait, tags=tags)
     try:
         thread.join()
     except Exception:
@@ -530,7 +540,7 @@ def submit_file(path: str, queue_config: QueueConfig = None,
 APP_NAME = 'hyper-shell submit'
 APP_USAGE = f"""\
 Usage:
-{APP_NAME} [-h] [FILE] [-b NUM] [-w SEC] [-t CMD] [--initdb]
+{APP_NAME} [-h] [FILE] [-b NUM] [-w SEC] [-t CMD] [--initdb] [--tag TAG [TAG...]]
 
 Submit tasks from a file.\
 """
@@ -539,14 +549,15 @@ APP_HELP = f"""\
 {APP_USAGE}
 
 Arguments:
-  FILE                    Path to task file ("-" for <stdin>).
+  FILE                       Path to task file ("-" for <stdin>).
 
 Options:
-  -t, --template     CMD  Submit-time template expansion (default: "{DEFAULT_TEMPLATE}").
-  -b, --bundlesize   NUM  Number of lines to buffer (default: {DEFAULT_BUNDLESIZE}).
-  -w, --bundlewait   SEC  Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
-      --initdb            Auto-initialize database.
-  -h, --help              Show this message and exit.\
+  -t, --template     CMD     Submit-time template expansion (default: "{DEFAULT_TEMPLATE}").
+  -b, --bundlesize   NUM     Number of lines to buffer (default: {DEFAULT_BUNDLESIZE}).
+  -w, --bundlewait   SEC     Seconds to wait before flushing tasks (default: {DEFAULT_BUNDLEWAIT}).
+      --initdb               Auto-initialize database.
+      --tag          TAG...  Assign tags as `key:value`.
+  -h, --help                 Show this message and exit.\
 """
 
 
@@ -574,6 +585,9 @@ class SubmitApp(Application):
     auto_initdb: bool = False
     interface.add_argument('--initdb', action='store_true', dest='auto_initdb')
 
+    taglist: List[str] = None
+    interface.add_argument('--tag', nargs='*', default=[], dest='taglist')
+
     count: int = 0
 
     exceptions = {
@@ -588,7 +602,8 @@ class SubmitApp(Application):
     def submit_all(self: SubmitApp) -> None:
         """Submit all tasks from source."""
         self.count = submit_from(self.source, template=self.template,
-                                 bundlesize=self.bundlesize, bundlewait=self.bundlewait)
+                                 bundlesize=self.bundlesize, bundlewait=self.bundlewait,
+                                 tags=Tag.parse_cmdline_list(self.taglist))
 
     @staticmethod
     def check_config():

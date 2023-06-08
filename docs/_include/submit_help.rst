@@ -43,3 +43,11 @@ Options
     ``hyper-shell initdb`` command. This happens by default with SQLite databases.
 
     See ``hyper-shell initdb`` command.
+
+``--tag`` *TAG*...
+    Assign one or more tags
+
+    Tags allow for user-defined tracking of information related to individual tasks or large
+    groups of tasks. They are defined with both a `key` and `value` (e.g., ``--tag file:a``).
+    The default `value` for tags is blank. When searching with tags, not specifying a `value`
+    will return any task with that `key` defined regardless of `value` (including blank).

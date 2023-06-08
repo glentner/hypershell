@@ -17,6 +17,9 @@ from dataclasses import dataclass
 # internal libs
 from hypershell.core.logging import HOSTNAME, INSTANCE
 
+# public interface
+__all__ = ['ClientState', 'Heartbeat']
+
 
 class ClientState(Enum):
     """Client state."""
@@ -48,7 +51,7 @@ class Heartbeat:
         """Create new instance."""
         return cls(uuid=(uuid or INSTANCE),
                    host=(host or HOSTNAME),
-                   time=(time or datetime.now()),
+                   time=(time or datetime.now().astimezone()),
                    state=(state or ClientState.RUNNING))
 
     def pack(self: Heartbeat) -> bytes:

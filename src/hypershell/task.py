@@ -16,6 +16,7 @@ import csv
 import json
 import time
 import functools
+from datetime import timedelta
 from dataclasses import dataclass
 from shutil import copyfileobj
 
@@ -26,7 +27,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from cmdkit.app import Application, ApplicationGroup, exit_status
 from cmdkit.cli import Interface, ArgumentError
-from sqlalchemy import Column
+from sqlalchemy import Column, type_coerce, JSON, text
 from sqlalchemy.exc import StatementError
 from sqlalchemy.orm import Query
 from sqlalchemy.orm.exc import StaleDataError
@@ -36,16 +37,15 @@ from sqlalchemy.sql.elements import BinaryExpression
 from hypershell.core.ansi import colorize_usage
 from hypershell.core.platform import default_path
 from hypershell.core.config import config
-from hypershell.core.exceptions import handle_exception
+from hypershell.core.exceptions import handle_exception, handle_exception_silently, get_shared_exception_mapping
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.remote import SSHConnection
 from hypershell.core.types import smart_coerce
-from hypershell.core.exceptions import get_shared_exception_mapping
-from hypershell.database.model import Task, to_json_type
-from hypershell.database import ensuredb
+from hypershell.data.model import Task, to_json_type
+from hypershell.data import ensuredb
 
 # public interface
-__all__ = ['TaskGroupApp', ]
+__all__ = ['TaskGroupApp', 'Tag', ]
 
 # initialize logger
 log = Logger.with_name(__name__)
@@ -54,7 +54,7 @@ log = Logger.with_name(__name__)
 SUBMIT_PROGRAM = 'hyper-shell task submit'
 SUBMIT_USAGE = f"""\
 Usage:
-{SUBMIT_PROGRAM} [-h] ARGS...
+{SUBMIT_PROGRAM} [-h] [-t TAG [TAG...]] ARGS...
 
 Submit individual task to database.\
 """
@@ -66,6 +66,7 @@ Arguments:
   ARGS...                Command-line arguments.
 
 Options:
+  -t, --tag    TAG...    Assign tags as `key:value`.
   -h, --help             Show this message and exit.\
 """
 
@@ -80,6 +81,9 @@ class TaskSubmitApp(Application):
     argv: List[str] = []
     interface.add_argument('argv', nargs='+')
 
+    taglist: List[str] = []
+    interface.add_argument('-t', '--tag', nargs='*', dest='taglist')
+
     exceptions = {
         **get_shared_exception_mapping(__name__)
     }
@@ -87,7 +91,8 @@ class TaskSubmitApp(Application):
     def run(self: TaskSubmitApp) -> None:
         """Submit task to database."""
         ensuredb()
-        task = Task.new(args=' '.join(self.argv))
+        task = Task.new(args=' '.join(self.argv),
+                        tag=(None if not self.taglist else Tag.parse_cmdline_list(self.taglist)))
         Task.add(task)
         print(task.id)
 
@@ -107,7 +112,7 @@ def check_uuid(value: str) -> None:
 INFO_PROGRAM = 'hyper-shell task info'
 INFO_USAGE = f"""\
 Usage: 
-{INFO_PROGRAM} [-h] ID [--yaml | --json | --stdout | --stderr | -x FIELD]
+{INFO_PROGRAM} [-h] ID [--stdout | --stderr | -x FIELD] [-f FORMAT]
 
 Get metadata and/or task outputs.\
 """
@@ -116,15 +121,16 @@ INFO_HELP = f"""\
 {INFO_USAGE}
 
 Arguments:
-  ID                    Unique task UUID.
+  ID                     Unique task UUID.
 
 Options:
-      --yaml            Format task metadata as YAML.
-      --json            Format task metadata as JSON.
-  -x, --extract  FIELD  Print single field.
-      --stdout          Fetch <stdout> from task.
-      --stderr          Fetch <stderr> from task.
-  -h, --help            Show this message and exit.\
+  -f, --format   FORMAT  Format task info ([normal], json, yaml).
+      --json             Format task metadata as JSON.
+      --yaml             Format task metadata as YAML.
+  -x, --extract  FIELD   Print single field.
+      --stdout           Print <stdout> from task.
+      --stderr           Print <stderr> from task.
+  -h, --help             Show this message and exit.\
 """
 
 
@@ -141,15 +147,17 @@ class TaskInfoApp(Application):
     print_stdout: bool = False
     print_stderr: bool = False
     extract_field: str = None
+    print_interface = interface.add_mutually_exclusive_group()
+    print_interface.add_argument('--stdout', action='store_true', dest='print_stdout')
+    print_interface.add_argument('--stderr', action='store_true', dest='print_stderr')
+    print_interface.add_argument('-x', '--extract', default=None, choices=Task.columns, dest='extract_field')
+
     output_format: str = 'normal'
     output_formats: List[str] = ['normal', 'json', 'yaml']
     output_interface = interface.add_mutually_exclusive_group()
-    output_interface.add_argument('--format', default=output_format, dest='output_format', choices=output_formats)
+    output_interface.add_argument('-f', '--format', default=output_format, dest='output_format', choices=output_formats)
     output_interface.add_argument('--json', action='store_const', const='json', dest='output_format')
     output_interface.add_argument('--yaml', action='store_const', const='yaml', dest='output_format')
-    output_interface.add_argument('--stdout', action='store_true', dest='print_stdout')
-    output_interface.add_argument('--stderr', action='store_true', dest='print_stderr')
-    output_interface.add_argument('-x', '--extract', default=None, choices=Task.columns, dest='extract_field')
 
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
@@ -173,7 +181,19 @@ class TaskInfoApp(Application):
 
     def print_field(self: TaskInfoApp) -> None:
         """Print single field."""
-        print(json.dumps(self.task.to_json().get(self.extract_field)).strip('"'))
+        if self.extract_field != 'tag':
+            print(json.dumps(self.task.to_json().get(self.extract_field)).strip('"'))
+        elif self.output_format == 'normal':
+            print(', '.join(f'{k}:{v}' if v else k for k, v in self.task.tag.items()))
+        else:
+            formatter = self.format_method[self.output_format]
+            output = formatter(self.task.tag)
+            if sys.stdout.isatty():
+                output = Syntax(output, self.output_format, word_wrap=True,
+                                theme=config.console.theme, background_color='default')
+                Console().print(output)
+            else:
+                print(output, file=sys.stdout, flush=True)
 
     def print_formatted(self: TaskInfoApp) -> None:
         """Format and print task metadata to console."""
@@ -233,7 +253,7 @@ DEFAULT_INTERVAL = 5
 WAIT_PROGRAM = 'hyper-shell task wait'
 WAIT_USAGE = f"""\
 Usage: 
-{WAIT_PROGRAM} [-h] ID [-n SEC] [--info [--json] | --status]
+{WAIT_PROGRAM} [-h] ID [-n SEC] [--info [-f FORMAT] | --status | --return]
 
 Wait for task to complete.\
 """
@@ -242,14 +262,17 @@ WAIT_HELP = f"""\
 {WAIT_USAGE}
 
 Arguments:
-  ID                    Unique UUID.
+  ID                     Unique UUID.
 
 Options:
-  -n, --interval  SEC   Time to wait between polling (default: {DEFAULT_INTERVAL}).
-      --info            Print info on task.
-      --json            Format info as JSON.
-      --status          Print exit status for task.
-  -h, --help            Show this message and exit.\
+  -n, --interval  SEC    Time to wait between polling (default: {DEFAULT_INTERVAL}).
+  -i, --info             Print info on task.
+  -f, --format   FORMAT  Format task info ([normal], json, yaml).
+      --json             Format info as JSON.
+      --yaml             Format info as YAML.
+  -s, --status           Print exit status for task.
+  -r, --return           Use exit status from task.
+  -h, --help             Show this message and exit.\
 """
 
 
@@ -267,15 +290,27 @@ class TaskWaitApp(Application):
     interface.add_argument('-n', '--interval', type=int, default=interval)
 
     print_info: bool = False
-    format_json: bool = False
     print_status: bool = False
+    return_status: bool = False
+    print_interface = interface.add_mutually_exclusive_group()
+    print_interface.add_argument('-i', '--info', action='store_true', dest='print_info')
+    print_interface.add_argument('-s', '--status', action='store_true', dest='print_status')
+    print_interface.add_argument('-r', '--return', action='store_true', dest='return_status')
+
+    output_format: str = 'normal'
+    output_formats: List[str] = ['normal', 'json', 'yaml']
     output_interface = interface.add_mutually_exclusive_group()
-    output_interface.add_argument('--info', action='store_true', dest='print_info')
-    output_interface.add_argument('--json', action='store_true', dest='format_json')
-    output_interface.add_argument('--status', action='store_true', dest='print_status')
+    output_interface.add_argument('-f', '--format', default=output_format,
+                                  dest='output_format', choices=output_formats)
+    output_interface.add_argument('--json', action='store_const', const='json', dest='output_format')
+    output_interface.add_argument('--yaml', action='store_const', const='yaml', dest='output_format')
+
+    class NonZeroStatus(Exception):
+        """Exception holds non-zero exit status of returned task."""
 
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        NonZeroStatus: handle_exception_silently,
         **get_shared_exception_mapping(__name__)
     }
 
@@ -284,10 +319,13 @@ class TaskWaitApp(Application):
         ensuredb()
         check_uuid(self.uuid)
         self.wait_task()
-        if self.print_info or self.format_json:
-            TaskInfoApp(uuid=self.uuid, format_json=self.format_json).run()
+        if self.print_info:
+            TaskInfoApp(uuid=self.uuid, output_format=self.output_format).run()
         elif self.print_status:
             TaskInfoApp(uuid=self.uuid, extract_field='exit_status').run()
+        elif self.return_status:
+            if status := Task.from_id(self.uuid).exit_status:
+                raise self.NonZeroStatus(status)
 
     def wait_task(self: TaskWaitApp):
         """Wait for the task to complete."""
@@ -354,7 +392,7 @@ class TaskRunApp(Application):
 SEARCH_PROGRAM = 'hyper-shell task search'
 SEARCH_USAGE = f"""\
 Usage:
-hyper-shell task search [-h] [FIELD [FIELD ...]] [--where COND [COND ...]] 
+hyper-shell task search [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]]
                         [--order-by FIELD [--desc]] [--count | --limit NUM]
                         [--format FORMAT | --json | --csv]  [-d CHAR]
                         
@@ -369,14 +407,15 @@ Arguments:
 
 Options:
   -w, --where      COND...   List of conditional statements.
+  -t, --with-tag   TAG...    List of tags.
   -s, --order-by   FIELD     Order output by field.
-      --failed               Alias for "exit_status != 0"
-      --succeeded            Alias for "exit_status == 0"
-      --finished             Alias for "exit_status != null"
-      --remaining            Alias for "exit_status == null"
-      --json                 Format output as JSON.
-      --csv                  Format output as CSV.
+      --failed               Alias for `exit_status != 0`
+      --succeeded            Alias for `exit_status == 0`
+      --finished             Alias for `exit_status != null`
+      --remaining            Alias for `exit_status == null`
       --format     FORMAT    Format output (normal, plain, table, csv, json).
+      --json                 Format output as JSON (alias for `--format=json`).
+      --csv                  Format output as CSV (alias for `--format=csv`.
   -d, --delimiter  CHAR      Field seperator for plain/csv formats.
   -l, --limit      NUM       Limit the number of results.
   -c, --count                Show count of results.
@@ -404,6 +443,9 @@ class TaskSearchApp(Application):
 
     where_clauses: List[str] = None
     interface.add_argument('-w', '--where', nargs='*', default=[], dest='where_clauses')
+
+    taglist: List[str] = None
+    interface.add_argument('-t', '--with-tag', nargs='*', default=[], dest='taglist')
 
     order_by: str = None
     order_desc: bool = False
@@ -454,18 +496,46 @@ class TaskSearchApp(Application):
     def build_query(self: TaskSearchApp) -> Query:
         """Build original query interface."""
         query = Task.query(*self.fields)
+        query = self.__build_order_by_clause(query)
+        query = self.__build_where_clause(query)
+        query = self.__build_where_clause_for_tags(query)
+        return query.limit(self.limit)
+
+    def __build_where_clause_for_tags(self: TaskSearchApp, query: Query) -> Query:
+        """Add JSON-based tag where-clauses to query if necessary."""
+        tags_name_only = []
+        tags_with_value = Tag.parse_cmdline_list(self.taglist)
+        for name in list(tags_with_value.keys()):
+            if not tags_with_value[name]:
+                tags_name_only.append(name)
+                tags_with_value.pop(name)
+        for name in tags_name_only:
+            if config.database.provider == 'sqlite':
+                # NOTE: sqlalchemy adds `json_quote(json_extract(task.tag, ?)) is not null`
+                # and cannot find a way to exclude `json_quote`, so we do it ourselves
+                query = query.filter(text('json_extract(task.tag, :tag) is not null')).params(tag=f'$."{name}"')
+            else:
+                query = query.filter(Task.tag[name].isnot(None))
+        for name, value in tags_with_value.items():
+            query = query.filter(Task.tag[name] == type_coerce(str(value), JSON))
+        return query
+
+    def __build_where_clause(self: TaskSearchApp, query: Query) -> Query:
+        """Add explicit where-clauses to query if necessary."""
+        for where_clause in self.__build_filters():
+            query = query.filter(where_clause.compile())
+        return query
+
+    def __build_order_by_clause(self: TaskSearchApp, query: Query) -> Query:
+        """Add order by clause to query if necessary."""
         if self.order_by:
             field = getattr(Task, self.order_by)
             if self.order_desc:
                 field = field.desc()
             query = query.order_by(field)
-        for where_clause in self.build_filters():
-            query = query.filter(where_clause.compile())
-        if self.limit:
-            query = query.limit(self.limit)
         return query
 
-    def build_filters(self: TaskSearchApp) -> List[WhereClause]:
+    def __build_filters(self: TaskSearchApp) -> List[WhereClause]:
         """Create list of field selectors from command-line arguments."""
         if self.show_failed:
             self.where_clauses.append('exit_status != 0')
@@ -598,7 +668,7 @@ class TaskUpdateApp(Application):
     interface.add_argument('field', choices=list(Task.columns)[1:])  # NOTE: not ID!
 
     value: str
-    interface.add_argument('value', type=smart_coerce)
+    interface.add_argument('value')
 
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
@@ -610,7 +680,17 @@ class TaskUpdateApp(Application):
         ensuredb()
         check_uuid(self.uuid)
         try:
-            Task.update(self.uuid, **{self.field: self.value, })
+            if self.field == 'tag':
+                Task.update(self.uuid, tag={**Task.from_id(self.uuid).tag,
+                                            **Tag.parse_cmdline_list([self.value, ])})
+            else:
+                if Task.columns.get(self.field) is str:
+                    # We want to coerce the value (e.g., as an int or None)
+                    # But also allow for, e.g., args==1 which expects type str.
+                    value = None if self.value.lower() in {'none', 'null'} else self.value
+                else:
+                    value = smart_coerce(self.value)
+                Task.update(self.uuid, **{self.field: value, })
         except StaleDataError as err:
             raise Task.NotFound(str(err)) from err
 
@@ -695,21 +775,56 @@ class WhereClause:
         match = cls.pattern.match(argument)
         if match:
             field, operand, value = match.groups()
-            return WhereClause(field=field, value=smart_coerce(value), operand=operand)
+            if Task.columns.get(field) is str:
+                # We want to coerce the value (e.g., as an int or None)
+                # But also allow for, e.g., args==1 which expects type str.
+                value = None if value.lower() in {'none', 'null'} else value
+            else:
+                value = smart_coerce(value)
+            return WhereClause(field=field, value=value, operand=operand)
         else:
             raise ArgumentError(f'Where clause not understood ({argument})')
+
+
+@dataclass
+class Tag:
+    """Tag specification.."""
+
+    name: str
+    value: str = ''
+
+    def to_dict(self: Tag) -> Dict[str, str]:
+        """Format tag specification as dictionary."""
+        return {self.name: self.value, }
+
+    @classmethod
+    def from_cmdline(cls: Type[Tag], arg: str) -> Tag:
+        """Construct from command-line `arg`."""
+        tag_part = arg.strip().split(':', 1)
+        if len(tag_part) == 1:
+            return cls(name=tag_part[0].strip())
+        else:
+            return cls(name=tag_part[0].strip(), value=tag_part[1].strip())
+
+    @classmethod
+    def parse_cmdline_list(cls: Type[Tag], args: List[str]) -> Dict[str, Optional[str]]:
+        """Parse command-line list of tags."""
+        return {tag.name: tag.value for tag in map(cls.from_cmdline, args)}
 
 
 def print_normal(task: Task) -> None:
     """Print semi-structured task metadata with all field names."""
     task_data = {k: json.dumps(to_json_type(v)).strip('"') for k, v in task.to_dict().items()}
+    task_data['waited'] = 'null' if not task.waited else timedelta(seconds=int(task_data['waited']))
+    task_data['duration'] = 'null' if not task.duration else timedelta(seconds=int(task_data['duration']))
+    task_data['tag'] = ', '.join(f'{k}:{v}' if v else k for k, v in task.tag.items())
     print(f'          id: {task_data["id"]}')
     print(f'     command: {task_data["command"]} ({task_data["args"]})')
     print(f' exit_status: {task_data["exit_status"]}')
     print(f'   submitted: {task_data["submit_time"]}')
     print(f'   scheduled: {task_data["schedule_time"]}')
-    print(f'     started: {task_data["start_time"]}')
-    print(f'   completed: {task_data["completion_time"]}')
+    print(f'     started: {task_data["start_time"]} (waited: {task_data["waited"]})')
+    print(f'   completed: {task_data["completion_time"]} (duration: {task_data["duration"]})')
     print(f' submit_host: {task_data["submit_host"]} ({task_data["submit_id"]})')
     print(f' server_host: {task_data["server_host"]} ({task_data["server_id"]})')
     print(f' client_host: {task_data["client_host"]} ({task_data["client_id"]})')
@@ -719,3 +834,4 @@ def print_normal(task: Task) -> None:
     print(f'     errpath: {task_data["errpath"]}')
     print(f' previous_id: {task_data["previous_id"]}')
     print(f'     next_id: {task_data["next_id"]}')
+    print(f'        tags: {task_data["tag"]}')

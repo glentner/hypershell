@@ -66,8 +66,8 @@ from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueServer, QueueConfig
 from hypershell.core.heartbeat import Heartbeat, ClientState
-from hypershell.database.model import Task
-from hypershell.database import ensuredb, DATABASE_ENABLED
+from hypershell.data.model import Task, Client
+from hypershell.data import ensuredb, DATABASE_ENABLED
 from hypershell.submit import SubmitThread, LiveSubmitThread, DEFAULT_BUNDLEWAIT
 from hypershell.client import ClientInfo
 
@@ -448,7 +448,7 @@ class HeartMonitor(StateMachine):
                  in_memory: bool = False, no_confirm: bool = False) -> None:
         """Initialize with queue server."""
         self.queue = queue
-        self.last_check = datetime.now()
+        self.last_check = datetime.now().astimezone()
         self.beats = {}
         self.in_memory = in_memory
         self.no_confirm = no_confirm
@@ -496,6 +496,8 @@ class HeartMonitor(StateMachine):
         if hb.state is not ClientState.FINISHED:
             if hb.uuid not in self.beats:
                 log.debug(f'Registered client ({hb.host}: {hb.uuid})')
+                if not self.in_memory:
+                    Client.add(Client.from_heartbeat(hb))
             else:
                 log.trace(f'Heartbeat - running ({hb.host}: {hb.uuid})')
             self.beats[hb.uuid] = hb
@@ -504,6 +506,8 @@ class HeartMonitor(StateMachine):
             log.trace(f'Client disconnected ({hb.host}: {hb.uuid})')
             if hb.uuid in self.beats:
                 self.beats.pop(hb.uuid)
+                if not self.in_memory:
+                    Client.update(hb.uuid, disconnected_at=datetime.now().astimezone())
             return HeartbeatState.SWITCH
 
     def switch_mode(self: HeartMonitor) -> HeartbeatState:
@@ -514,7 +518,7 @@ class HeartMonitor(StateMachine):
             return HeartbeatState.SIGNAL
         if not self.beats and self.scheduler_done:
             return HeartbeatState.FINAL
-        now = datetime.now()
+        now = datetime.now().astimezone()
         if (now - self.last_check) > self.wait_check:
             self.last_check = now
             return HeartbeatState.CHECK
@@ -530,6 +534,8 @@ class HeartMonitor(StateMachine):
             if age > self.evict_after:
                 log.warning(f'Evicting client ({hb.host}: {uuid})')
                 self.beats.pop(uuid)
+                if not self.in_memory:
+                    Client.update(hb.uuid, disconnected_at=datetime.now().astimezone(), evicted=True)
                 if not self.in_memory and not self.no_confirm:
                     log.warning(f'Reverting orphaned tasks ({hb.host}: {uuid})')
                     Task.revert_orphaned(uuid)

@@ -1,7 +1,7 @@
 Search for tasks in database.
 
 A database must be configured.
-Fields will be columns in the output.
-Options relate to SQL concepts.
-For single column output, use ``-x``/``--extract`` to disable
-formatting and quotations (useful for piping output).
+Specifying *FIELD* names defines what is included in the output
+(by default all fields are included).
+
+This command maps directly to underlying SQL queries.

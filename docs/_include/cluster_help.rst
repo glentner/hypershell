@@ -185,3 +185,89 @@ Options
     The *server* acts like a sieve, reading task args from *stdin* and redirecting those original
     args to *stdout* if the task had a non-zero exit status. The *cluster* will run the *server*
     for you and if ``--failures`` is enabled these task args will be sent to a local file *PATH*.
+
+``--timeout`` *SEC*
+    Timeout in seconds for clients. Automatically shutdown if no tasks received (default: never).
+
+    This option is only valid for an ``--autoscaling`` cluster. This feature allows for gracefully
+    scaling down a cluster when task throughput subsides.
+
+``--task-timeout`` *SEC*
+    Task-level walltime limit (default: none).
+
+    Executors will send a progression of SIGINT, SIGTERM, and SIGKILL.
+    If the process still persists the executor itself will shutdown.
+
+``-A``, ``--autoscaling`` [*MODE*]
+    Enable autoscaling (default: disabled). Used with ``--launcher``.
+
+    Specifying this option on its own triggers the use of the autoscaler, with the default
+    *policy* or the configured policy. The *policy* can be specified directly here
+    as either *fixed* or *dynamic* (e.g., ``--autoscaling=dynamic``). The default is *fixed*.
+
+    The specified ``--launcher`` is used to bring up each individual instance of the client
+    as a discrete scaling unit. This is different than using ``--launcher`` on its own where
+    it specifies a single invocation that should launch all clients (e.g., like an ``mpirun``).
+    Without this option, clients will simply be run locally.
+
+    A *fixed* policy will seek to maintain a definite size and allows for recovery in the
+    event that clients halt for some reason (e.g., due to expected faults or timeouts).
+
+    A *dynamic* policy maintains a ``--min-size`` (default: 0) and grows up to some
+    ``--max-size`` depending on the observed *task pressure* given the specified scaling
+    ``--factor``.
+
+    See also ``--factor``, ``--period``, ``--init-size``, ``--min-size``, and ``--max-size``.
+
+``-F``, ``--factor`` *VALUE*
+    Scaling factor (default: 1).
+
+    A configurable, dimensionless quantity used by the ``--autoscaling=dynamic`` policy.
+    This value expresses some multiple of the average task duration in seconds.
+
+    The autoscaler periodically checks ``toc / (factor x avg_duration)``, where
+    ``toc`` is the estimated time of completion for all remaining tasks given current
+    throughput of active clients. This ratio is referred to as *task pressure*, and if
+    it exceeds 1, the pressure is considered *high* and we will add another client if
+    we are not already at the given ``--max-size`` of the cluster.
+
+    For example, if the average task length is 30 minutes, and we set ``--factor=2``, then if
+    the estimated time of completion of remaining tasks given currently connected executors
+    exceeds 1 hour, we will scale up by one unit.
+
+    See also ``--period``.  Only valid with ``--autoscaling``.
+
+``-P``, ``--period`` *SEC*
+    Scaling period in seconds (default: 60).
+
+    The autoscaler waits for this period of time in between checks and scaling events.
+    A shorter period makes the scaling behavior more responsive but can effect database
+    performance if checks happen too rapidly.
+
+    Only valid with ``--autoscaling``.
+
+``-I``, ``--init-size`` *SIZE*
+    Initial size of cluster (default: 1).
+
+    When the cluster starts, this number of clients will be launched.
+    For a *fixed* policy cluster, this should be given with a ``--min-size``, and likely
+    the same value.
+
+    Only valid with ``--autoscaling``.
+
+``-X``, ``--min-size`` *SIZE*
+    Minimum size of cluster (default: 0).
+
+    Regardless of autoscaling policy, if the number of launched clients drops below this
+    value we will scale up by one. Allowing ``--min-size=0`` is an important feature for
+    efficient use of computing resources in the absence of tasks.
+
+    Only valid with ``--autoscaling``.
+
+``-Y``, ``--max-size`` *SIZE*
+    Maximum size of cluster (default: 2).
+
+    For a *dynamic* autoscaling policy, this sets an upper limit on the number of launched
+    clients. When this number is reached, scaling stops regardless of task pressure.
+
+    Only valid with ``--autoscaling``.

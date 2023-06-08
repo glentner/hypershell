@@ -16,41 +16,48 @@ import functools
 from enum import Enum
 
 # public interface
-__all__ = ['NO_TTY', 'Ansi', 'format_ansi',
+__all__ = ['NO_COLOR', 'FORCE_COLOR', 'COLOR_STDOUT', 'COLOR_STDERR', 'Ansi', 'format_ansi',
            'bold', 'faint', 'italic', 'underline',
            'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
            'colorize_usage', ]
 
 
-# Automatically disable colors if necessary
-NO_TTY = False
-if not sys.stderr.isatty():
-    NO_TTY = True
-if 'HYPERSHELL_FORCE_COLOR' in os.environ:
-    NO_TTY = False
+# Enable/disable colors if necessary
+NO_COLOR = False if not os.getenv('NO_COLOR') else True
+FORCE_COLOR = False if not os.getenv('FORCE_COLOR') else True
+
+COLOR_STDOUT = True
+COLOR_STDERR = True
+if not sys.stdout.isatty() and not FORCE_COLOR:
+    COLOR_STDOUT = False
+if not sys.stderr.isatty() and not FORCE_COLOR:
+    COLOR_STDERR = False
+if NO_COLOR:
+    COLOR_STDOUT = False
+    COLOR_STDERR = False
 
 
 class Ansi(Enum):
     """ANSI escape sequences for colors."""
     NULL = ''
-    RESET = '\033[0m' if not NO_TTY else ''
-    BOLD = '\033[1m' if not NO_TTY else ''
-    FAINT = '\033[2m' if not NO_TTY else ''
-    ITALIC = '\033[3m' if not NO_TTY else ''
-    UNDERLINE = '\033[4m' if not NO_TTY else ''
-    BLACK = '\033[30m' if not NO_TTY else ''
-    RED = '\033[31m' if not NO_TTY else ''
-    GREEN = '\033[32m' if not NO_TTY else ''
-    YELLOW = '\033[33m' if not NO_TTY else ''
-    BLUE = '\033[34m' if not NO_TTY else ''
-    MAGENTA = '\033[35m' if not NO_TTY else ''
-    CYAN = '\033[36m' if not NO_TTY else ''
-    WHITE = '\033[37m' if not NO_TTY else ''
+    RESET = '\033[0m'
+    BOLD = '\033[1m'
+    FAINT = '\033[2m'
+    ITALIC = '\033[3m'
+    UNDERLINE = '\033[4m'
+    BLACK = '\033[30m'
+    RED = '\033[31m'
+    GREEN = '\033[32m'
+    YELLOW = '\033[33m'
+    BLUE = '\033[34m'
+    MAGENTA = '\033[35m'
+    CYAN = '\033[36m'
+    WHITE = '\033[37m'
 
 
 def format_ansi(seq: Ansi, text: str) -> str:
     """Apply escape sequence with reset afterward."""
-    if NO_TTY:
+    if NO_COLOR:
         return text
     elif text.endswith(Ansi.RESET.value):
         return f'{seq.value}{text}'
@@ -74,8 +81,11 @@ white = functools.partial(format_ansi, Ansi.WHITE)
 
 
 def colorize_usage(text: str) -> str:
-    """Apply rich ANSI formatting to usage and help text if TTY-mode."""
-    if not sys.stdout.isatty():  # NOTE: usage is on stdout not stderr
+    """
+    Apply rich ANSI formatting to usage and help text.
+    Has no effect if NO_COLOR is set or stdout is not a TTY.
+    """
+    if not COLOR_STDOUT:  # NOTE: usage is on stdout not stderr
         return text
     else:
         return _apply_formatters(text,
@@ -122,8 +132,8 @@ def _format_options(text: str) -> str:
 
 def _format_special_args(text: str) -> str:
     """Add rich ANSI formatting to special argument syntax."""
-    metavars = ['FILE', 'PATH', 'ARGS', 'ID', 'NUM', 'CMD', 'SIZE', 'SEC', 'NAME', 'TEMPLATE', 'CHAR',
-                'ADDR', 'HOST', 'PORT', 'KEY', 'SECTION', 'VAR', 'VALUE', 'FIELD', 'COND', 'FORMAT']
+    metavars = ['FILE', 'PATH', 'ARGS', 'ID', 'NUM', 'CMD', 'SIZE', 'SEC', 'NAME', 'TEMPLATE', 'CHAR', 'MODE',
+                'ADDR', 'HOST', 'PORT', 'KEY', 'SECTION', 'VAR', 'VALUE', 'FIELD', 'COND', 'FORMAT', 'TAG']
     metavars_pattern = r'\b(?P<arg>' + '|'.join(metavars) + r')\b'
     return re.sub(metavars_pattern + NOT_QUOTED, italic(r'\g<arg>'), text)
 
@@ -147,6 +157,7 @@ def _format_double_quoted_string(text: str) -> str:
 def _format_backtick_string(text: str) -> str:
     """Add rich ANSI formatting to quoted strings."""
     return re.sub(r'`(?P<subtext>.*)`', yellow(r'`\g<subtext>`'), text)
+
 
 def _format_digit(text: str) -> str:
     """Add rich ANSI formatting to numerical digits."""

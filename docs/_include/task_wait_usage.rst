@@ -1,2 +1,2 @@
 ``hyper-shell`` ``task`` ``wait`` ``[-h]``
-    ``ID`` ``[-n SEC]`` ``[--info [--json] | --status]``
+    ``ID`` ``[-n SEC]`` ``[--info [-f FORMAT] | --status | --return]``

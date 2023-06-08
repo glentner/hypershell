@@ -21,7 +21,7 @@ from cmdkit.app import exit_status
 from cmdkit.config import ConfigurationError
 
 # internal libs
-from hypershell.core.ansi import Ansi
+from hypershell.core.ansi import Ansi, COLOR_STDERR
 from hypershell.core.config import config, blame
 from hypershell.core.exceptions import write_traceback
 
@@ -106,7 +106,7 @@ def solve_relative_time(elapsed: float) -> Tuple[float, int, datetime.timedelta,
 
 
 class LogRecord(logging.LogRecord):
-    """Extends LogRecord to include the hostname and ANSI color codes."""
+    """Extends LogRecord to include ANSI colors, time formats, and other attributes."""
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -118,20 +118,20 @@ class LogRecord(logging.LogRecord):
         self.relative_name = self.name.split('.', 1)[-1]
 
         # Formatting attributes
-        self.ansi_level = level_color.get(self.levelname, Ansi.NULL).value
-        self.ansi_reset = Ansi.RESET.value
-        self.ansi_bold = Ansi.BOLD.value
-        self.ansi_faint = Ansi.FAINT.value
-        self.ansi_italic = Ansi.ITALIC.value
-        self.ansi_underline = Ansi.UNDERLINE.value
-        self.ansi_black = Ansi.BLACK.value
-        self.ansi_red = Ansi.RED.value
-        self.ansi_green = Ansi.GREEN.value
-        self.ansi_yellow = Ansi.YELLOW.value
-        self.ansi_blue = Ansi.BLUE.value
-        self.ansi_magenta = Ansi.MAGENTA.value
-        self.ansi_cyan = Ansi.CYAN.value
-        self.ansi_white = Ansi.WHITE.value
+        self.ansi_level = level_color.get(self.levelname, Ansi.NULL).value if COLOR_STDERR else ''
+        self.ansi_reset = Ansi.RESET.value if COLOR_STDERR else ''
+        self.ansi_bold = Ansi.BOLD.value if COLOR_STDERR else ''
+        self.ansi_faint = Ansi.FAINT.value if COLOR_STDERR else ''
+        self.ansi_italic = Ansi.ITALIC.value if COLOR_STDERR else ''
+        self.ansi_underline = Ansi.UNDERLINE.value if COLOR_STDERR else ''
+        self.ansi_black = Ansi.BLACK.value if COLOR_STDERR else ''
+        self.ansi_red = Ansi.RED.value if COLOR_STDERR else ''
+        self.ansi_green = Ansi.GREEN.value if COLOR_STDERR else ''
+        self.ansi_yellow = Ansi.YELLOW.value if COLOR_STDERR else ''
+        self.ansi_blue = Ansi.BLUE.value if COLOR_STDERR else ''
+        self.ansi_magenta = Ansi.MAGENTA.value if COLOR_STDERR else ''
+        self.ansi_cyan = Ansi.CYAN.value if COLOR_STDERR else ''
+        self.ansi_white = Ansi.WHITE.value if COLOR_STDERR else ''
 
         # Timing attributes
         (self.elapsed,

@@ -3,19 +3,44 @@
 
     ``.level``
         One of ``DEVEL``, ``TRACE``, ``DEBUG``, ``INFO``, ``WARNING``,
-        ``ERROR``, or ``CRITICAL`` (default: `WARNING`)
+        ``ERROR``, or ``CRITICAL`` (default: ``WARNING``)
+
+        ``INFO`` level messages are reserved for clients when tasks begin running.
+        There are numerous WARNING events (e.g., non-zero exit status of a task).
+        ``DEBUG`` level messages signal component thread start/stop and individual task
+        level behavior. ``TRACE`` contains detailed information on all other behavior,
+        particular iterative messages while components are waiting for something.
+
+        ``ERROR`` messages track when things fail but the application can continue; e.g.,
+        when command template expansion fails on an individual task.
+
+        ``CRITICAL`` messages are emitted when the application will halt or crash.
+        Some of these are expected (such as incorrect command-line arguments) but in
+        the event of an uncaught exception within the application a full traceback is
+        written to a file and logged.
+
+        ``DEVEL`` messages are meant for development purposes and track every single
+        state-transition in all component threads.
 
     ``.datefmt``
-        Date/time format, standard codes apply (default: `'%Y-%m-%d %H:%M:%S'`)
+        Date/time format, standard codes apply (default: ``'%Y-%m-%d %H:%M:%S'```)
 
     ``.format``
-        Log message format. Default set by the `default` ``logging.style``.
+        Log message format.
+
+        Default set by the "default" ``logging.style``.
         See the `available attributes <https://docs.python.org/3/library/logging.html#logrecord-attributes>`_
         defined by the underlying Python logging interface.
 
+        Additional attributes provided beyond the standard include `app_id`, `hostname`, `hostname_short`,
+        `relative_name`, time formats in `elapsed`, `elapsed_ms`, `elapsed_delta`, and `elapsed_hms`,
+        as well as all ANSI colors and formats as `ansi_x` where x is one of `reset`, `bold`, `faint`,
+        `italic`, `underline`, `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, and
+        `ansi_level` contains the standard color for the current message severity level.
+
     ``.style``
         Presets for ``logging.format`` which can be difficult to define correctly.
-        Options are `default`, `detailed`, and `system`.
+        Options are `default`, `detailed`, `detailed-compact`, and `system`.
 
 
 ``[database]``
@@ -178,6 +203,10 @@
 
         Even on the largest scales the default interval should be fine.
 
+    ``.timeout``
+        Timeout in seconds for client. Automatically shutdown if no tasks received (default: never).
+
+        This feature allows for gracefully scaling down a cluster when task throughput subsides.
 
 ``[submit]``
     Section for `submit` workflow parameters.
@@ -206,6 +235,11 @@
     ``.cwd``
         Explicitly set the working directory for all tasks.
 
+    ``.timeout``
+        Task-level walltime limit (default: none).
+
+        Executors will send a progression of SIGINT, SIGTERM, and SIGKILL.
+        If the process still persists the executor itself will shutdown.
 
 ``[ssh]``
     SSH configuration section.
@@ -214,8 +248,86 @@
         SSH connection arguments; e.g., ``-i ~/.ssh/some.key``.
         It is preferable to configure SSH directly however, in ``~/.ssh/config``.
 
-    ``[group]``
-        Setting a `list` for the ``.group`` allows for a global list of available client hosts.
-        Or, set one or more named groups and reference them by name with ``--ssh-group``.
+    ``[nodelist]``
+        This can be a single list of hostnames or a section when multiple named lists.
+        Reference named groups from the command-line with ``--ssh-group``.
 
-        ``.<name> = ['host-01', 'host-02', 'host-03']``
+        Such as,
+
+        ``.mycluster = ['mycluster-01', 'mycluster-02', 'mycluster-03']``
+
+``[autoscale]``
+    Define an autoscaling policy and parameters.
+
+    ``.policy``
+        Either `fixed` or `dynamic`.
+
+        A `fixed` policy will seek to maintain a definite size and allows for recovery in the
+        event that clients halt for some reason (e.g., due to expected faults or timeouts).
+
+        A `dynamic` policy maintains a minimum size and grows up to some maximum size
+        depending on the observed *task pressure* given the specified scaling factor.
+
+        See also ``.factor``, ``.period``, ``.size.init``, ``.size.min``, and ``.size.max``.
+
+    ``.factor``
+        Scaling factor (default: 1).
+
+        A dimensionless quantity used by the `dynamic` policy.
+        This value expresses some multiple of the average task duration in seconds.
+
+        The autoscaler periodically checks ``toc / (factor x avg_duration)``, where
+        ``toc`` is the estimated time of completion for all remaining tasks given current
+        throughput of active clients. This ratio is referred to as *task pressure*, and if
+        it exceeds 1, the pressure is considered *high* and we will add another client if
+        we are not already at the maximum size of the cluster.
+
+        For example, if the average task length is 30 minutes, and we set ``factor = 2``, then if
+        the estimated time of completion of remaining tasks given currently connected executors
+        exceeds 1 hour, we will scale up by one unit.
+
+        See also ``.period``.
+
+    ``.period``
+        Scaling period in seconds (default: 60).
+
+        The autoscaler waits for this period of time in between checks and scaling events.
+        A shorter period makes the scaling behavior more responsive but can effect database
+        performance if checks happen too rapidly.
+
+    ``[size]``
+        ``.init``
+            Initial size of cluster (default: 1).
+
+            When the the cluster starts, this number of clients will be launched.
+            For a *fixed* policy cluster, this should be given with a ``.min`` size, and likely
+            the same value.
+
+        ``.min``
+            Minimum size of cluster (default: 0).
+
+            Regardless of autoscaling policy, if the number of launched clients drops below this
+            value we will scale up by one. Allowing ``min = 0`` is an important feature for
+            efficient use of computing resources in the absence of tasks.
+
+        ``.max``
+            Maximum size of cluster (default: 2).
+
+            For a *dynamic* autoscaling policy, this sets an upper limit on the number of launched
+            clients. WHen this number is reached, scaling stops regardless of task pressure.
+
+``[console]``
+    Rich text display and output parameters.
+
+    ``.theme``
+        Color scheme to use by default in output (such as with ``task info`` and ``task search``).
+
+        This option is passed to the `rich` library.
+
+``[export]``
+    Any variable defined here is injected as an environment variable for tasks.
+
+    Example,
+
+    ``foo = 1``
+        The environment variable ``FOO=1`` would defined for all tasks.

@@ -47,6 +47,11 @@ LOGGING_STYLES = {
         'format': ('%(ansi_faint)s%(asctime)s.%(msecs)03d %(hostname)s %(ansi_reset)s'
                    '%(ansi_level)s%(ansi_bold)s%(levelname)8s%(ansi_reset)s '
                    '%(ansi_faint)s[%(name)s]%(ansi_reset)s %(message)s'),
+    },
+    'detailed-compact': {
+        'format': ('%(ansi_faint)s%(elapsed_hms)s [%(hostname_short)s] %(ansi_reset)s'
+                   '%(ansi_level)s%(ansi_bold)s%(levelname)8s%(ansi_reset)s '
+                   '%(ansi_faint)s[%(relative_name)s]%(ansi_reset)s %(message)s'),
     }
 }
 
@@ -66,6 +71,7 @@ default = Namespace({
     },
     'task': {
         'cwd': os.getcwd(),
+        'timeout': None,  # Seconds, period to wait before killing tasks
     },
     'submit': {
         'bundlesize': 1,
@@ -87,9 +93,21 @@ default = Namespace({
         'bundlesize': 1,
         'bundlewait': 5,  # Seconds
         'heartrate': 10,  # Seconds, period to wait between heartbeats
+        'timeout': None,  # seconds, period to wait on tasks before shutting down
     },
     'ssh': {
         'config': os.path.join(home, '.ssh', 'config'),
+    },
+    'autoscale': {
+        'policy': 'fixed',  # Either 'fixed' or 'dynamic'
+        'factor': 1,
+        'period': 60,  # seconds to wait between checks
+        'launcher': '',  # empty means just 'hyper-shell client'
+        'size': {
+            'init': 1,
+            'min': 0,
+            'max': 2,
+        },
     },
     'console': {
         'theme': 'monokai',

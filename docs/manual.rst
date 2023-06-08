@@ -205,7 +205,23 @@ Parameter Reference
 Environment Variables
 ---------------------
 
+As stated for configuration, any environment variable prefixed as ``HYPERSHELL_``
+where the name aligns to the path to some option, delimited by underscores,
+will set that option.
+
+Example, ``HYPERSHELL_CLIENT_TIMEOUT`` maps to the corresponding configuration option.
+
 .. include:: _include/config_task_env_alt.rst
+
+We also respect setting the following environment variables to force disable/enable
+the use of colors in all console output.
+
+``NO_COLOR``
+    If this variable is set to anything but a blank string, all colors are disabled.
+
+``FORCE_COLOR``
+    If this variable is set to anything but a blank string, colors will be enabled
+    regardless of whether `stdout` or `stderr` are a TTY.
 
 
 Exit Status

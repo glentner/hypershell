@@ -22,12 +22,12 @@ from cmdkit.config import Namespace
 from cmdkit.config import ConfigurationError
 
 # internal libs
-from hypershell.core.ansi import faint, bold, magenta, yellow, red
+from hypershell.core.ansi import faint, bold, magenta, yellow, red, COLOR_STDERR
 from hypershell.core.platform import default_path
 
 # public interface
 __all__ = ['display_warning', 'display_error', 'display_critical', 'traceback_filepath', 'write_traceback',
-           'handle_exception', 'handle_disconnect', 'handle_address_unknown',
+           'handle_exception', 'handle_exception_silently', 'handle_disconnect', 'handle_address_unknown',
            'HostAddressInfo', 'DatabaseUninitialized',
            'get_shared_exception_mapping', ]
 
@@ -36,8 +36,12 @@ def _display_message(levelname: str, error: Union[Exception, str],
                      module: str = None, colorized: Callable[[str], str] = None) -> None:
     """Generic message display for import-time warnings and errors."""
     text = error if isinstance(error, str) else f'{error.__class__.__name__}: {error}'
-    name = '' if not module else faint(f'[{module}]')
-    level = levelname if colorized is None else bold(colorized(levelname))
+    if COLOR_STDERR:
+        name = '' if not module else faint(f'[{module}]')
+        level = levelname if colorized is None else bold(colorized(levelname))
+    else:
+        name = '' if not module else f'[{module}]'
+        level = levelname
     print(f'{level} {name} {text}', file=sys.stderr)
 
 
@@ -83,6 +87,12 @@ def handle_disconnect(exc: Exception, logger: logging.Logger) -> int:
 def handle_exception(exc: Exception, logger: logging.Logger, status: int) -> int:
     """Log the exception argument and exit with `status`."""
     logger.critical(f'{exc.__class__.__name__}: ' + str(exc).replace('\n', ' - '))
+    return status
+
+
+def handle_exception_silently(exc: Exception) -> int:
+    """Return status held by `exc.args` without logging."""
+    status, = exc.args
     return status
 
 
