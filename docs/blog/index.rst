@@ -7,6 +7,23 @@ A place for announcements, release notes, thoughts and ideas for the project.
 
 -----
 
+:ref:`Release Notes (v2.4.0) <20230602_2_4_0_release>`
+------------------------------------------------------
+
+`June 2, 2023`
+
+The v2.4.0 release includes major new features along with numerous fixes and improvements.
+
+- User-defined tags
+- Walltime limits on tasks
+- Client timeouts for automatic shutdown
+- Autoscaling cluster (fixed and dynamic)
+- New logging style
+- NO_COLOR environment variable support
+
+
+-----
+
 :ref:`Release Notes (v2.3.0) <20230413_2_3_0_release>`
 ------------------------------------------------------
 
@@ -32,6 +49,7 @@ a few quality of life improvements, and a fix for SSH-mode.
     :hidden:
     :maxdepth: 1
 
-    20230329_2_2_0_release
+    20230602_2_4_0_release
     20230413_2_3_0_release
+    20230329_2_2_0_release
 
