@@ -158,6 +158,7 @@ def _format_backtick_string(text: str) -> str:
     """Add rich ANSI formatting to quoted strings."""
     return re.sub(r'`(?P<subtext>.*)`', yellow(r'`\g<subtext>`'), text)
 
+
 def _format_digit(text: str) -> str:
     """Add rich ANSI formatting to numerical digits."""
     return re.sub(r'\b(?P<num>\d+|null|NULL)\b' + NOT_QUOTED, green(r'\g<num>'), text)
