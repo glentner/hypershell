@@ -143,6 +143,12 @@ Options
     Send environment variables. Only for ``--ssh`` mode, all ``HYPERSHELL_`` prefixed environment
     variables can be exported to the remote clients.
 
+``--remote-exe`` *PATH*
+    Path to remote executable on the client side.
+
+    By default the executable path used to launch clients is the same as that for the cluster.
+    This option is necessary for clients with a different install path on client hosts.
+
 ``-d``, ``--delay-start`` *SEC*
     Delay time in seconds for launching clients (default: 0).
 
@@ -186,13 +192,13 @@ Options
     args to *stdout* if the task had a non-zero exit status. The *cluster* will run the *server*
     for you and if ``--failures`` is enabled these task args will be sent to a local file *PATH*.
 
-``--timeout`` *SEC*
+``-T``, ``--timeout`` *SEC*
     Timeout in seconds for clients. Automatically shutdown if no tasks received (default: never).
 
     This option is only valid for an ``--autoscaling`` cluster. This feature allows for gracefully
     scaling down a cluster when task throughput subsides.
 
-``--task-timeout`` *SEC*
+``-W``, ``--task-timeout`` *SEC*
     Task-level walltime limit (default: none).
 
     Executors will send a progression of SIGINT, SIGTERM, and SIGKILL.

@@ -83,6 +83,7 @@ Options:
       --ssh-args      ARGS     Command-line arguments for SSH.
       --ssh-group     NAME     SSH nodelist group in config.
   -E, --env                    Send environment variables.
+      --remote-exe    PATH     Path to executable on remote hosts.
   -d, --delay-start   SEC      Delay time for launching clients (default: {DEFAULT_DELAY}).
   -c, --capture                Capture individual task <stdout> and <stderr>.         
   -o, --output        PATH     File path for task outputs (default: <stdout>).
