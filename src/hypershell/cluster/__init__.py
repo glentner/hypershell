@@ -11,6 +11,7 @@ from types import TracebackType
 
 # standard libs
 import sys
+import shlex
 from functools import cached_property
 
 # external libs
@@ -234,7 +235,7 @@ class ClusterApp(Application):
             nodelist = NodeList.from_config(self.ssh_group)
         else:
             nodelist = NodeList.from_cmdline(self.ssh_mode if self.ssh_mode != '<default>' else None)
-        run_ssh(**options, launcher='ssh', launcher_args=[self.ssh_args, ], nodelist=nodelist,
+        run_ssh(**options, launcher='ssh', launcher_args=shlex.split(self.ssh_args), nodelist=nodelist,
                 remote_exe=self.remote_exe, bind=('0.0.0.0', self.port), export_env=self.export_env)
 
     def run_autoscaling(self: ClusterApp, **options) -> None:

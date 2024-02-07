@@ -11,6 +11,7 @@ from typing import Tuple, List, Dict, IO, Iterable, Callable, Type
 import os
 import sys
 import time
+import shlex
 import secrets
 from enum import Enum
 from datetime import datetime, timedelta
@@ -57,7 +58,7 @@ class RemoteCluster(Thread):
 
     server: ServerThread
     clients: Popen
-    client_argv: str
+    client_argv: List[str]
 
     def __init__(self: RemoteCluster,
                  source: Iterable[str] = None,
@@ -86,19 +87,25 @@ class RemoteCluster(Thread):
                                    in_memory=in_memory, no_confirm=no_confirm, max_retries=max_retries, eager=eager,
                                    address=bind, forever_mode=forever_mode, restart_mode=restart_mode,
                                    redirect_failures=redirect_failures)
-        launcher_args = '' if launcher_args is None else ' '.join(launcher_args)
-        client_args = ''
+        launcher = shlex.split(launcher)
+        if launcher_args is None:
+            launcher_args = []
+        else:
+            launcher_args = [arg for arg_group in launcher_args for arg in shlex.split(arg_group)]
+        client_args = []
         if capture is True:
-            client_args += ' --capture'
+            client_args.append('--capture')
         if no_confirm is True:
-            client_args += ' --no-confirm'
+            client_args.append('--no-confirm')
         if client_timeout is not None:
-            client_args += f' -T {client_timeout}'
+            client_args.extend(['-T', str(client_timeout)])
         if task_timeout is not None:
-            client_args += f' -W {task_timeout}'
-        self.client_argv = (f'{launcher} {launcher_args} {remote_exe} client -H {HOSTNAME} -p {bind[1]} '
-                            f'-N {num_tasks} -b {bundlesize} -w {bundlewait} -t "{template}" -k {auth} '
-                            f'-d {delay_start} {client_args}')
+            client_args.extend(['-W', str(task_timeout)])
+        self.client_argv = [
+            *launcher, *launcher_args, remote_exe, 'client',
+            '-H', HOSTNAME, '-p', str(bind[1]), '-N', str(num_tasks), '-b', str(bundlesize), '-w', str(bundlewait),
+            '-t', template, '-k', auth, '-d', str(delay_start), *client_args
+        ]
         super().__init__(name='hypershell-cluster')
 
     def run_with_exceptions(self: RemoteCluster) -> None:
@@ -106,7 +113,8 @@ class RemoteCluster(Thread):
         self.server.start()
         time.sleep(2)  # NOTE: give the server a chance to start
         log.debug(f'Launching clients: {self.client_argv}')
-        self.clients = Popen(self.client_argv, shell=True, stdout=sys.stdout, stderr=sys.stderr,
+        self.clients = Popen(self.client_argv,
+                             stdout=sys.stdout, stderr=sys.stderr,
                              env={**os.environ, **load_task_env()})
         self.clients.wait()
         self.server.join()
@@ -172,7 +180,7 @@ class AutoScaler(StateMachine):
     init_size: int
     min_size: int
     max_size: int
-    launcher: str
+    launcher: List[str]
 
     clients: List[Popen]
     last_check: datetime
@@ -183,13 +191,13 @@ class AutoScaler(StateMachine):
     states: Type[State] = AutoScalerState
 
     def __init__(self: AutoScaler,
+                 launcher: List[str],
                  policy: str = DEFAULT_AUTOSCALE_POLICY,
                  factor: float = DEFAULT_AUTOSCALE_FACTOR,
                  period: int = DEFAULT_AUTOSCALE_PERIOD,
                  init_size: int = DEFAULT_AUTOSCALE_INIT_SIZE,
                  min_size: int = DEFAULT_AUTOSCALE_MIN_SIZE,
                  max_size: int = DEFAULT_AUTOSCALE_MAX_SIZE,
-                 launcher: str = DEFAULT_AUTOSCALE_LAUNCHER,
                  ) -> None:
         """Initialize with scaling parameters."""
         self.policy = AutoScalerPolicy.from_name(policy)
@@ -306,7 +314,7 @@ class AutoScaler(StateMachine):
 
     def scale(self: AutoScaler) -> AutoScalerState:
         """Launch new client."""
-        proc = Popen(self.launcher, shell=True, stdout=sys.stdout, stderr=sys.stderr,
+        proc = Popen(self.launcher, stdout=sys.stdout, stderr=sys.stderr,
                      bufsize=0, universal_newlines=True, env={**os.environ, **load_task_env()})
         log.trace(f'Autoscale adding client ({proc.pid})')
         self.clients.append(proc)
@@ -340,19 +348,18 @@ class AutoScalerThread(Thread):
     """Run AutoScaler within dedicated thread."""
 
     def __init__(self: AutoScalerThread,
+                 launcher: List[str],
                  policy: str = DEFAULT_AUTOSCALE_POLICY,
                  factor: float = DEFAULT_AUTOSCALE_FACTOR,
                  period: int = DEFAULT_AUTOSCALE_PERIOD,
                  init_size: int = DEFAULT_AUTOSCALE_INIT_SIZE,
                  min_size: int = DEFAULT_AUTOSCALE_MIN_SIZE,
                  max_size: int = DEFAULT_AUTOSCALE_MAX_SIZE,
-                 launcher: str = DEFAULT_AUTOSCALE_LAUNCHER,
                  ) -> None:
         """Initialize task executor."""
         super().__init__(name=f'hypershell-autoscaler')
-        self.machine = AutoScaler(policy=policy, factor=factor, period=period,
-                                  init_size=init_size, min_size=min_size, max_size=max_size,
-                                  launcher=launcher)
+        self.machine = AutoScaler(launcher, policy=policy, factor=factor, period=period,
+                                  init_size=init_size, min_size=min_size, max_size=max_size)
 
     def run_with_exceptions(self: AutoScalerThread) -> None:
         """Run machine."""
@@ -405,18 +412,25 @@ class AutoScalingCluster(Thread):
         self.server = ServerThread(source=source, auth=auth, bundlesize=bundlesize, bundlewait=bundlewait,
                                    max_retries=max_retries, eager=eager, address=bind, forever_mode=True,
                                    redirect_failures=redirect_failures)
-        launcher_args = '' if launcher_args is None else ' '.join(launcher_args)
-        client_args = '' if not capture else '--capture'
+        launcher = shlex.split(launcher)
+        if launcher_args is None:
+            launcher_args = []
+        else:
+            launcher_args = [arg for arg_group in launcher_args for arg in shlex.split(arg_group)]
+        client_args = []
+        if capture:
+            client_args.append('--capture')
         if client_timeout is not None:
-            client_args += f' -T {client_timeout}'
+            client_args.extend(['-T', str(client_timeout)])
         if task_timeout is not None:
-            client_args += f' -W {task_timeout}'
-        launcher = (f'{launcher} {launcher_args} {remote_exe} client -H {HOSTNAME} -p {bind[1]} '
-                    f'-N {num_tasks} -b {bundlesize} -w {bundlewait} -t "{template}" -k {auth} '
-                    f'-d {delay_start} {client_args}')
-        self.autoscaler = AutoScalerThread(policy=policy, factor=factor, period=period,
-                                           init_size=init_size, min_size=min_size, max_size=max_size,
-                                           launcher=launcher)
+            client_args.extend(['-W', str(task_timeout)])
+        launcher.extend([
+            *launcher_args, remote_exe, 'client',
+            '-H', HOSTNAME, '-p', str(bind[1]), '-N', str(num_tasks), '-b', str(bundlesize), '-w', str(bundlewait),
+            '-t', template, '-k', auth, '-d', str(delay_start), *client_args
+        ])
+        self.autoscaler = AutoScalerThread(launcher, policy=policy, factor=factor, period=period,
+                                           init_size=init_size, min_size=min_size, max_size=max_size)
         super().__init__(name='hypershell-cluster')
 
     def run_with_exceptions(self: AutoScalingCluster) -> None:

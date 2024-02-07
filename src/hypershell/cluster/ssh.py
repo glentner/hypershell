@@ -12,6 +12,7 @@ from typing import Type, List, Iterable, Tuple, IO
 import re
 import sys
 import time
+import shlex
 import secrets
 from subprocess import Popen
 
@@ -50,7 +51,7 @@ class SSHCluster(Thread):
 
     server: ServerThread
     clients: List[Popen]
-    client_argv: List[str]
+    client_argv: List[List[str]]
 
     def __init__(self: SSHCluster,
                  source: Iterable[str] = None,
@@ -84,24 +85,25 @@ class SSHCluster(Thread):
                                    forever_mode=forever_mode, restart_mode=restart_mode,
                                    in_memory=in_memory, no_confirm=no_confirm,
                                    redirect_failures=redirect_failures)
-        launcher_env = '' if not export_env else compile_env()
+        launcher = shlex.split(launcher)
+        launcher_env = shlex.split('' if not export_env else compile_env())
         if launcher_args is None:
-            launcher_args = config.ssh.get('args', '')
-        else:
-            launcher_args = config.ssh.get('args', '') + ' ' + ' '.join(launcher_args)
-        client_args = ''
-        if capture is True:
-            client_args += ' --capture'
+            launcher_args = shlex.split(config.ssh.get('args', ''))
+        client_args = []
+        if capture:
+            client_args.append('--capture')
         if no_confirm:
-            client_args += ' --no-confirm'
+            client_args.append('--no-confirm')
         if client_timeout is not None:
-            client_args += f' -T {client_timeout}'
+            client_args.extend(['-T', str(client_timeout)])
         if task_timeout is not None:
-            client_args += f' -W {task_timeout}'
-        self.client_argv = [f'{launcher} {launcher_args} {host} {launcher_env} {remote_exe} '
-                            f'client -H {HOSTNAME} -p {bind[1]} -N {num_tasks} -b {bundlesize} -w {bundlewait} '
-                            f'-t \'"{template}"\' -k {auth} -d {delay_start} {client_args}'
-                            for host in nodelist]
+            client_args.extend(['-W', str(task_timeout)])
+        self.client_argv = [
+            [*launcher, *launcher_args, host, *launcher_env, remote_exe, 'client', '-H', HOSTNAME,
+             '-p', str(bind[1]), '-N', str(num_tasks), '-b', str(bundlesize), '-w', str(bundlewait),
+             '-t', f'\'{template}\'', '-k', auth, '-d', str(delay_start), *client_args]
+            for host in nodelist
+        ]
         super().__init__(name='hypershell-cluster')
 
     def run_with_exceptions(self: SSHCluster) -> None:
@@ -111,7 +113,7 @@ class SSHCluster(Thread):
         self.clients = []
         for argv in self.client_argv:
             log.debug(f'Launching client: {argv}')
-            self.clients.append(Popen(argv, shell=True, stdout=sys.stdout, stderr=sys.stderr))
+            self.clients.append(Popen(argv, stdout=sys.stdout, stderr=sys.stderr))
         for client in self.clients:
             client.wait()
         self.server.join()
