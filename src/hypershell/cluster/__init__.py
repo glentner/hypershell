@@ -111,7 +111,6 @@ class ClusterApp(Application):
                           colorize_usage(APP_HELP))
 
     filepath: str
-    source: Optional[IO] = None
     interface.add_argument('filepath', nargs='?', default=None)
 
     num_tasks: int = 1
