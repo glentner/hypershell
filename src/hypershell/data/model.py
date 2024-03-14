@@ -359,7 +359,10 @@ class Task(Entity):
         failed_tasks = cls.select_failed(attempts=attempts, limit=limit)
         if failed_tasks:
             log.trace(f'Selected {len(failed_tasks)} previously failed tasks')
-            new_tasks = [cls.new(args=task.args, attempt=task.attempt + 1, previous_id=task.id)
+            new_tasks = [cls.new(args=task.args,
+                                 attempt=task.attempt + 1,
+                                 previous_id=task.id,
+                                 tag=task.tag)
                          for task in failed_tasks]
             tasks.extend(new_tasks)
             cls.add_all(tasks)
