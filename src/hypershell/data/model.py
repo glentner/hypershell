@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import List, Dict, Any, Type, TypeVar, Union, Optional
 
 # standard libs
+import re
 import json
 from uuid import uuid4 as gen_uuid
 from datetime import datetime
@@ -277,9 +278,26 @@ class Task(Entity):
     def new(cls: Type[Task], args: str, attempt: int = 1, retried: bool = False,
             tag: Dict[str, str] = None, **other) -> Task:
         """Create a new Task."""
+        cls.ensure_valid_tag(tag)
         return Task(id=str(gen_uuid()), args=str(args).strip(),
                     submit_id=INSTANCE, submit_host=HOSTNAME, submit_time=datetime.now().astimezone(),
                     attempt=attempt, retried=retried, tag=(tag or {}), **other)
+
+    @staticmethod
+    def ensure_valid_tag(tag: Dict[str, Any]) -> None:
+        """Check tag dictionary and raise if invalid."""
+        if not isinstance(tag, (dict, type(None))):
+            raise TypeError('Expected dict or None for tag data')
+        if tag is None:
+            return
+        for key, value in tag.items():
+            if not isinstance(key, str):
+                raise TypeError(f'Tag key, {key} ({type(key)}) is not string')
+            if not isinstance(value, (str, int, float, bool, type(None))):
+                raise TypeError(f'Invalid type for tag value, {type(value)})')
+            if isinstance(value, str) and not re.match(r'^[A-Za-z0-9_.+-]+$', value):
+                raise ValueError(f'Tag "{key}:{value}" must only contain alphanumeric '
+                                 f'characters and basic symbols [+._-].')
 
     @classmethod
     def select_new(cls: Type[Task], limit: int) -> List[Task]:

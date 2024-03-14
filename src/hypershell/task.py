@@ -40,7 +40,7 @@ from hypershell.core.config import config
 from hypershell.core.exceptions import handle_exception, handle_exception_silently, get_shared_exception_mapping
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.remote import SSHConnection
-from hypershell.core.types import smart_coerce
+from hypershell.core.types import smart_coerce, ValueType
 from hypershell.data.model import Task, to_json_type
 from hypershell.data import ensuredb
 
@@ -517,7 +517,7 @@ class TaskSearchApp(Application):
             else:
                 query = query.filter(Task.tag[name].isnot(None))
         for name, value in tags_with_value.items():
-            query = query.filter(Task.tag[name] == type_coerce(str(value), JSON))
+            query = query.filter(Task.tag[name] == type_coerce(value, JSON))
         return query
 
     def __build_where_clause(self: TaskSearchApp, query: Query) -> Query:
@@ -788,10 +788,10 @@ class WhereClause:
 
 @dataclass
 class Tag:
-    """Tag specification.."""
+    """Tag specification."""
 
     name: str
-    value: str = ''
+    value: ValueType = ''
 
     def to_dict(self: Tag) -> Dict[str, str]:
         """Format tag specification as dictionary."""
@@ -804,10 +804,12 @@ class Tag:
         if len(tag_part) == 1:
             return cls(name=tag_part[0].strip())
         else:
-            return cls(name=tag_part[0].strip(), value=tag_part[1].strip())
+            name, value = tag_part[0].strip(), smart_coerce(tag_part[1].strip())
+            Task.ensure_valid_tag({name: value})
+            return cls(name, value)
 
     @classmethod
-    def parse_cmdline_list(cls: Type[Tag], args: List[str]) -> Dict[str, Optional[str]]:
+    def parse_cmdline_list(cls: Type[Tag], args: List[str]) -> Dict[str, Optional[ValueType]]:
         """Parse command-line list of tags."""
         return {tag.name: tag.value for tag in map(cls.from_cmdline, args)}
 
