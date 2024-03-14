@@ -152,21 +152,28 @@ class NodeList(list):
             raise ConfigurationError('No `ssh.nodelist` section found in configuration')
 
         label = blame(config, 'ssh', 'nodelist')
+        nodelist = config.ssh.nodelist
+
         if groupname is None:
-            if isinstance(config.ssh.nodelist, list):
-                return cls(config.ssh.nodelist)
-            elif isinstance(config.ssh.nodelist, dict):
+            if isinstance(nodelist, str):
+                return cls.from_pattern(nodelist)
+            elif isinstance(nodelist, list):
+                return cls(nodelist)
+            elif isinstance(nodelist, dict):
                 raise ConfigurationError(f'SSH group unspecified but multiple groups in `ssh.nodelist` ({label})')
             else:
                 raise ConfigurationError(f'Expected list for `ssh.nodelist` ({label})')
 
-        if isinstance(config.ssh.nodelist, dict):
-            if groupname not in config.ssh.nodelist:
+        if isinstance(nodelist, dict):
+            nodelist = nodelist.get(groupname, None)
+            if not nodelist:
                 raise ConfigurationError(f'No list \'{groupname}\' found in `ssh.nodelist` section ({label})')
-            elif not isinstance(config.ssh.nodelist.get(groupname), list):
-                raise ConfigurationError(f'Expected list for `ssh.nodelist.{groupname}` ({label})')
+            elif isinstance(nodelist, str):
+                return cls.from_pattern(nodelist)
+            elif isinstance(nodelist, list):
+                return cls(nodelist)
             else:
-                return cls(config.ssh.nodelist.get(groupname))
+                raise ConfigurationError(f'Expected list for `ssh.nodelist.{groupname}` ({label})')
         else:
             raise ConfigurationError(f'Expected either list or section for `ssh.nodelist` ({label})')
 
