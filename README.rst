@@ -17,8 +17,8 @@ HyperShell v2: Distributed Task Execution for HPC
     :target: https://hyper-shell.readthedocs.io
     :alt: Documentation
 
-.. image:: https://pepy.tech/badge/hyper-shell
-    :target: https://pepy.tech/badge/hyper-shell
+.. image:: https://static.pepy.tech/badge/hyper-shell
+    :target: https://pepy.tech/project/hyper-shell
     :alt: Downloads
 
 |
