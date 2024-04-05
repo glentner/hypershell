@@ -19,7 +19,6 @@ from cmdkit.app import Application
 from cmdkit.cli import Interface, ArgumentError
 
 # internal libs
-from hypershell.core.ansi import colorize_usage
 from hypershell.core.config import config, blame
 from hypershell.core.queue import QueueConfig
 from hypershell.core.logging import Logger
@@ -46,15 +45,15 @@ log = Logger.with_name(__name__)
 
 
 APP_NAME = 'hyper-shell cluster'
-APP_USAGE = f"""\
+APP_USAGE = """\
 Usage:
-hyper-shell cluster [-h] [FILE | --restart | --forever] [-N NUM] [-t CMD] [-b SIZE] [-w SEC]
-                    [-p PORT] [-r NUM [--eager]] [-f PATH] [--capture | [-o PATH] [-e PATH]]
-                    [--ssh [HOST... | --ssh-group NAME] [--env] | --mpi | --launcher=ARGS...]
-                    [--no-db | --initdb] [--no-confirm] [--delay-start SEC] [-T SEC] [-W SEC]
-                    [--autoscaling [MODE] [-P SEC] [-F VALUE] [-I NUM] [-X NUM] [-Y NUM]] 
+  hyper-shell cluster [-h] [FILE | --restart | --forever] [-N NUM] [-t CMD] [-b SIZE] [-w SEC]
+                      [-p PORT] [-r NUM [--eager]] [-f PATH] [--capture | [-o PATH] [-e PATH]]
+                      [--ssh [HOST... | --ssh-group NAME] [--env] | --mpi | --launcher=ARGS...]
+                      [--no-db | --initdb] [--no-confirm] [--delay-start SEC] [-T SEC] [-W SEC]
+                      [--autoscaling [MODE] [-P SEC] [-F VALUE] [-I NUM] [-X NUM] [-Y NUM]]
 
-Start cluster locally, over SSH, or with a custom launcher.\
+  Start cluster locally, over SSH, or with a custom launcher.\
 """
 
 APP_HELP = f"""\
@@ -86,7 +85,7 @@ Options:
   -E, --env                    Send environment variables.
       --remote-exe    PATH     Path to executable on remote hosts.
   -d, --delay-start   SEC      Delay time for launching clients (default: {DEFAULT_DELAY}).
-  -c, --capture                Capture individual task <stdout> and <stderr>.         
+  -c, --capture                Capture individual task <stdout> and <stderr>.
   -o, --output        PATH     File path for task outputs (default: <stdout>).
   -e, --errors        PATH     File path for task errors (default: <stderr>).
   -f, --failures      PATH     File path to write failed task args (default: <none>).
@@ -106,9 +105,7 @@ class ClusterApp(Application):
     """Run managed cluster."""
 
     name = APP_NAME
-    interface = Interface(APP_NAME,
-                          colorize_usage(APP_USAGE),
-                          colorize_usage(APP_HELP))
+    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
 
     filepath: str
     interface.add_argument('filepath', nargs='?', default=None)

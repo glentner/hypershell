@@ -15,12 +15,12 @@ import functools
 from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
 from cmdkit.config import ConfigurationError
+from cmdkit.ansi import colorize_usage
 from sqlalchemy import inspect
 from sqlalchemy.orm import close_all_sessions
 from sqlalchemy.exc import OperationalError
 
 # internal libs
-from hypershell.core.ansi import colorize_usage
 from hypershell.core.logging import Logger
 from hypershell.core.config import config
 from hypershell.core.exceptions import (write_traceback, handle_exception, DatabaseUninitialized,

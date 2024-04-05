@@ -34,7 +34,6 @@ from sqlalchemy.orm.exc import StaleDataError
 from sqlalchemy.sql.elements import BinaryExpression
 
 # internal libs
-from hypershell.core.ansi import colorize_usage
 from hypershell.core.platform import default_path
 from hypershell.core.config import config
 from hypershell.core.exceptions import handle_exception, handle_exception_silently, get_shared_exception_mapping
@@ -54,9 +53,8 @@ log = Logger.with_name(__name__)
 SUBMIT_PROGRAM = 'hyper-shell task submit'
 SUBMIT_USAGE = f"""\
 Usage:
-{SUBMIT_PROGRAM} [-h] [-t TAG [TAG...]] ARGS...
-
-Submit individual task to database.\
+  {SUBMIT_PROGRAM} [-h] [-t TAG [TAG...]] ARGS...
+  Submit individual task to database.\
 """
 
 SUBMIT_HELP = f"""\
@@ -74,9 +72,7 @@ Options:
 class TaskSubmitApp(Application):
     """Submit task to database."""
 
-    interface = Interface(SUBMIT_PROGRAM,
-                          colorize_usage(SUBMIT_USAGE),
-                          colorize_usage(SUBMIT_HELP))
+    interface = Interface(SUBMIT_PROGRAM, SUBMIT_USAGE, SUBMIT_HELP)
 
     argv: List[str] = []
     interface.add_argument('argv', nargs='+')
@@ -112,9 +108,8 @@ def check_uuid(value: str) -> None:
 INFO_PROGRAM = 'hyper-shell task info'
 INFO_USAGE = f"""\
 Usage: 
-{INFO_PROGRAM} [-h] ID [--stdout | --stderr | -x FIELD] [-f FORMAT]
-
-Get metadata and/or task outputs.\
+  {INFO_PROGRAM} [-h] ID [--stdout | --stderr | -x FIELD] [-f FORMAT]
+  Get metadata and/or task outputs.\
 """
 
 INFO_HELP = f"""\
@@ -137,9 +132,7 @@ Options:
 class TaskInfoApp(Application):
     """Get metadata/status/outputs of task."""
 
-    interface = Interface(INFO_PROGRAM,
-                          colorize_usage(INFO_USAGE),
-                          colorize_usage(INFO_HELP))
+    interface = Interface(INFO_PROGRAM, INFO_USAGE, INFO_HELP)
 
     uuid: str
     interface.add_argument('uuid')
@@ -253,9 +246,8 @@ DEFAULT_INTERVAL = 5
 WAIT_PROGRAM = 'hyper-shell task wait'
 WAIT_USAGE = f"""\
 Usage: 
-{WAIT_PROGRAM} [-h] ID [-n SEC] [--info [-f FORMAT] | --status | --return]
-
-Wait for task to complete.\
+  {WAIT_PROGRAM} [-h] ID [-n SEC] [--info [-f FORMAT] | --status | --return]
+  Wait for task to complete.\
 """
 
 WAIT_HELP = f"""\
@@ -279,9 +271,7 @@ Options:
 class TaskWaitApp(Application):
     """Wait for task to complete."""
 
-    interface = Interface(WAIT_PROGRAM,
-                          colorize_usage(WAIT_USAGE),
-                          colorize_usage(WAIT_HELP))
+    interface = Interface(WAIT_PROGRAM, WAIT_USAGE, WAIT_HELP)
 
     uuid: str
     interface.add_argument('uuid')
@@ -345,9 +335,8 @@ class TaskWaitApp(Application):
 RUN_PROGRAM = 'hyper-shell task run'
 RUN_USAGE = f"""\
 Usage: 
-{RUN_PROGRAM} [-h] [-n SEC] ARGS... 
-
-Submit individual task and wait for completion.\
+  {RUN_PROGRAM} [-h] [-n SEC] ARGS... 
+  Submit individual task and wait for completion.\
 """
 
 RUN_HELP = f"""\
@@ -365,9 +354,7 @@ Options:
 class TaskRunApp(Application):
     """Submit task and wait for completion."""
 
-    interface = Interface(RUN_PROGRAM,
-                          colorize_usage(RUN_USAGE),
-                          colorize_usage(RUN_HELP))
+    interface = Interface(RUN_PROGRAM, RUN_USAGE, RUN_HELP)
 
     argv: List[str] = []
     interface.add_argument('argv', nargs='+')
@@ -392,11 +379,11 @@ class TaskRunApp(Application):
 SEARCH_PROGRAM = 'hyper-shell task search'
 SEARCH_USAGE = f"""\
 Usage:
-hyper-shell task search [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]]
-                        [--order-by FIELD [--desc]] [--count | --limit NUM]
-                        [--format FORMAT | --json | --csv]  [-d CHAR]
+  hyper-shell task search [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]]
+                          [--order-by FIELD [--desc]] [--count | --limit NUM]
+                          [--format FORMAT | --json | --csv]  [-d CHAR]
                         
-Search for tasks in the database.\
+  Search tasks in the database.\
 """
 
 SEARCH_HELP = f"""\
@@ -434,9 +421,7 @@ DELIMITER_MAX_SIZE = 100
 class TaskSearchApp(Application):
     """Search for tasks in database."""
 
-    interface = Interface(SEARCH_PROGRAM,
-                          colorize_usage(SEARCH_USAGE),
-                          colorize_usage(SEARCH_HELP))
+    interface = Interface(SEARCH_PROGRAM, SEARCH_USAGE, SEARCH_HELP)
 
     field_names: List[str] = ALL_FIELDS
     interface.add_argument('field_names', nargs='*', default=field_names)
@@ -636,9 +621,8 @@ class TaskSearchApp(Application):
 UPDATE_PROGRAM = 'hyper-shell task update'
 UPDATE_USAGE = f"""\
 Usage: 
-{UPDATE_PROGRAM} [-h] ID FIELD VALUE 
-
-Update individual task metadata.\
+  {UPDATE_PROGRAM} [-h] ID FIELD VALUE
+  Update individual task metadata.\
 """
 
 UPDATE_HELP = f"""\
@@ -657,9 +641,7 @@ Options:
 class TaskUpdateApp(Application):
     """Update individual task attribute directly."""
 
-    interface = Interface(UPDATE_PROGRAM,
-                          colorize_usage(UPDATE_USAGE),
-                          colorize_usage(UPDATE_HELP))
+    interface = Interface(UPDATE_PROGRAM, UPDATE_USAGE, UPDATE_HELP)
 
     uuid: str
     interface.add_argument('uuid')
@@ -698,9 +680,8 @@ class TaskUpdateApp(Application):
 TASK_PROGRAM = 'hyper-shell task'
 TASK_USAGE = f"""\
 Usage: 
-{TASK_PROGRAM} [-h] <command> [<args>...]
-
-Search, submit, track, and manage individual tasks.\
+  {TASK_PROGRAM} [-h] <command> [<args>...]
+  Search, submit, track, and manage individual tasks.\
 """
 
 TASK_HELP = f"""\
@@ -722,9 +703,7 @@ Options:
 class TaskGroupApp(ApplicationGroup):
     """Search, submit, track, and manage individual tasks."""
 
-    interface = Interface(TASK_PROGRAM,
-                          colorize_usage(TASK_USAGE),
-                          colorize_usage(TASK_HELP))
+    interface = Interface(TASK_PROGRAM, TASK_USAGE, TASK_HELP)
 
     interface.add_argument('command')
 

@@ -56,7 +56,6 @@ from cmdkit.config import Namespace
 
 # internal libs
 from hypershell.data.model import Task
-from hypershell.core.ansi import colorize_usage
 from hypershell.core.heartbeat import Heartbeat, ClientState
 from hypershell.core.platform import default_path
 from hypershell.core.config import default, config, load_task_env
@@ -879,20 +878,20 @@ def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
 APP_NAME = 'hyper-shell client'
 APP_USAGE = f"""\
 Usage:
-hyper-shell client [-h] [-N NUM] [-t CMD] [-b SIZE] [-w SEC] [-H ADDR] [-p PORT]
-                   [-k KEY] [--capture | [-o PATH] [-e PATH]] [--no-confirm]
-                   [--delay-start SEC] [--timeout SEC] [--task-timeout SEC]
+  hyper-shell client [-h] [-N NUM] [-t CMD] [-b SIZE] [-w SEC] [-H ADDR] [-p PORT]
+                     [-k KEY] [--capture | [-o PATH] [-e PATH]] [--no-confirm]
+                     [--delay-start SEC] [--timeout SEC] [--task-timeout SEC]
 
-Launch client directly, run tasks in parallel.\
+  Launch client directly, run tasks in parallel.\
 """
 
 APP_HELP = f"""\
 {APP_USAGE}
 
-Tasks are pulled off of the shared queue in bundles from the server and run
-locally within the same shell as the client. By default the bundle size is one,
-meaning that at small scales there is greater responsiveness. It is recommended
-to coordinate these parameters to be the same as the server.
+  Tasks are pulled off of the shared queue in bundles from the server and run
+  locally within the same shell as the client. By default the bundle size is one,
+  meaning that at small scales there is greater responsiveness. It is recommended
+  to coordinate these parameters to be the same as the server.
 
 Options:
   -N, --num-tasks     NUM   Number of tasks to run in parallel (default: {DEFAULT_NUM_TASKS}).
@@ -917,9 +916,7 @@ class ClientApp(Application):
     """Run individual client directly."""
 
     name = APP_NAME
-    interface = Interface(APP_NAME,
-                          colorize_usage(APP_USAGE),
-                          colorize_usage(APP_HELP))
+    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
 
     num_tasks: int = DEFAULT_NUM_TASKS
     interface.add_argument('-N', '--num-tasks', type=int, default=num_tasks)

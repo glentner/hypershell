@@ -56,7 +56,6 @@ from cmdkit.app import Application
 from cmdkit.cli import Interface
 
 # internal libs
-from hypershell.core.ansi import colorize_usage
 from hypershell.core.logging import Logger
 from hypershell.core.config import config, default
 from hypershell.core.fsm import State, StateMachine
@@ -540,9 +539,8 @@ def submit_file(path: str, queue_config: QueueConfig = None,
 APP_NAME = 'hyper-shell submit'
 APP_USAGE = f"""\
 Usage:
-{APP_NAME} [-h] [FILE] [-b NUM] [-w SEC] [-t CMD] [--initdb] [--tag TAG [TAG...]]
-
-Submit tasks from a file.\
+  {APP_NAME} [-h] [FILE] [-b NUM] [-w SEC] [-t CMD] [--initdb] [--tag TAG [TAG...]]
+  Submit tasks from a file.\
 """
 
 APP_HELP = f"""\
@@ -565,9 +563,7 @@ class SubmitApp(Application):
     """Submit tasks to the database."""
 
     name = APP_NAME
-    interface = Interface(APP_NAME,
-                          colorize_usage(APP_USAGE),
-                          colorize_usage(APP_HELP))
+    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
 
     source: IO
     filepath: str

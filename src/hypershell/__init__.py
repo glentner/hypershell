@@ -13,7 +13,6 @@ from cmdkit.app import Application, ApplicationGroup
 from cmdkit.cli import Interface
 
 # internal libs
-from hypershell.core.ansi import colorize_usage
 from hypershell.core.logging import Logger, initialize_logging
 from hypershell.submit import SubmitApp
 from hypershell.server import ServerApp
@@ -57,10 +56,9 @@ Application.log_exception = log.exception
 
 APP_NAME = 'hyper-shell'
 APP_USAGE = f"""\
-Usage: 
-{APP_NAME} [-h] [-v] <command> [<args>...]
-
-{__description__}\
+Usage:
+  {APP_NAME} [-h] [-v] <command> [<args>...]
+  {__description__}\
 """
 
 APP_HELP = f"""\
@@ -91,10 +89,7 @@ citing us (see --citation).\
 class HyperShellApp(ApplicationGroup):
     """Top-level application class for console application."""
 
-    interface = Interface(APP_NAME,
-                          colorize_usage(APP_USAGE),
-                          colorize_usage(APP_HELP))
-
+    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
     interface.add_argument('-v', '--version', action='version', version=__version__)
     interface.add_argument('--citation', action='version', version=__citation__)
     interface.add_argument('command')

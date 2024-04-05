@@ -12,9 +12,7 @@ import ctypes
 # external libs
 from cmdkit.config import Namespace
 from cmdkit.app import exit_status
-
-# internal libs
-from hypershell.core.ansi import bold, magenta
+from cmdkit.ansi import bold, magenta
 
 # public interface
 __all__ = ['cwd', 'home', 'site', 'path', 'default_path']

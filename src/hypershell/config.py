@@ -23,7 +23,6 @@ from rich.console import Console
 from rich.syntax import Syntax
 
 # internal libs
-from hypershell.core.ansi import colorize_usage
 from hypershell.core.platform import path
 from hypershell.core.types import smart_coerce
 from hypershell.core.config import load_file, update, config as full_config
@@ -40,10 +39,10 @@ log = Logger.with_name(__name__)
 EDIT_PROGRAM = 'hyper-shell config edit'
 EDIT_USAGE = f"""\
 Usage:
-{EDIT_PROGRAM} [-h] [--system | --user]
+  {EDIT_PROGRAM} [-h] [--system | --user]
 
-Edit configuration with default editor.
-The EDITOR/VISUAL environment variable must be set.\
+  Edit configuration with default editor.
+  The EDITOR/VISUAL environment variable must be set.\
 """
 
 EDIT_HELP = f"""\
@@ -59,9 +58,7 @@ Options:
 class ConfigEditApp(Application):
     """Edit configuration with default editor."""
 
-    interface = Interface(EDIT_PROGRAM,
-                          colorize_usage(EDIT_USAGE),
-                          colorize_usage(EDIT_HELP))
+    interface = Interface(EDIT_PROGRAM, EDIT_USAGE, EDIT_HELP)
 
     site_name: str = 'user'
     site_interface = interface.add_mutually_exclusive_group()
@@ -88,17 +85,16 @@ class ConfigEditApp(Application):
 GET_PROGRAM = 'hyper-shell config get'
 GET_USAGE = f"""\
 Usage:
-{GET_PROGRAM} [-h] [-x] SECTION[...].VAR [--system | --user]
-
-Get configuration option.\
+  {GET_PROGRAM} [-h] [-x] SECTION[...].VAR [--system | --user]
+  Get configuration option.\
 """
 
 GET_HELP = f"""\
 {GET_USAGE}
 
-If --user/--system not specified, the output is the merged configuration
-from all sources. Use `hyper-shell config which` to see where a specific
-option originates from.
+  If --user/--system not specified, the output is the merged configuration
+  from all sources. Use `hyper-shell config which` to see where a specific
+  option originates from.
 
 Arguments:
   SECTION[...].VAR          Path to variable (default: '.').
@@ -114,9 +110,7 @@ Options:
 class ConfigGetApp(Application):
     """Get configuration option."""
 
-    interface = Interface(GET_PROGRAM,
-                          colorize_usage(GET_USAGE),
-                          colorize_usage(GET_HELP))
+    interface = Interface(GET_PROGRAM, GET_USAGE, GET_HELP)
 
     varpath: str = None
     interface.add_argument('varpath', nargs='?', default='.')
@@ -232,9 +226,8 @@ class ConfigGetApp(Application):
 SET_PROGRAM = 'hyper-shell config set'
 SET_USAGE = f"""\
 Usage: 
-{SET_PROGRAM} [-h] SECTION[...].VAR VALUE [--system | --user]
-
-Set configuration option.\
+  {SET_PROGRAM} [-h] SECTION[...].VAR VALUE [--system | --user]
+  Set configuration option.\
 """
 
 SET_HELP = f"""\
@@ -254,9 +247,7 @@ Options:
 class ConfigSetApp(Application):
     """Set configuration option."""
 
-    interface = Interface(SET_PROGRAM,
-                          colorize_usage(SET_USAGE),
-                          colorize_usage(SET_HELP))
+    interface = Interface(SET_PROGRAM, SET_USAGE, SET_HELP)
 
     varpath: str = None
     interface.add_argument('varpath', metavar='VAR')
@@ -295,9 +286,8 @@ class ConfigSetApp(Application):
 WHICH_PROGRAM = 'hyper-shell config which'
 WHICH_USAGE = f"""\
 Usage: 
-{WHICH_PROGRAM} [-h] SECTION[...].VAR
-
-Show origin of configuration option.\
+  {WHICH_PROGRAM} [-h] SECTION[...].VAR
+  Show origin of configuration option.\
 """
 
 WHICH_HELP = f"""\
@@ -314,9 +304,7 @@ Options:
 class ConfigWhichApp(Application):
     """Show origin of configuration option."""
 
-    interface = Interface(WHICH_PROGRAM,
-                          colorize_usage(WHICH_USAGE),
-                          colorize_usage(WHICH_HELP))
+    interface = Interface(WHICH_PROGRAM, WHICH_USAGE, WHICH_HELP)
 
     varpath: str = None
     interface.add_argument('varpath', metavar='VAR')
@@ -349,9 +337,8 @@ else:
 PROGRAM = 'hyper-shell config'
 USAGE = f"""\
 Usage: 
-{PROGRAM} [-h] <command> [<args>...]
-
-{__doc__}\
+  {PROGRAM} [-h] <command> [<args>...]
+  {__doc__}\
 """
 
 HELP = f"""\
@@ -375,9 +362,7 @@ Files:
 class ConfigApp(ApplicationGroup):
     """Manage configuration."""
 
-    interface = Interface(PROGRAM,
-                          colorize_usage(USAGE),
-                          colorize_usage(HELP))
+    interface = Interface(PROGRAM, USAGE, HELP)
 
     interface.add_argument('command')
 

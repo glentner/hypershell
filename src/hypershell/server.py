@@ -58,7 +58,6 @@ from cmdkit.app import Application
 from cmdkit.cli import Interface, ArgumentError
 
 # internal libs
-from hypershell.core.ansi import colorize_usage
 from hypershell.core.exceptions import get_shared_exception_mapping
 from hypershell.core.config import config, default
 from hypershell.core.logging import Logger
@@ -758,26 +757,27 @@ def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, in_memory: bool = False,
 APP_NAME = 'hyper-shell server'
 APP_USAGE = f"""\
 Usage:
-hyper-shell server [-h] [FILE | --forever | --restart] [-b NUM] [-w SEC] [-r NUM [--eager]]
-                   [-H ADDR] [-p PORT] [-k KEY] [--no-db | --initdb] [--print | -f PATH] [--no-confirm]
+  hyper-shell server [-h] [FILE | --forever | --restart] [-b NUM] [-w SEC] [-r NUM [--eager]]
+                     [-H ADDR] [-p PORT] [-k KEY] [--no-db | --initdb] [--print | -f PATH] 
+                     [--no-confirm]
 
-Launch server, schedule directly or asynchronously from database.\
+  Launch server, schedule directly or asynchronously from database.\
 """
 
 APP_HELP = f"""\
 {APP_USAGE}
 
-The server includes a scheduler component that pulls tasks from the database and offers
-them up on a distributed queue to clients. It also has a receiver that collects the results
-of finished tasks. Optionally, the server can submit tasks (FILE). When submitting tasks,
-the -w/--bundlewait and -b/--bundlesize options are the same as for 'hyper-shell submit'.
+  The server includes a scheduler component that pulls tasks from the database and offers
+  them up on a distributed queue to clients. It also has a receiver that collects the results
+  of finished tasks. Optionally, the server can submit tasks (FILE). When submitting tasks,
+  the -w/--bundlewait and -b/--bundlesize options are the same as for 'hyper-shell submit'.
 
-With --max-retries greater than zero and with the database configured, the scheduler will 
-check for a non-zero exit status for tasks and re-submit them if their previous number of 
-attempts is less.
+  With --max-retries greater than zero and with the database configured, the scheduler will 
+  check for a non-zero exit status for tasks and re-submit them if their previous number of 
+  attempts is less.
 
-Tasks are bundled and clients pull them in these bundles. However, by default the bundle
-size is one, meaning that at small scales there is greater responsiveness.
+  Tasks are bundled and clients pull them in these bundles. However, by default the bundle
+  size is one, meaning that at small scales there is greater responsiveness.
 
 Arguments:
   FILE                        Path to input task file (default: <stdin>).
@@ -805,9 +805,7 @@ class ServerApp(Application):
     """Run server in stand-alone mode."""
 
     name = APP_NAME
-    interface = Interface(APP_NAME,
-                          colorize_usage(APP_USAGE),
-                          colorize_usage(APP_HELP))
+    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
 
     filepath: str
     interface.add_argument('filepath', nargs='?', default=None)
