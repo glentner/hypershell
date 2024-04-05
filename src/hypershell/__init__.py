@@ -6,6 +6,7 @@
 
 # standard libs
 import sys
+from importlib.metadata import version as get_version
 
 # external libs
 from cmdkit.app import Application, ApplicationGroup
@@ -23,16 +24,11 @@ from hypershell.config import ConfigApp
 from hypershell.data import InitDBApp
 
 # public interface
-__all__ = ['HyperShellApp', 'main', '__version__', '__license__']
+__all__ = ['HyperShellApp', 'main', '__version__']
 
 # project metadata
-__version__     = '2.4.0'
-__authors__     = 'Geoffrey Lentner'
-__contact__     = 'glentner@purdue.edu'
-__license__     = 'Apache Software License'
-__copyright__   = '2019-2023. All Rights Reserved.'
+__version__     = get_version('hyper-shell')
 __website__     = 'https://github.com/glentner/hyper-shell'
-__keywords__    = 'distributed-computing command-line-tool shell-scripting high-performance-computing'
 __description__ = 'Process shell commands over a distributed, asynchronous queue.'
 __citation__    = """\
 @inproceedings{lentner_2022,

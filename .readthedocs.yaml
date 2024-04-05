@@ -4,14 +4,15 @@
 version: 2
 
 build:
-  os: ubuntu-20.04
+  os: ubuntu-22.04
   tools:
-    python: "3.9"
-
-python:
-  install:
-    - method: pip
-      path: .
+    python: "3.10"
+  jobs:
+    post_create_environment:
+      - pip install poetry
+      - poetry config virtualenvs.create false
+    post_install:
+      - poetry install --with docs
 
 sphinx:
    configuration: docs/conf.py

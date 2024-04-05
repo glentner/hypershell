@@ -1,10 +1,9 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 LABEL authors="geoffrey"
 
 
 RUN apt-get update && \
     apt-get upgrade --yes && \
-    apt-get install --yes pipenv && \
     rm -rf /var/lib/apt/lists/*
 
 RUN addgroup --gid 1001 --system app && \
@@ -12,7 +11,9 @@ RUN addgroup --gid 1001 --system app && \
 
 WORKDIR /app
 COPY . .
-RUN pipenv install --deploy --system --ignore-pipfile
+RUN pip install poetry psycopg2-binary && \
+    poetry config virtualenvs.create false && \
+    poetry install --no-dev
 
 ENV HYPERSHELL_LOGGING_LEVEL=DEBUG \
     HYPERSHELL_LOGGING_STYLE=SYSTEM
