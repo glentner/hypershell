@@ -494,12 +494,19 @@ class HeartMonitor(StateMachine):
         """Update client with heartbeat or disconnect."""
         hb = self.latest_heartbeat
         if hb.state is not ClientState.FINISHED:
-            if hb.uuid not in self.beats:
+            if hb.uuid in self.beats:
+                log.trace(f'Heartbeat - running ({hb.host}: {hb.uuid})')
+            else:
                 log.debug(f'Registered client ({hb.host}: {hb.uuid})')
                 if not self.in_memory:
-                    Client.add(Client.from_heartbeat(hb))
-            else:
-                log.trace(f'Heartbeat - running ({hb.host}: {hb.uuid})')
+                    new_client = Client.from_heartbeat(hb)
+                    try:
+                        # Check to see if we are re-registering a falsely-evicted client (Issue #29)
+                        old_client = Client.from_id(new_client.id)
+                        log.warning(f'Existing client re-registered ({old_client.host}: {old_client.id})')
+                        Client.update(old_client.id, disconnected_at=None, evicted=False)
+                    except Client.NotFound:
+                        Client.add(new_client)
             self.beats[hb.uuid] = hb
             return HeartbeatState.SWITCH
         else:
