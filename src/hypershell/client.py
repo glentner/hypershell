@@ -225,7 +225,7 @@ class ClientScheduler(StateMachine):
     def put_local(self: ClientScheduler) -> SchedulerState:
         """Put latest task on the local task queue."""
         try:
-            self.local.put(self.task, timeout=2)
+            self.local.put(self.task, timeout=1)
             return SchedulerState.POP_TASK
         except QueueFull:
             return SchedulerState.PUT_LOCAL
@@ -351,15 +351,18 @@ class ClientCollector(StateMachine):
 
     def put_remote(self: ClientCollector) -> CollectorState:
         """Push out bundle of completed tasks."""
-        if self.bundle:
-            self.queue.completed.put(self.bundle)
-            log.trace(f'Bundle returned ({len(self.bundle)} tasks)')
-            self.tasks.clear()
-            self.bundle.clear()
-            self.previous_send = datetime.now()
-        else:
-            log.trace('Bundle empty')
-        return CollectorState.GET_LOCAL
+        try:
+            if self.bundle:
+                self.queue.completed.put(self.bundle, timeout=2)
+                log.trace(f'Bundle returned ({len(self.bundle)} tasks)')
+                self.tasks.clear()
+                self.bundle.clear()
+                self.previous_send = datetime.now()
+            else:
+                log.trace('Bundle empty')
+            return CollectorState.GET_LOCAL
+        except QueueFull:
+            return CollectorState.PUT_REMOTE
 
     def finalize(self: ClientCollector) -> CollectorState:
         """Push out any remaining tasks and halt."""
