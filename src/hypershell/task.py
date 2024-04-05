@@ -798,7 +798,7 @@ def print_normal(task: Task) -> None:
     task_data = {k: json.dumps(to_json_type(v)).strip('"') for k, v in task.to_dict().items()}
     task_data['waited'] = 'null' if not task.waited else timedelta(seconds=int(task_data['waited']))
     task_data['duration'] = 'null' if not task.duration else timedelta(seconds=int(task_data['duration']))
-    task_data['tag'] = ', '.join(f'{k}:{v}' if v else k for k, v in task.tag.items())
+    task_data['tag'] = ', '.join(format_tag(k, v) for k, v in task.tag.items())
     print(f'          id: {task_data["id"]}')
     print(f'        args: {task_data["args"]}')
     print(f'     command: {task_data["command"]}')
@@ -817,3 +817,11 @@ def print_normal(task: Task) -> None:
     print(f' previous_id: {task_data["previous_id"]}')
     print(f'     next_id: {task_data["next_id"]}')
     print(f'        tags: {task_data["tag"]}')
+
+
+def format_tag(key: str, value: ValueType) -> str:
+    """Format as `key` or `key:value` if not empty string."""
+    if isinstance(value, str) and not value:
+        return key
+    else:
+        return f'{key}:{value}'
