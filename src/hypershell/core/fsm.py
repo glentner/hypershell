@@ -54,7 +54,7 @@ class StateMachine(ABC):
         else:
             # NOTE: Development aids not typically engaged
             # time.sleep(random.uniform(0, 5))  # FUZZ
-            log.devel(f'{self.__class__.__name__}: {previous_state} -> {next_state}')
+            # log.devel(f'{self.__class__.__name__}: {previous_state} -> {next_state}')
             return next_state
 
     def run(self) -> None:
