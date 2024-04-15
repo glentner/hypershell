@@ -20,7 +20,7 @@ from sqlalchemy.orm import Query
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.types import Integer, DateTime, Text, Boolean, JSON as _JSON
-from sqlalchemy.dialects.postgresql import UUID as PostgresUUID, JSONB as PostgresJSON
+from sqlalchemy.dialects.postgresql import UUID as POSTGRES_UUID, JSONB as POSTGRES_JSON
 
 # internal libs
 from hypershell.core.logging import Logger, HOSTNAME, INSTANCE
@@ -71,13 +71,13 @@ def from_json_type(value: RT) -> Union[RT, VT]:
         return value
 
 
-# Column types used by models
-UUID = Text().with_variant(PostgresUUID(as_uuid=False), 'postgresql')
+# Pre-defining types shortens declarations and makes changes easier
+UUID = Text().with_variant(POSTGRES_UUID(as_uuid=False), 'postgresql')
 TEXT = Text()
 INTEGER = Integer()
 DATETIME = DateTime(timezone=True)
 BOOLEAN = Boolean()
-JSON = _JSON().with_variant(PostgresJSON(), 'postgresql')
+JSON = _JSON().with_variant(POSTGRES_JSON(), 'postgresql')
 
 
 class EntityInterface:
