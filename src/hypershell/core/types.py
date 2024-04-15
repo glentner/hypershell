@@ -8,14 +8,14 @@
 from typing import TypeVar
 
 # public interface
-__all__ = ['smart_coerce', 'ValueType']
+__all__ = ['smart_coerce', 'JSONValue']
 
 
 # Each possible input type
-ValueType = TypeVar('ValueType', bool, int, float, str, type(None))
+JSONValue = TypeVar('JSONValue', bool, int, float, str, type(None))
 
 
-def smart_coerce(value: str) -> ValueType:
+def smart_coerce(value: str) -> JSONValue:
     """Automatically coerce string to typed value."""
     try:
         return int(value)

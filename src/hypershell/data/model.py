@@ -25,6 +25,7 @@ from sqlalchemy.dialects.postgresql import UUID as POSTGRES_UUID, JSONB as POSTG
 # internal libs
 from hypershell.core.logging import Logger, HOSTNAME, INSTANCE
 from hypershell.core.heartbeat import Heartbeat
+from hypershell.core.types import JSONValue
 from hypershell.data.core import schema, Session
 
 # public interface
@@ -50,16 +51,17 @@ class AlreadyExists(DatabaseError):
     """Exception specific to a record with unique properties already existing."""
 
 
+# Extended value type contains datetime types
+# These are not valid JSON and must be converted
 VT = TypeVar('VT', bool, int, float, str, type(None), datetime)
-RT = TypeVar('RT', bool, int, float, str, type(None))
 
 
-def to_json_type(value: VT) -> Union[VT, RT]:
+def to_json_type(value: VT) -> Union[VT, JSONValue]:
     """Convert `value` to alternate representation for JSON."""
     return value if not isinstance(value, datetime) else value.isoformat(sep=' ')
 
 
-def from_json_type(value: RT) -> Union[RT, VT]:
+def from_json_type(value: JSONValue) -> Union[JSONValue, VT]:
     """Convert `value` to richer type if possible."""
     try:
         # NOTE: minor detail in PyPy datetime implementation
@@ -108,7 +110,7 @@ class Entity(DeclarativeBase):
         """Convert record to dictionary."""
         return dict(zip(self.columns, self.to_tuple()))
 
-    def to_json(self: Entity) -> Dict[str, RT]:
+    def to_json(self: Entity) -> Dict[str, JSONValue]:
         """Convert record to JSON-serializable dictionary."""
         return {key: to_json_type(value) for key, value in self.to_dict().items()}
 
@@ -122,7 +124,7 @@ class Entity(DeclarativeBase):
         return cls(**data)  # noqa: __init__ instrumented by declarative_base
 
     @classmethod
-    def from_json(cls: Type[Entity], data: Dict[str, RT]) -> Entity:
+    def from_json(cls: Type[Entity], data: Dict[str, JSONValue]) -> Entity:
         """Build from JSON `text` string."""
         return cls.from_dict({key: from_json_type(value) for key, value in data.items()})
 
@@ -272,7 +274,7 @@ class Task(Entity):
 
     @classmethod
     def new(cls: Type[Task], args: str, attempt: int = 1, retried: bool = False,
-            tag: Dict[str, str] = None, **other) -> Task:
+            tag: Dict[str, JSONValue] = None, **other) -> Task:
         """Create a new Task."""
         cls.ensure_valid_tag(tag)
         return Task(id=str(gen_uuid()), args=str(args).strip(),
@@ -280,7 +282,7 @@ class Task(Entity):
                     attempt=attempt, retried=retried, tag=(tag or {}), **other)
 
     @staticmethod
-    def ensure_valid_tag(tag: Dict[str, Any]) -> None:
+    def ensure_valid_tag(tag: Dict[str, JSONValue]) -> None:
         """Check tag dictionary and raise if invalid."""
         if not isinstance(tag, (dict, type(None))):
             raise TypeError('Expected dict or None for tag data')

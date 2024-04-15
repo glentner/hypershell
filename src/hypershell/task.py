@@ -39,7 +39,7 @@ from hypershell.core.config import config
 from hypershell.core.exceptions import handle_exception, handle_exception_silently, get_shared_exception_mapping
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.remote import SSHConnection
-from hypershell.core.types import smart_coerce, ValueType
+from hypershell.core.types import smart_coerce, JSONValue
 from hypershell.data.model import Task, to_json_type
 from hypershell.data import ensuredb
 
@@ -770,7 +770,7 @@ class Tag:
     """Tag specification."""
 
     name: str
-    value: ValueType = ''
+    value: JSONValue = ''
 
     def to_dict(self: Tag) -> Dict[str, str]:
         """Format tag specification as dictionary."""
@@ -788,7 +788,7 @@ class Tag:
             return cls(name, value)
 
     @classmethod
-    def parse_cmdline_list(cls: Type[Tag], args: List[str]) -> Dict[str, Optional[ValueType]]:
+    def parse_cmdline_list(cls: Type[Tag], args: List[str]) -> Dict[str, Optional[JSONValue]]:
         """Parse command-line list of tags."""
         return {tag.name: tag.value for tag in map(cls.from_cmdline, args)}
 
@@ -819,7 +819,7 @@ def print_normal(task: Task) -> None:
     print(f'        tags: {task_data["tag"]}')
 
 
-def format_tag(key: str, value: ValueType) -> str:
+def format_tag(key: str, value: JSONValue) -> str:
     """Format as `key` or `key:value` if not empty string."""
     if isinstance(value, str) and not value:
         return key
