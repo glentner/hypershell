@@ -50,8 +50,8 @@ EDIT_HELP = f"""\
 {EDIT_USAGE}
 
 Options:
-      --system         Edit system configuration.
       --user           Edit user configuration (default).
+      --system         Edit system configuration.
   -h, --help           Show this message and exit.\
 """
 
@@ -102,8 +102,8 @@ Arguments:
   SECTION[...].VAR          Path to variable (default: '.').
 
 Options:
-      --system              Load from system configuration.
       --user                Load from user configuration.
+      --system              Load from system configuration.
   -x, --expand              Expand variable.
   -h, --help                Show this message and exit.\
 """
@@ -241,8 +241,8 @@ Arguments:
   VALUE                   Value to be set.
 
 Options:
-      --system            Apply to system configuration.
       --user              Apply to user configuration (default).
+      --system            Apply to system configuration.
   -h, --help              Show this message and exit.\
 """
 
