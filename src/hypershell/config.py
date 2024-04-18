@@ -354,17 +354,17 @@ HELP = f"""\
 {USAGE}
 
 Commands:
-  get                   {ConfigGetApp.__doc__}
-  set                   {ConfigSetApp.__doc__}
-  edit                  {ConfigEditApp.__doc__}
-  which                 {ConfigWhichApp.__doc__}
+  get              {ConfigGetApp.__doc__}
+  set              {ConfigSetApp.__doc__}
+  edit             {ConfigEditApp.__doc__}
+  which            {ConfigWhichApp.__doc__}
 
 Options:
-  -h, --help            Show this message and exit.
+  -h, --help       Show this message and exit.
 
 Files:
-  (system)  {SYSTEM_CONFIG_PATH}
-    (user)  {USER_CONFIG_PATH}
+  --user           {USER_CONFIG_PATH}
+  --system         {SYSTEM_CONFIG_PATH}
 """
 
 
