@@ -37,9 +37,10 @@ log = Logger.with_name(__name__)
 
 
 EDIT_PROGRAM = 'hyper-shell config edit'
+EDIT_SYNOPSIS = f'{EDIT_PROGRAM} [-h] [--user | --system]'
 EDIT_USAGE = f"""\
 Usage:
-  {EDIT_PROGRAM} [-h] [--system | --user]
+  {EDIT_SYNOPSIS}
 
   Edit configuration with default editor.
   The EDITOR/VISUAL environment variable must be set.\
@@ -83,9 +84,10 @@ class ConfigEditApp(Application):
 
 
 GET_PROGRAM = 'hyper-shell config get'
+GET_SYNOPSIS = f'{GET_PROGRAM} [-h] SECTION[...].VAR [--user | --system] [--expand]'
 GET_USAGE = f"""\
 Usage:
-  {GET_PROGRAM} [-h] [-x] SECTION[...].VAR [--system | --user]
+  {GET_SYNOPSIS}
   Get configuration option.\
 """
 
@@ -224,9 +226,10 @@ class ConfigGetApp(Application):
 
 
 SET_PROGRAM = 'hyper-shell config set'
+SET_SYNOPSIS = f'{SET_PROGRAM} [-h] SECTION[...].VAR VALUE [--user | --system]'
 SET_USAGE = f"""\
 Usage: 
-  {SET_PROGRAM} [-h] SECTION[...].VAR VALUE [--system | --user]
+  {SET_SYNOPSIS}
   Set configuration option.\
 """
 
@@ -284,9 +287,10 @@ class ConfigSetApp(Application):
 
 
 WHICH_PROGRAM = 'hyper-shell config which'
+WHICH_SYNOPSIS = f'{WHICH_PROGRAM} [-h] SECTION[...].VAR'
 WHICH_USAGE = f"""\
 Usage: 
-  {WHICH_PROGRAM} [-h] SECTION[...].VAR
+  {WHICH_SYNOPSIS}
   Show origin of configuration option.\
 """
 
@@ -336,8 +340,13 @@ else:
 
 PROGRAM = 'hyper-shell config'
 USAGE = f"""\
-Usage: 
-  {PROGRAM} [-h] <command> [<args>...]
+Usage:
+  {PROGRAM} [-h]
+  {GET_SYNOPSIS}
+  {SET_SYNOPSIS}
+  {EDIT_SYNOPSIS}
+  {WHICH_SYNOPSIS}
+
   {__doc__}\
 """
 

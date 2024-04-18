@@ -51,9 +51,10 @@ log = Logger.with_name(__name__)
 
 
 SUBMIT_PROGRAM = 'hyper-shell task submit'
+SUBMIT_SYNOPSIS = f'{SUBMIT_PROGRAM} [-h] [-t TAG [TAG...]] ARGS...'
 SUBMIT_USAGE = f"""\
 Usage:
-  {SUBMIT_PROGRAM} [-h] [-t TAG [TAG...]] ARGS...
+  {SUBMIT_SYNOPSIS}
   Submit individual task to database.\
 """
 
@@ -106,9 +107,10 @@ def check_uuid(value: str) -> None:
 
 
 INFO_PROGRAM = 'hyper-shell task info'
+INFO_SYNOPSIS = f'{INFO_PROGRAM} [-h] ID [--stdout | --stderr | -x FIELD] [-f FORMAT]'
 INFO_USAGE = f"""\
 Usage: 
-  {INFO_PROGRAM} [-h] ID [--stdout | --stderr | -x FIELD] [-f FORMAT]
+  {INFO_SYNOPSIS}
   Get metadata and/or task outputs.\
 """
 
@@ -244,9 +246,10 @@ DEFAULT_INTERVAL = 5
 
 
 WAIT_PROGRAM = 'hyper-shell task wait'
+WAIT_SYNOPSIS = f'{WAIT_PROGRAM} [-h] ID [-n SEC] [--info [-f FORMAT] | --status | --return]'
 WAIT_USAGE = f"""\
 Usage: 
-  {WAIT_PROGRAM} [-h] ID [-n SEC] [--info [-f FORMAT] | --status | --return]
+  {WAIT_SYNOPSIS}
   Wait for task to complete.\
 """
 
@@ -333,9 +336,10 @@ class TaskWaitApp(Application):
 
 
 RUN_PROGRAM = 'hyper-shell task run'
+RUN_SYNOPSIS = f'{RUN_PROGRAM} [-h] [-n SEC] ARGS...'
 RUN_USAGE = f"""\
 Usage: 
-  {RUN_PROGRAM} [-h] [-n SEC] ARGS... 
+  {RUN_SYNOPSIS}
   Submit individual task and wait for completion.\
 """
 
@@ -377,6 +381,7 @@ class TaskRunApp(Application):
 
 
 SEARCH_PROGRAM = 'hyper-shell task search'
+SEARCH_SYNOPSIS = f'{SEARCH_PROGRAM} [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]] ...'
 SEARCH_USAGE = f"""\
 Usage:
   hyper-shell task search [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]]
@@ -619,6 +624,7 @@ class TaskSearchApp(Application):
 
 
 UPDATE_PROGRAM = 'hyper-shell task update'
+UPDATE_SYNOPSIS = f'{UPDATE_PROGRAM} [-h] ID FIELD VALUE'
 UPDATE_USAGE = f"""\
 Usage: 
   {UPDATE_PROGRAM} [-h] ID FIELD VALUE
@@ -680,7 +686,14 @@ class TaskUpdateApp(Application):
 TASK_PROGRAM = 'hyper-shell task'
 TASK_USAGE = f"""\
 Usage: 
-  {TASK_PROGRAM} [-h] <command> [<args>...]
+  {TASK_PROGRAM} [-h]
+  {SUBMIT_SYNOPSIS}
+  {INFO_SYNOPSIS}
+  {WAIT_SYNOPSIS}
+  {RUN_SYNOPSIS}
+  {SEARCH_SYNOPSIS}
+  {UPDATE_SYNOPSIS}
+  
   Search, submit, track, and manage individual tasks.\
 """
 
