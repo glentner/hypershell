@@ -401,10 +401,10 @@ Options:
   -w, --where      COND...   List of conditional statements.
   -t, --with-tag   TAG...    List of tags.
   -s, --order-by   FIELD     Order output by field.
-      --failed               Alias for `exit_status != 0`
-      --succeeded            Alias for `exit_status == 0`
-      --finished             Alias for `exit_status != null`
-      --remaining            Alias for `exit_status == null`
+  -F, --failed               Alias for `exit_status != 0`
+  -S, --succeeded            Alias for `exit_status == 0`
+  -C, --completed            Alias for `exit_status != null`
+  -R, --remaining            Alias for `exit_status == null`
       --format     FORMAT    Format output (normal, plain, table, csv, json).
       --json                 Format output as JSON (alias for `--format=json`).
       --csv                  Format output as CSV (alias for `--format=csv`.
@@ -449,14 +449,16 @@ class TaskSearchApp(Application):
     interface.add_argument('-c', '--count', action='store_true', dest='show_count')
 
     show_failed: bool = False
-    show_finished: bool = False
+    show_completed: bool = False
     show_succeeded: bool = False
     show_remaining: bool = False
     search_alias_interface = interface.add_mutually_exclusive_group()
-    search_alias_interface.add_argument('--failed', action='store_true', dest='show_failed')
-    search_alias_interface.add_argument('--finished', action='store_true', dest='show_finished')
-    search_alias_interface.add_argument('--remaining', action='store_true', dest='show_remaining')
-    search_alias_interface.add_argument('--succeeded', action='store_true', dest='show_succeeded')
+    search_alias_interface.add_argument('-F', '--failed', action='store_true', dest='show_failed')
+    search_alias_interface.add_argument('-C', '--completed', action='store_true', dest='show_completed')
+    search_alias_interface.add_argument('-S', '--succeeded', action='store_true', dest='show_succeeded')
+    search_alias_interface.add_argument('-R', '--remaining', action='store_true', dest='show_remaining')
+    search_alias_interface.add_argument('--finished', action='store_true', dest='show_completed')
+    # NOTE: --finished retained for backwards compatibility
 
     output_format: str = '<default>'  # 'plain' if field_names else 'normal'
     output_formats: List[str] = ['normal', 'plain', 'table', 'json', 'csv']
