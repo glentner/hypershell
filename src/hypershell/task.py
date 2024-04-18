@@ -16,6 +16,7 @@ import csv
 import json
 import time
 import functools
+import itertools
 from datetime import timedelta
 from dataclasses import dataclass
 from shutil import copyfileobj
@@ -380,6 +381,100 @@ class TaskRunApp(Application):
         TaskInfoApp(uuid=task.id, print_stderr=True).run()
 
 
+# Listing of all field names in order (default for search)
+ALL_FIELDS = list(Task.columns)
+
+
+# Reasonable limit on output delimiter (typically just single char).
+DELIMITER_MAX_SIZE = 100
+
+
+class SearchableMixin:
+    """Mixin class implements task search for multiple commands."""
+
+    field_names: List[str] = ALL_FIELDS
+    where_clauses: List[str] = None
+    taglist: List[str] = None
+    limit: int = None
+
+    # Not needed by some applications
+    order_by: str = None
+    order_desc: bool = False
+
+    show_failed: bool = False
+    show_completed: bool = False
+    show_succeeded: bool = False
+    show_remaining: bool = False
+
+    def build_query(self: SearchableMixin) -> Query:
+        """Build original query interface."""
+        query = Task.query(*self.fields)
+        query = self.__build_order_by_clause(query)
+        query = self.__build_where_clause(query)
+        query = self.__build_where_clause_for_tags(query)
+        return query.limit(self.limit)
+
+    def __build_where_clause_for_tags(self: SearchableMixin, query: Query) -> Query:
+        """Add JSON-based tag where-clauses to query if necessary."""
+        tags_name_only = []
+        tags_with_value = Tag.parse_cmdline_list(self.taglist)
+        for name in list(tags_with_value.keys()):
+            if not tags_with_value[name]:
+                tags_name_only.append(name)
+                tags_with_value.pop(name)
+        for name in tags_name_only:
+            if config.database.provider == 'sqlite':
+                # NOTE: sqlalchemy adds `json_quote(json_extract(task.tag, ?)) is not null`
+                # and cannot find a way to exclude `json_quote`, so we do it ourselves
+                query = query.filter(text('json_extract(task.tag, :tag) is not null')).params(tag=f'$."{name}"')
+            else:
+                query = query.filter(Task.tag[name].isnot(None))
+        for name, value in tags_with_value.items():
+            query = query.filter(Task.tag[name] == type_coerce(value, JSON))
+        return query
+
+    def __build_where_clause(self: SearchableMixin, query: Query) -> Query:
+        """Add explicit where-clauses to query if necessary."""
+        for where_clause in self.__build_filters():
+            query = query.filter(where_clause.compile())
+        return query
+
+    def __build_order_by_clause(self: SearchableMixin, query: Query) -> Query:
+        """Add order by clause to query if necessary."""
+        if self.order_by:
+            field = getattr(Task, self.order_by)
+            if self.order_desc:
+                field = field.desc()
+            query = query.order_by(field)
+        return query
+
+    def __build_filters(self: SearchableMixin) -> List[WhereClause]:
+        """Create list of field selectors from command-line arguments."""
+        if self.show_failed:
+            self.where_clauses.append('exit_status != 0')
+        if self.show_succeeded:
+            self.where_clauses.append('exit_status == 0')
+        if self.show_completed:
+            self.where_clauses.append('exit_status != null')
+        if self.show_remaining:
+            self.where_clauses.append('exit_status == null')
+        if not self.where_clauses:
+            return []
+        else:
+            return [WhereClause.from_cmdline(arg) for arg in self.where_clauses]
+
+    @functools.cached_property
+    def fields(self: SearchableMixin) -> List[Column]:
+        """Field instances to query against."""
+        return [getattr(Task, name) for name in self.field_names]
+
+    def check_field_names(self: SearchableMixin) -> None:
+        """Check field names are valid."""
+        for name in self.field_names:
+            if name not in Task.columns:
+                raise ArgumentError(f'Invalid field name \'{name}\'')
+
+
 SEARCH_PROGRAM = 'hyper-shell task search'
 SEARCH_SYNOPSIS = f'{SEARCH_PROGRAM} [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]] ...'
 SEARCH_USAGE = f"""\
@@ -387,7 +482,7 @@ Usage:
   hyper-shell task search [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]]
                           [--order-by FIELD [--desc]] [--count | --limit NUM]
                           [--format FORMAT | --json | --csv]  [-d CHAR]
-                        
+
   Search tasks in the database.\
 """
 
@@ -415,15 +510,7 @@ Options:
 """
 
 
-# Listing of all field names in order (default for search)
-ALL_FIELDS = list(Task.columns)
-
-
-# Reasonable limit on output delimiter (typically just single char).
-DELIMITER_MAX_SIZE = 100
-
-
-class TaskSearchApp(Application):
+class TaskSearchApp(Application, SearchableMixin):
     """Search for tasks in database."""
 
     interface = Interface(SEARCH_PROGRAM, SEARCH_USAGE, SEARCH_HELP)
@@ -485,68 +572,6 @@ class TaskSearchApp(Application):
         else:
             self.print_output(self.build_query().all())
 
-    def build_query(self: TaskSearchApp) -> Query:
-        """Build original query interface."""
-        query = Task.query(*self.fields)
-        query = self.__build_order_by_clause(query)
-        query = self.__build_where_clause(query)
-        query = self.__build_where_clause_for_tags(query)
-        return query.limit(self.limit)
-
-    def __build_where_clause_for_tags(self: TaskSearchApp, query: Query) -> Query:
-        """Add JSON-based tag where-clauses to query if necessary."""
-        tags_name_only = []
-        tags_with_value = Tag.parse_cmdline_list(self.taglist)
-        for name in list(tags_with_value.keys()):
-            if not tags_with_value[name]:
-                tags_name_only.append(name)
-                tags_with_value.pop(name)
-        for name in tags_name_only:
-            if config.database.provider == 'sqlite':
-                # NOTE: sqlalchemy adds `json_quote(json_extract(task.tag, ?)) is not null`
-                # and cannot find a way to exclude `json_quote`, so we do it ourselves
-                query = query.filter(text('json_extract(task.tag, :tag) is not null')).params(tag=f'$."{name}"')
-            else:
-                query = query.filter(Task.tag[name].isnot(None))
-        for name, value in tags_with_value.items():
-            query = query.filter(Task.tag[name] == type_coerce(value, JSON))
-        return query
-
-    def __build_where_clause(self: TaskSearchApp, query: Query) -> Query:
-        """Add explicit where-clauses to query if necessary."""
-        for where_clause in self.__build_filters():
-            query = query.filter(where_clause.compile())
-        return query
-
-    def __build_order_by_clause(self: TaskSearchApp, query: Query) -> Query:
-        """Add order by clause to query if necessary."""
-        if self.order_by:
-            field = getattr(Task, self.order_by)
-            if self.order_desc:
-                field = field.desc()
-            query = query.order_by(field)
-        return query
-
-    def __build_filters(self: TaskSearchApp) -> List[WhereClause]:
-        """Create list of field selectors from command-line arguments."""
-        if self.show_failed:
-            self.where_clauses.append('exit_status != 0')
-        if self.show_succeeded:
-            self.where_clauses.append('exit_status == 0')
-        if self.show_finished:
-            self.where_clauses.append('exit_status != null')
-        if self.show_remaining:
-            self.where_clauses.append('exit_status == null')
-        if not self.where_clauses:
-            return []
-        else:
-            return [WhereClause.from_cmdline(arg) for arg in self.where_clauses]
-
-    @functools.cached_property
-    def fields(self: TaskSearchApp) -> List[Column]:
-        """Field instances to query against."""
-        return [getattr(Task, name) for name in self.field_names]
-
     @functools.cached_property
     def print_output(self: TaskSearchApp) -> Callable[[List[Tuple]], None]:
         """The requested output formatter."""
@@ -593,12 +618,6 @@ class TaskSearchApp(Application):
             data = [to_json_type(value) for value in record]
             data = [value if isinstance(value, str) else json.dumps(value) for value in data]
             writer.writerow(data)
-
-    def check_field_names(self: TaskSearchApp) -> None:
-        """Check field names are valid."""
-        for name in self.field_names:
-            if name not in Task.columns:
-                raise ArgumentError(f'Invalid field name \'{name}\'')
 
     def check_output_format(self: TaskSearchApp) -> None:
         """Check given output format is valid."""
@@ -685,6 +704,119 @@ class TaskUpdateApp(Application):
             raise Task.NotFound(str(err)) from err
 
 
+UPDATE_ALL_PROGRAM = 'hyper-shell task update-all'
+UPDATE_ALL_SYNOPSIS = f'{UPDATE_ALL_PROGRAM} [-h] FIELD VALUE [-w COND [COND ...]] [-t TAG [TAG...]]'
+UPDATE_ALL_USAGE = f"""\
+Usage:
+  {UPDATE_ALL_SYNOPSIS}
+  Update many tasks at once.\
+"""
+
+UPDATE_ALL_HELP = f"""\
+{UPDATE_ALL_USAGE}
+
+Arguments:
+  FIELD                      Task field name.
+  VALUE                      New value.
+
+Options:
+  -w, --where      COND...   List of conditional statements.
+  -t, --with-tag   TAG...    List of tags.
+  -F, --failed               Alias for `exit_status != 0`
+  -S, --succeeded            Alias for `exit_status == 0`
+  -C, --completed            Alias for `exit_status != null`
+  -R, --remaining            Alias for `exit_status == null`
+  -h, --help                 Show this message and exit.\
+"""
+
+
+class TaskUpdateAllApp(Application, SearchableMixin):
+    """Update many tasks at once."""
+
+    interface = Interface(UPDATE_ALL_PROGRAM, UPDATE_ALL_USAGE, UPDATE_ALL_HELP)
+
+    field: str
+    interface.add_argument('field', choices=list(Task.columns)[1:])  # NOTE: not ID!
+
+    value: str
+    interface.add_argument('value')
+
+    field_names: List[str] = []  # Empty field_names triggers full Task object
+
+    where_clauses: List[str] = None
+    interface.add_argument('-w', '--where', nargs='*', default=[], dest='where_clauses')
+
+    taglist: List[str] = None
+    interface.add_argument('-t', '--with-tag', nargs='*', default=[], dest='taglist')
+
+    show_failed: bool = False
+    show_completed: bool = False
+    show_succeeded: bool = False
+    show_remaining: bool = False
+    search_alias_interface = interface.add_mutually_exclusive_group()
+    search_alias_interface.add_argument('-F', '--failed', action='store_true', dest='show_failed')
+    search_alias_interface.add_argument('-C', '--completed', action='store_true', dest='show_completed')
+    search_alias_interface.add_argument('-S', '--succeeded', action='store_true', dest='show_succeeded')
+    search_alias_interface.add_argument('-R', '--remaining', action='store_true', dest='show_remaining')
+
+    exceptions = {
+        StatementError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        **get_shared_exception_mapping(__name__)
+    }
+
+    def run(self: TaskUpdateAllApp) -> None:
+        """Update task attributes in bulk."""
+
+        ensuredb()
+        query = self.build_query()
+
+        if config.database.provider == 'sqlite':
+            site = config.database.file
+        else:
+            site = config.database.get('host', 'localhost')
+
+        print(f'Inspecting database: {config.database.provider} ({site}) ...')
+        count = query.count()
+        if count == 0:
+            print(f'Update affects {count} tasks, stopping')
+            return
+
+        response = input(f'Update affects {count} tasks, continue? yes/[no]: ').strip().lower()
+        if response in ['n', 'no', '']:
+            print('Stopping')
+            return
+        if response not in ['y', 'yes']:
+            print(f'Stopping (invalid response: "{response}")')
+            return
+
+        field = self.field
+        if Task.columns.get(self.field) is str:
+            # We want to coerce the value (e.g., as an int or None)
+            # But also allow for, e.g., args==1 which expects type str.
+            value = None if self.value.lower() in {'none', 'null'} else self.value
+        else:
+            value = smart_coerce(self.value)
+
+        if field == 'tag':
+            update_data = Tag.parse_cmdline_list([value, ])
+        else:
+            update_data = {field: value, }
+
+        tasks = query.all()
+        tasks_it = iter(tasks)
+        while batch := tuple(itertools.islice(tasks_it, 100)):
+            if field == 'tag':
+                Task.update_all([
+                    {'id': task.id, 'tag': {**task.tag, **update_data}}
+                    for task in batch
+                ])
+            else:
+                Task.update_all([
+                    {'id': task.id, **update_data}
+                    for task in batch
+                ])
+
+
 TASK_PROGRAM = 'hyper-shell task'
 TASK_USAGE = f"""\
 Usage: 
@@ -695,6 +827,7 @@ Usage:
   {RUN_SYNOPSIS}
   {SEARCH_SYNOPSIS}
   {UPDATE_SYNOPSIS}
+  {UPDATE_ALL_SYNOPSIS}
   
   Search, submit, track, and manage individual tasks.\
 """
@@ -703,15 +836,16 @@ TASK_HELP = f"""\
 {TASK_USAGE}
 
 Commands:
-  submit                 {TaskSubmitApp.__doc__}
-  info                   {TaskInfoApp.__doc__}
-  wait                   {TaskWaitApp.__doc__}
-  run                    {TaskRunApp.__doc__}
-  search                 {TaskSearchApp.__doc__}
-  update                 {TaskUpdateApp.__doc__}
+  submit           {TaskSubmitApp.__doc__}
+  info             {TaskInfoApp.__doc__}
+  wait             {TaskWaitApp.__doc__}
+  run              {TaskRunApp.__doc__}
+  search           {TaskSearchApp.__doc__}
+  update           {TaskUpdateApp.__doc__}
+  update-all       {TaskUpdateAllApp.__doc__}
 
 Options:
-  -h, --help             Show this message and exit.\
+  -h, --help       Show this message and exit.\
 """
 
 
@@ -730,6 +864,7 @@ class TaskGroupApp(ApplicationGroup):
         'run': TaskRunApp,
         'search': TaskSearchApp,
         'update': TaskUpdateApp,
+        'update-all': TaskUpdateAllApp,
     }
 
 
