@@ -6,7 +6,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import List, Dict, Callable, IO, Tuple, Any, Optional, Type
+from typing import List, Dict, Callable, IO, Tuple, Any, Optional, Type, Final
 
 # standard libs
 import os
@@ -17,7 +17,7 @@ import json
 import time
 import functools
 import itertools
-from datetime import timedelta
+from datetime import timedelta, datetime
 from dataclasses import dataclass
 from shutil import copyfileobj
 
@@ -817,6 +817,66 @@ class TaskUpdateAllApp(Application, SearchableMixin):
                 ])
 
 
+CANCEL_PROGRAM = 'hyper-shell task cancel'
+CANCEL_SYNOPSIS = f'{CANCEL_PROGRAM} [-h] ID'
+CANCEL_USAGE = f"""\
+Usage: 
+  {CANCEL_SYNOPSIS}
+  Cancel existing task.\
+"""
+
+CANCEL_HELP = f"""\
+{CANCEL_USAGE}
+
+  Cancellation does not delete a task from the database.
+  We set schedule_time and exit_status to stop it from running.
+  
+Arguments:
+  ID                    Unique UUID.
+
+Options:
+  -h, --help            Show this message and exit.\
+"""
+
+
+# Special exit status indicates cancellation
+CANCEL_STATUS: Final[int] = -1
+
+
+class TaskCancelApp(Application):
+    """Cancel existing task."""
+
+    interface = Interface(CANCEL_PROGRAM, CANCEL_USAGE, CANCEL_HELP)
+
+    uuid: str
+    interface.add_argument('uuid')
+
+    exceptions = {
+        Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
+        **get_shared_exception_mapping(__name__)
+    }
+
+    def run(self: TaskCancelApp) -> None:
+        """Update individual task attribute directly."""
+        ensuredb()
+        check_uuid(self.uuid)
+        task = Task.from_id(self.uuid)
+        if task.exit_status == CANCEL_STATUS:
+            log.critical(f'Task already cancelled ({task.schedule_time})')
+            return
+        elif task.exit_status is not None:
+            log.critical(f'Task already completed with exit code {task.exit_status} ({task.completion_time})')
+            return
+        elif task.client_id is not None:
+            log.critical(f'Task already running ({task.client_host}: {task.client_id})')
+            return
+        elif task.schedule_time is not None:
+            log.critical(f'Task already scheduled ({task.schedule_time})')
+            return
+        else:
+            Task.update(task.id, schedule_time=datetime.now().astimezone(), exit_status=CANCEL_STATUS)
+
+
 TASK_PROGRAM = 'hyper-shell task'
 TASK_USAGE = f"""\
 Usage: 
@@ -828,6 +888,7 @@ Usage:
   {SEARCH_SYNOPSIS}
   {UPDATE_SYNOPSIS}
   {UPDATE_ALL_SYNOPSIS}
+  {CANCEL_SYNOPSIS}
   
   Search, submit, track, and manage individual tasks.\
 """
@@ -843,6 +904,7 @@ Commands:
   search           {TaskSearchApp.__doc__}
   update           {TaskUpdateApp.__doc__}
   update-all       {TaskUpdateAllApp.__doc__}
+  cancel           {TaskCancelApp.__doc__}
 
 Options:
   -h, --help       Show this message and exit.\
@@ -865,6 +927,7 @@ class TaskGroupApp(ApplicationGroup):
         'search': TaskSearchApp,
         'update': TaskUpdateApp,
         'update-all': TaskUpdateAllApp,
+        'cancel': TaskCancelApp,
     }
 
 
