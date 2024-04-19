@@ -84,7 +84,7 @@ class ConfigEditApp(Application):
 
 
 GET_PROGRAM = 'hyper-shell config get'
-GET_SYNOPSIS = f'{GET_PROGRAM} [-h] SECTION[...].VAR [--user | --system] [--expand]'
+GET_SYNOPSIS = f'{GET_PROGRAM} [-h] SECTION[...].VAR [-x] [-r] [--user | --system]'
 GET_USAGE = f"""\
 Usage:
   {GET_SYNOPSIS}
@@ -97,6 +97,8 @@ GET_HELP = f"""\
   If --user/--system not specified, the output is the merged configuration
   from all sources. Use `hyper-shell config which` to see where a specific
   option originates from.
+  
+  If a single value is requested, use -r/--raw to strip formatting. 
 
 Arguments:
   SECTION[...].VAR          Path to variable (default: '.').
@@ -105,6 +107,7 @@ Options:
       --user                Load from user configuration.
       --system              Load from system configuration.
   -x, --expand              Expand variable.
+  -r, --raw                 Disable formatting on single value output.
   -h, --help                Show this message and exit.\
 """
 
@@ -124,6 +127,9 @@ class ConfigGetApp(Application):
 
     expand: bool = False
     interface.add_argument('-x', '--expand', action='store_true')
+
+    raw_mode: bool = False
+    interface.add_argument('-r', '--raw', action='store_true', dest='raw_mode')
 
     exceptions = {
         **get_shared_exception_mapping(__name__)
@@ -190,7 +196,7 @@ class ConfigGetApp(Application):
     def print_output(self: ConfigGetApp, value: Any) -> None:
         """Format and print final `value`."""
         value = self.format_output(value)
-        if sys.stdout.isatty():
+        if sys.stdout.isatty() and not self.raw_mode:
             output = Syntax(value, 'toml', word_wrap=True,
                             theme = full_config.console.theme,
                             background_color = 'default')
