@@ -741,7 +741,7 @@ class TaskUpdateAllApp(Application, SearchableMixin):
     value: str
     interface.add_argument('value')
 
-    field_names: List[str] = []  # Empty field_names triggers full Task object
+    field_names: List[str] = []  # Empty field_names returns full Task object
 
     where_clauses: List[str] = None
     interface.add_argument('-w', '--where', nargs='*', default=[], dest='where_clauses')
@@ -877,6 +877,107 @@ class TaskCancelApp(Application):
             Task.update(task.id, schedule_time=datetime.now().astimezone(), exit_status=CANCEL_STATUS)
 
 
+CANCEL_ALL_PROGRAM = 'hyper-shell task cancel-all'
+CANCEL_ALL_SYNOPSIS = f'{CANCEL_ALL_PROGRAM} [-h] [-w COND [COND ...]] [-t TAG [TAG...]] [-R]'
+CANCEL_ALL_USAGE = f"""\
+Usage:
+  {CANCEL_ALL_SYNOPSIS}
+  Cancel many tasks at once.\
+"""
+
+CANCEL_ALL_HELP = f"""\
+{CANCEL_ALL_USAGE}
+
+  Cancellation does not delete a task from the database.
+  We set schedule_time and exit_status to stop it from running.
+  
+  It is good practice to include -R/--remaining to automatically
+  ignore completed tasks and avoid warnings.
+
+Options:
+  -w, --where      COND...   List of conditional statements.
+  -t, --with-tag   TAG...    List of tags.
+  -R, --remaining            Alias for `exit_status == null`
+  -h, --help                 Show this message and exit.\
+"""
+
+
+class TaskCancelAllApp(Application, SearchableMixin):
+    """Cancel many tasks at once."""
+
+    interface = Interface(CANCEL_ALL_PROGRAM, CANCEL_ALL_USAGE, CANCEL_ALL_HELP)
+
+    field_names: List[str] = []  # Empty field_names returns full Task object
+
+    where_clauses: List[str] = None
+    interface.add_argument('-w', '--where', nargs='*', default=[], dest='where_clauses')
+
+    taglist: List[str] = None
+    interface.add_argument('-t', '--with-tag', nargs='*', default=[], dest='taglist')
+
+    # NOTE: we do not allow --failed, --completed, or --succeeded
+    show_remaining: bool = False
+    interface.add_argument('-R', '--remaining', action='store_true', dest='show_remaining')
+
+    exceptions = {
+        **get_shared_exception_mapping(__name__)
+    }
+
+    def run(self: TaskCancelAllApp) -> None:
+        """Invoke TaskCancelApp for each task found."""
+
+        ensuredb()
+        query = self.build_query()
+
+        if config.database.provider == 'sqlite':
+            site = config.database.file
+        else:
+            site = config.database.get('host', 'localhost')
+
+        print(f'Inspecting database: {config.database.provider} ({site}) ...')
+        count = query.count()
+        if count == 0:
+            print(f'Cancellation affects {count} tasks, stopping')
+            return
+
+        response = input(f'Cancelling {count} tasks, continue? yes/[no]: ').strip().lower()
+        if response in ['n', 'no', '']:
+            print('Stopping')
+            return
+        if response not in ['y', 'yes']:
+            print(f'Stopping (invalid response: "{response}")')
+            return
+
+        count_cancelled = 0
+        tasks = query.all()
+        tasks_it = iter(tasks)
+        while batch := tuple(itertools.islice(tasks_it, 100)):
+            batch_ok = []
+            for task in batch:
+                if task.exit_status == CANCEL_STATUS:
+                    log.warning(f'Task ({task.id}) already cancelled ({task.schedule_time})')
+                    continue
+                elif task.exit_status is not None:
+                    log.warning(f'Task ({task.id}) already completed with exit code '
+                                f'{task.exit_status} ({task.completion_time})')
+                    continue
+                elif task.client_id is not None:
+                    log.warning(f'Task ({task.id}) already running ({task.client_host}: {task.client_id})')
+                    continue
+                elif task.schedule_time is not None:
+                    log.warning(f'Task ({task.id}) already scheduled ({task.schedule_time})')
+                    continue
+                else:
+                    batch_ok.append(task)
+            if batch_ok:
+                count_cancelled += len(batch_ok)
+                Task.update_all([
+                    {'id': task.id, 'schedule_time': datetime.now().astimezone(), 'exit_status': CANCEL_STATUS}
+                    for task in batch_ok
+                ])
+        log.info(f'Cancelled {count_cancelled} tasks')
+
+
 TASK_PROGRAM = 'hyper-shell task'
 TASK_USAGE = f"""\
 Usage: 
@@ -889,8 +990,9 @@ Usage:
   {UPDATE_SYNOPSIS}
   {UPDATE_ALL_SYNOPSIS}
   {CANCEL_SYNOPSIS}
+  {CANCEL_ALL_SYNOPSIS}
   
-  Search, submit, track, and manage individual tasks.\
+  Search, submit, track, and manage tasks.\
 """
 
 TASK_HELP = f"""\
@@ -905,6 +1007,7 @@ Commands:
   update           {TaskUpdateApp.__doc__}
   update-all       {TaskUpdateAllApp.__doc__}
   cancel           {TaskCancelApp.__doc__}
+  cancel-all       {TaskCancelAllApp.__doc__}
 
 Options:
   -h, --help       Show this message and exit.\
@@ -928,6 +1031,7 @@ class TaskGroupApp(ApplicationGroup):
         'update': TaskUpdateApp,
         'update-all': TaskUpdateAllApp,
         'cancel': TaskCancelApp,
+        'cancel-all': TaskCancelAllApp,
     }
 
 
