@@ -430,6 +430,8 @@ class SearchableMixin:
             else:
                 query = query.filter(Task.tag[name].isnot(None))
         for name, value in tags_with_value.items():
+            if config.database.provider == 'sqlite' and value in (True, False):
+                value = int(value)  # NOTE: SQLite stores as 0/1 not JSON true/false :(
             query = query.filter(Task.tag[name] == type_coerce(value, JSON))
         return query
 
