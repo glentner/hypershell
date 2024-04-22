@@ -419,7 +419,7 @@ class SearchableMixin:
         tags_name_only = []
         tags_with_value = Tag.parse_cmdline_list(self.taglist)
         for name in list(tags_with_value.keys()):
-            if not tags_with_value[name]:
+            if isinstance(tags_with_value[name], str) and not tags_with_value[name]:
                 tags_name_only.append(name)
                 tags_with_value.pop(name)
         for name in tags_name_only:
