@@ -293,9 +293,14 @@ class Task(Entity):
                 raise TypeError(f'Tag key, {key} ({type(key)}) is not string')
             if not isinstance(value, (str, int, float, bool, type(None))):
                 raise TypeError(f'Invalid type for tag value, {type(value)})')
-            if isinstance(value, str) and not re.match(r'^[A-Za-z0-9_.+-]+$', value):
-                raise ValueError(f'Tag "{key}:{value}" must only contain alphanumeric '
-                                 f'characters and basic symbols [+._-].')
+            if isinstance(value, str):
+                if not value.strip():
+                    return  # Empty value is a naked tag (no value).
+                if len(value) > 120:
+                    raise ValueError(f'Tag size ({len(value)}) exceeds 120 characters ({key}: {value})')
+                if not re.match(r'^[A-Za-z0-9_.+-]+$', value):
+                    raise ValueError(f'Tag must only contain alphanumerics and basic symbols [+._-]: '
+                                     f'({key}: {value})')
 
     @classmethod
     def select_new(cls: Type[Task], limit: int) -> List[Task]:
@@ -430,6 +435,25 @@ class Task(Entity):
         """Revert scheduled but incomplete tasks to un-scheduled state."""
         while tasks := cls.select_interrupted(100):
             cls.revert_all([task.id for task in tasks])
+
+    @classmethod
+    def cancel_all(cls: Type[Task], ids: List[str]) -> None:
+        """Cancel all tasks identified by `ids`."""
+        cls.update_all([
+            {
+                'id': id,
+                'schedule_time': datetime.now().astimezone(),
+                'exit_status': -1,
+             }
+            for id in ids
+        ])
+        for id in ids:
+            log.trace(f'Cancelled task ({id})')
+
+    @classmethod
+    def cancel(cls: Type[Task], id: str) -> None:
+        """Cancel single task by `id`."""
+        cls.cancel_all([id, ])
 
     @classmethod
     def select_orphaned(cls: Type[Task], client_id: str, limit: int) -> List[Task]:
