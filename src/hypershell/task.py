@@ -41,6 +41,7 @@ from hypershell.core.exceptions import handle_exception, handle_exception_silent
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.remote import SSHConnection
 from hypershell.core.types import smart_coerce, JSONValue
+from hypershell.data.core import Session
 from hypershell.data.model import Task, to_json_type
 from hypershell.data import ensuredb
 
@@ -707,27 +708,48 @@ class TaskUpdateApp(Application):
 
 
 UPDATE_ALL_PROGRAM = 'hyper-shell task update-all'
-UPDATE_ALL_SYNOPSIS = f'{UPDATE_ALL_PROGRAM} [-h] FIELD VALUE [-w COND [COND ...]] [-t TAG [TAG...]]'
+UPDATE_ALL_SYNOPSIS = f'{UPDATE_ALL_PROGRAM} [-h] ARG [ARG...] [--cancel | --revert | --delete]'
 UPDATE_ALL_USAGE = f"""\
 Usage:
   {UPDATE_ALL_SYNOPSIS}
-  Update many tasks at once.\
+  {' ' * len(UPDATE_ALL_PROGRAM)} [--failed | --succeeded | --completed | --remaining]
+  {' ' * len(UPDATE_ALL_PROGRAM)} [-w COND [COND ...]] [-t TAG [TAG...]]
+  {' ' * len(UPDATE_ALL_PROGRAM)} [--order-by FIELD [--desc]] [--limit NUM]
+  {' ' * len(UPDATE_ALL_PROGRAM)} [--remove-tag TAG [TAG ...]] [--no-confirm]
+  
+  Update task metadata.\
 """
 
 UPDATE_ALL_HELP = f"""\
 {UPDATE_ALL_USAGE}
 
+  Include any number of FIELD=VALUE or tag KEY:VALUE positional arguments.
+  The -w/--where and -t/--with-tag operate just as in the search command.
+
+  Using --cancel sets schedule_time to now and exit_status to -1. 
+  Using --revert reverts everything as if the task was new again.
+  Using --delete drops the row from the database entirely.
+
+  The legacy interface for updating a single task with the ID, FIELD, 
+  and VALUE as positional arguments remains valid.
+
 Arguments:
-  FIELD                      Task field name.
-  VALUE                      New value.
+  ARGS...                    Assignment pairs for update.
 
 Options:
-  -w, --where      COND...   List of conditional statements.
-  -t, --with-tag   TAG...    List of tags.
+      --cancel               Cancel specified tasks.
+      --revert               Revert specified tasks.
+      --delete               Delete specified tasks.
+      --remove-tag  TAG...   Remove specified tags by name.
+  -w, --where       COND...  List of conditional statements.
+  -t, --with-tag    TAG...   List of tags.
+  -s, --order-by    FIELD    Order matches by FIELD.
+  -l, --limit       NUM      Limit matches.
   -F, --failed               Alias for `exit_status != 0`
   -S, --succeeded            Alias for `exit_status == 0`
   -C, --completed            Alias for `exit_status != null`
   -R, --remaining            Alias for `exit_status == null`
+  -f, --no-confirm           Do not ask for confirmation.
   -h, --help                 Show this message and exit.\
 """
 
@@ -737,19 +759,27 @@ class TaskUpdateAllApp(Application, SearchableMixin):
 
     interface = Interface(UPDATE_ALL_PROGRAM, UPDATE_ALL_USAGE, UPDATE_ALL_HELP)
 
-    field: str
-    interface.add_argument('field', choices=list(Task.columns)[1:])  # NOTE: not ID!
+    update_args: List[str]
+    interface.add_argument('update_args', nargs='*')
 
-    value: str
-    interface.add_argument('value')
-
-    field_names: List[str] = []  # Empty field_names returns full Task object
+    # Used by SearchableMixin and not part of this interface
+    # Could be left empty and the entire row would be returned for iterative method
+    # Only these two fields are ever actually needed though
+    field_names: List[str] = ['id', 'tag']
 
     where_clauses: List[str] = None
     interface.add_argument('-w', '--where', nargs='*', default=[], dest='where_clauses')
 
     taglist: List[str] = None
     interface.add_argument('-t', '--with-tag', nargs='*', default=[], dest='taglist')
+
+    order_by: str = None
+    order_desc: bool = False
+    interface.add_argument('-s', '--order-by', default=None, choices=list(Task.columns))
+    interface.add_argument('--desc', action='store_true', dest='order_desc')
+
+    limit: int = None
+    interface.add_argument('-l', '--limit', type=int, default=None)
 
     show_failed: bool = False
     show_completed: bool = False
@@ -761,62 +791,176 @@ class TaskUpdateAllApp(Application, SearchableMixin):
     search_alias_interface.add_argument('-S', '--succeeded', action='store_true', dest='show_succeeded')
     search_alias_interface.add_argument('-R', '--remaining', action='store_true', dest='show_remaining')
 
+    revert_mode: bool = False
+    cancel_mode: bool = False
+    delete_mode: bool = False
+    action_interface = interface.add_mutually_exclusive_group()
+    action_interface.add_argument('--revert', action='store_true', dest='revert_mode')
+    action_interface.add_argument('--cancel', action='store_true', dest='cancel_mode')
+    action_interface.add_argument('--delete', action='store_true', dest='delete_mode')
+
+    remove_tag: List[str] = None
+    interface.add_argument('--remove-tag', nargs='*')
+
+    no_confirm: bool = False
+    interface.add_argument('-f', '--no-confirm', action='store_true')
+
     exceptions = {
-        StatementError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         **get_shared_exception_mapping(__name__)
     }
 
     def run(self: TaskUpdateAllApp) -> None:
         """Update task attributes in bulk."""
 
-        ensuredb()
-        query = self.build_query()
+        field_updates = {}
+        tag_updates = {}
+        for arg in self.update_args:
+            if WhereClause.pattern.match(arg):
+                raise ArgumentError(f'Positional argument matches conditional ({arg}), '
+                                    f'maybe you intended to use -w/--where?')
+            if '=' in arg:
+                field, value = arg.split('=', 1)
+                if field == 'id':
+                    raise ArgumentError(f'Cannot alter task "id" (given: {field}={value})')
+                if field not in Task.columns:
+                    raise ArgumentError(f'Unrecognized task field "{field}"')
+                if Task.columns.get(field) is str:
+                    # We want to coerce the value (e.g., as an int or None)
+                    # But also allow for, e.g., args==1 which expects type str.
+                    value = None if value.lower() in {'none', 'null'} else value
+                else:
+                    value = smart_coerce(value)
+                field_updates[field] = value
+            elif ':' in arg:
+                key, value = arg.split(':', 1)
+                tag_updates[key] = smart_coerce(value)
+            else:
+                raise ArgumentError(f'Argument not recognized ({arg}): missing "=" or ":"')
+
+        Task.ensure_valid_tag(tag_updates)
+
+        if self.order_desc and not self.order_by:
+            raise ArgumentError('Should not provide --desc if not using -s/--order-by')
+
+        if self.order_by and not self.limit:
+            raise ArgumentError('Using -s/--order-by without -l/--limit is meaningless')
 
         if config.database.provider == 'sqlite':
             site = config.database.file
         else:
             site = config.database.get('host', 'localhost')
 
-        print(f'Inspecting database: {config.database.provider} ({site}) ...')
+        log.info(f'Searching database: {config.database.provider} ({site})')
+
+        ensuredb()
+        query = self.build_query()
         count = query.count()
+
         if count == 0:
-            print(f'Update affects {count} tasks, stopping')
+            log.info(f'Update affects {count} tasks - stopping')
             return
 
-        response = input(f'Update affects {count} tasks, continue? yes/[no]: ').strip().lower()
-        if response in ['n', 'no', '']:
-            print('Stopping')
+        if not self.no_confirm:
+            response = input(f'Update affects {count} tasks, continue? yes/[no]: ').strip().lower()
+            if response in ['n', 'no', '']:
+                print('Stopping')
+                return
+            if response not in ['y', 'yes']:
+                print(f'Stopping (invalid response: "{response}")')
+                return
+
+        if self.delete_mode:
+            query.delete()
+            Session.commit()
             return
-        if response not in ['y', 'yes']:
-            print(f'Stopping (invalid response: "{response}")')
+
+        if self.cancel_mode:
+            field_updates['schedule_time'] = datetime.now().astimezone()
+            field_updates['exit_status'] = -1
+
+        if self.revert_mode:
+            field_updates['schedule_time'] = None
+            field_updates['server_host'] = None
+            field_updates['server_id'] = None
+            field_updates['client_host'] = None
+            field_updates['client_id'] = None
+            field_updates['command'] = None
+            field_updates['start_time'] = None
+            field_updates['completion_time'] = None
+            field_updates['exit_status'] = None
+            field_updates['outpath'] = None
+            field_updates['errpath'] = None
+            field_updates['waited'] = None
+            field_updates['duration'] = None
+
+        if self.limit is not None:
+            # We cannot apply an UPDATE query with a LIMIT field
+            # The alternative is to pull the data and batch the update
+            # While is terribly less efficient at least it has a LIMIT
+            if field_updates:
+                tasks = query.all()
+                tasks_it = iter(tasks)
+                while batch := tuple(itertools.islice(tasks_it, 100)):
+                    Task.update_all([{'id': task.id, **field_updates} for task in batch])
+            if tag_updates:
+                tasks = query.all()
+                tasks_it = iter(tasks)
+                while batch := tuple(itertools.islice(tasks_it, 100)):
+                    Task.update_all([{'id': task.id, 'tag': {**task.tag, **tag_updates}} for task in batch])
+            if self.remove_tag:
+                tasks = query.all()
+                tasks_it = iter(tasks)
+                while batch := tuple(itertools.islice(tasks_it, 100)):
+                    Task.update_all([
+                        {'id': task.id, 'tag': self.drop_items(task.tag, *self.remove_tag)}
+                        for task in batch
+                    ])
             return
 
-        field = self.field
-        if Task.columns.get(self.field) is str:
-            # We want to coerce the value (e.g., as an int or None)
-            # But also allow for, e.g., args==1 which expects type str.
-            value = None if self.value.lower() in {'none', 'null'} else self.value
-        else:
-            value = smart_coerce(self.value)
+        if field_updates:
+            query.update(field_updates)
 
-        if field == 'tag':
-            update_data = Tag.parse_cmdline_list([value, ])
-        else:
-            update_data = {field: value, }
-
-        tasks = query.all()
-        tasks_it = iter(tasks)
-        while batch := tuple(itertools.islice(tasks_it, 100)):
-            if field == 'tag':
-                Task.update_all([
-                    {'id': task.id, 'tag': {**task.tag, **update_data}}
-                    for task in batch
-                ])
+        if tag_updates:
+            if config.database.provider == 'sqlite':
+                tag_changes = {}
+                change_expr = 'json_set(task.tag'
+                for i, (k, v) in enumerate(tag_updates.items()):
+                    tag_changes[f'k{i}'] = f'$.{k}'
+                    tag_changes[f'v{i}'] = v
+                    change_expr += f', :k{i}, :v{i}'
+                change_expr += ')'
+                query.update({Task.tag: text(change_expr).params(tag_changes)})
             else:
-                Task.update_all([
-                    {'id': task.id, **update_data}
-                    for task in batch
-                ])
+                # We cannot stack inserts with Postgres
+                # Instead we do them with individual update queries
+                for i, (k, v) in enumerate(tag_updates.items()):
+                    change_expr = 'jsonb_set(task.tag, :key, :value)'
+                    params = {'key': '{' + k + '}', 'value': json.dumps(to_json_type(v))}
+                    query.update({Task.tag: text(change_expr).params(**params)})
+
+        if self.remove_tag:
+            if config.database.provider == 'sqlite':
+                tag_changes = {}
+                change_expr = 'json_remove(task.tag'
+                for i, name in enumerate(self.remove_tag):
+                    tag_changes[f'k{i}'] = f'$.{name}'
+                    change_expr += f', :k{i}'
+                change_expr += ')'
+                query.update({Task.tag: text(change_expr).params(tag_changes)})
+            else:
+                # We cannot stack subtractions with Postgres
+                # Instead we do them with individual update queries
+                for name in self.remove_tag:
+                    query.update({Task.tag: text('task.tag - :name').params(name=name)})
+
+        Session.commit()
+
+    @staticmethod
+    def drop_items(d: dict, *keys: str) -> dict:
+        """Drop items by key if they exist."""
+        for key in keys:
+            d.pop(key, None)
+        return d
 
 
 CANCEL_PROGRAM = 'hyper-shell task cancel'
@@ -1008,8 +1152,6 @@ Commands:
   search           {TaskSearchApp.__doc__}
   update           {TaskUpdateApp.__doc__}
   update-all       {TaskUpdateAllApp.__doc__}
-  cancel           {TaskCancelApp.__doc__}
-  cancel-all       {TaskCancelAllApp.__doc__}
 
 Options:
   -h, --help       Show this message and exit.\
