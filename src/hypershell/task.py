@@ -763,9 +763,8 @@ class TaskUpdateAllApp(Application, SearchableMixin):
     interface.add_argument('update_args', nargs='*')
 
     # Used by SearchableMixin and not part of this interface
-    # Could be left empty and the entire row would be returned for iterative method
-    # Only these two fields are ever actually needed though
-    field_names: List[str] = ['id', 'tag']
+    # Empty list results in Session.query(Task)
+    field_names: List[str] = []
 
     where_clauses: List[str] = None
     interface.add_argument('-w', '--where', nargs='*', default=[], dest='where_clauses')
