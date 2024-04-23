@@ -812,10 +812,29 @@ class TaskUpdateAllApp(Application, SearchableMixin):
 
     def run(self: TaskUpdateAllApp) -> None:
         """Update task attributes in bulk."""
+        ensuredb()
         if len(self.update_args) == 3 and UUID_PATTERN.match(self.update_args[0]):
             self.update_legacy()
         else:
             self.update_tasks()
+
+    def update_legacy(self: TaskUpdateAllApp) -> None:
+        """Implement legacy interface to update single task."""
+        uuid, field, value = self.update_args
+        if field not in Task.columns:
+            raise ArgumentError(f'Invalid field name "{field}"')
+        try:
+            if field == 'tag':
+                Task.update(uuid, tag={**Task.from_id(uuid).tag,
+                                       **Tag.parse_cmdline_list([value, ])})
+            else:
+                if Task.columns.get(field) is str:
+                    value = None if value.lower() in {'none', 'null'} else value
+                else:
+                    value = smart_coerce(value)
+                Task.update(uuid, **{field: value, })
+        except StaleDataError as err:
+            raise Task.NotFound(str(err)) from err
 
     def update_tasks(self: TaskUpdateAllApp) -> None:
         """Normal mode updates many tasks."""
@@ -860,7 +879,6 @@ class TaskUpdateAllApp(Application, SearchableMixin):
 
         log.info(f'Searching database: {config.database.provider} ({site})')
 
-        ensuredb()
         query = self.build_query()
         count = query.count()
 
