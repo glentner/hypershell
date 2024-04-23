@@ -17,12 +17,11 @@ JSONValue = TypeVar('JSONValue', bool, int, float, str, type(None))
 
 def smart_coerce(value: str) -> JSONValue:
     """Automatically coerce string to typed value."""
-    if value.lower() in ('null', 'none', ):
+    cmp_val = value.lower()
+    if cmp_val in ('null', 'none'):
         return None
-    if value.lower() in ('true', ):
-        return True
-    if value.lower() in ('false', ):
-        return False
+    if cmp_val in ('true', 'false'):
+        return cmp_val == 'true'
     try:
         return int(value)
     except ValueError:
