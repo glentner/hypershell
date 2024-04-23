@@ -910,6 +910,7 @@ class TaskUpdateAllApp(Application, SearchableMixin):
                         {'id': task.id, 'tag': self.drop_items(task.tag, *self.remove_tag)}
                         for task in batch
                     ])
+            log.info(f'Updated {count} tasks')
             return
 
         if field_updates:
@@ -949,6 +950,7 @@ class TaskUpdateAllApp(Application, SearchableMixin):
                     query.update({Task.tag: text('task.tag - :name').params(name=name)})
 
         Session.commit()
+        log.info(f'Updated {count} tasks')
 
     def process_arguments(self: TaskUpdateAllApp) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Process positional arguments and build dictionaries for changes."""
