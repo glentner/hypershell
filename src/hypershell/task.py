@@ -475,7 +475,7 @@ class SearchableMixin:
         """Check field names are valid."""
         for name in self.field_names:
             if name not in Task.columns:
-                raise ArgumentError(f'Invalid field name \'{name}\'')
+                raise ArgumentError(f'Invalid field name "{name}"')
 
 
 SEARCH_PROGRAM = 'hyper-shell task search'
@@ -806,11 +806,19 @@ class TaskUpdateAllApp(Application, SearchableMixin):
     interface.add_argument('-f', '--no-confirm', action='store_true')
 
     exceptions = {
+        Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         **get_shared_exception_mapping(__name__)
     }
 
     def run(self: TaskUpdateAllApp) -> None:
         """Update task attributes in bulk."""
+        if len(self.update_args) == 3 and UUID_PATTERN.match(self.update_args[0]):
+            self.update_legacy()
+        else:
+            self.update_tasks()
+
+    def update_tasks(self: TaskUpdateAllApp) -> None:
+        """Normal mode updates many tasks."""
 
         field_updates = {}
         tag_updates = {}
@@ -896,7 +904,7 @@ class TaskUpdateAllApp(Application, SearchableMixin):
         if self.limit is not None:
             # We cannot apply an UPDATE query with a LIMIT field
             # The alternative is to pull the data and batch the update
-            # While is terribly less efficient at least it has a LIMIT
+            # While terribly inefficient at least it has a LIMIT
             if field_updates:
                 tasks = query.all()
                 tasks_it = iter(tasks)
@@ -954,6 +962,25 @@ class TaskUpdateAllApp(Application, SearchableMixin):
                     query.update({Task.tag: text('task.tag - :name').params(name=name)})
 
         Session.commit()
+
+    def update_legacy(self: TaskUpdateAllApp) -> None:
+        """Implement legacy interface to update single task."""
+        ensuredb()
+        uuid, field, value = self.update_args
+        if field not in Task.columns:
+            raise ArgumentError(f'Invalid field name "{field}"')
+        try:
+            if field == 'tag':
+                Task.update(uuid, tag={**Task.from_id(uuid).tag,
+                                       **Tag.parse_cmdline_list([value, ])})
+            else:
+                if Task.columns.get(field) is str:
+                    value = None if value.lower() in {'none', 'null'} else value
+                else:
+                    value = smart_coerce(value)
+                Task.update(uuid, **{field: value, })
+        except StaleDataError as err:
+            raise Task.NotFound(str(err)) from err
 
     @staticmethod
     def drop_items(d: dict, *keys: str) -> dict:
