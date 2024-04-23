@@ -839,38 +839,7 @@ class TaskUpdateAllApp(Application, SearchableMixin):
     def update_tasks(self: TaskUpdateAllApp) -> None:
         """Normal mode updates many tasks."""
 
-        field_updates = {}
-        tag_updates = {}
-        for arg in self.update_args:
-            if WhereClause.pattern.match(arg):
-                raise ArgumentError(f'Positional argument matches conditional ({arg}), '
-                                    f'maybe you intended to use -w/--where?')
-            if '=' in arg:
-                field, value = arg.split('=', 1)
-                if field == 'id':
-                    raise ArgumentError(f'Cannot alter task "id" (given: {field}={value})')
-                if field not in Task.columns:
-                    raise ArgumentError(f'Unrecognized task field "{field}"')
-                if Task.columns.get(field) is str:
-                    # We want to coerce the value (e.g., as an int or None)
-                    # But also allow for, e.g., args==1 which expects type str.
-                    value = None if value.lower() in {'none', 'null'} else value
-                else:
-                    value = smart_coerce(value)
-                field_updates[field] = value
-            elif ':' in arg:
-                key, value = arg.split(':', 1)
-                tag_updates[key] = smart_coerce(value)
-            else:
-                raise ArgumentError(f'Argument not recognized ({arg}): missing "=" or ":"')
-
-        Task.ensure_valid_tag(tag_updates)
-
-        if self.order_desc and not self.order_by:
-            raise ArgumentError('Should not provide --desc if not using -s/--order-by')
-
-        if self.order_by and not self.limit:
-            raise ArgumentError('Using -s/--order-by without -l/--limit is meaningless')
+        field_updates, tag_updates = self.process_arguments()
 
         if config.database.provider == 'sqlite':
             site = config.database.file
@@ -981,24 +950,42 @@ class TaskUpdateAllApp(Application, SearchableMixin):
 
         Session.commit()
 
-    def update_legacy(self: TaskUpdateAllApp) -> None:
-        """Implement legacy interface to update single task."""
-        ensuredb()
-        uuid, field, value = self.update_args
-        if field not in Task.columns:
-            raise ArgumentError(f'Invalid field name "{field}"')
-        try:
-            if field == 'tag':
-                Task.update(uuid, tag={**Task.from_id(uuid).tag,
-                                       **Tag.parse_cmdline_list([value, ])})
-            else:
+    def process_arguments(self: TaskUpdateAllApp) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Process positional arguments and build dictionaries for changes."""
+        field_updates = {}
+        tag_updates = {}
+        for arg in self.update_args:
+            if WhereClause.pattern.match(arg):
+                raise ArgumentError(f'Positional argument matches conditional ({arg}), '
+                                    f'maybe you intended to use -w/--where?')
+            if '=' in arg:
+                field, value = arg.split('=', 1)
+                if field == 'id':
+                    raise ArgumentError(f'Cannot alter task "id" (given: {field}={value})')
+                if field not in Task.columns:
+                    raise ArgumentError(f'Unrecognized task field "{field}"')
                 if Task.columns.get(field) is str:
+                    # We want to coerce the value (e.g., as an int or None)
+                    # But also allow for, e.g., args==1 which expects type str.
                     value = None if value.lower() in {'none', 'null'} else value
                 else:
                     value = smart_coerce(value)
-                Task.update(uuid, **{field: value, })
-        except StaleDataError as err:
-            raise Task.NotFound(str(err)) from err
+                field_updates[field] = value
+            elif ':' in arg:
+                key, value = arg.split(':', 1)
+                tag_updates[key] = smart_coerce(value)
+            else:
+                raise ArgumentError(f'Argument not recognized ({arg}): missing "=" or ":"')
+
+        Task.ensure_valid_tag(tag_updates)
+
+        if self.order_desc and not self.order_by:
+            raise ArgumentError('Should not provide --desc if not using -s/--order-by')
+
+        if self.order_by and not self.limit:
+            raise ArgumentError('Using -s/--order-by without -l/--limit is meaningless')
+
+        return field_updates, tag_updates
 
     @staticmethod
     def drop_items(d: dict, *keys: str) -> dict:
