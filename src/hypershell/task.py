@@ -496,14 +496,14 @@ Arguments:
   FIELD                      Select specific named fields.
 
 Options:
-  -w, --where      COND...   List of conditional statements.
-  -t, --with-tag   TAG...    List of tags.
+  -w, --where      COND...   Filter on conditional expression.
+  -t, --with-tag   TAG...    Filter by tag.
   -s, --order-by   FIELD     Order output by field.
-  -F, --failed               Alias for `exit_status != 0`
-  -S, --succeeded            Alias for `exit_status == 0`
-  -C, --completed            Alias for `exit_status != null`
-  -R, --remaining            Alias for `exit_status == null`
-      --format     FORMAT    Format output (normal, plain, table, csv, json).
+  -F, --failed               Alias for `-w exit_status != 0`.
+  -S, --succeeded            Alias for `-w exit_status == 0`.
+  -C, --completed            Alias for `-w exit_status != null`.
+  -R, --remaining            Alias for `-w exit_status == null`.
+  -f, --format     FORMAT    Format output (normal, plain, table, csv, json).
       --json                 Format output as JSON (alias for `--format=json`).
       --csv                  Format output as CSV (alias for `--format=csv`.
   -d, --delimiter  CHAR      Field seperator for plain/csv formats.
@@ -553,7 +553,8 @@ class TaskSearchApp(Application, SearchableMixin):
     output_format: str = '<default>'  # 'plain' if field_names else 'normal'
     output_formats: List[str] = ['normal', 'plain', 'table', 'json', 'csv']
     output_interface = interface.add_mutually_exclusive_group()
-    output_interface.add_argument('--format', default=output_format, dest='output_format', choices=output_formats)
+    output_interface.add_argument('-f', '--format', default=output_format,
+                                  dest='output_format', choices=output_formats)
     output_interface.add_argument('--json', action='store_const', const='json', dest='output_format')
     output_interface.add_argument('--csv', action='store_const', const='csv', dest='output_format')
 
@@ -647,86 +648,30 @@ class TaskSearchApp(Application, SearchableMixin):
             raise ArgumentError(f'Valid --csv output must use single-char delimiter')
 
 
+# Special exit status indicates cancellation
+CANCEL_STATUS: Final[int] = -1
+
+
 UPDATE_PROGRAM = 'hyper-shell task update'
-UPDATE_SYNOPSIS = f'{UPDATE_PROGRAM} [-h] ID FIELD VALUE'
+UPDATE_SYNOPSIS = f'{UPDATE_PROGRAM} [-h] ARG [ARG...] [--cancel | --revert | --delete]'
 UPDATE_USAGE = f"""\
-Usage: 
-  {UPDATE_PROGRAM} [-h] ID FIELD VALUE
-  Update individual task metadata.\
+Usage:
+  {UPDATE_SYNOPSIS}
+  {' ' * len(UPDATE_PROGRAM)} [--failed | --succeeded | --completed | --remaining]
+  {' ' * len(UPDATE_PROGRAM)} [-w COND [COND ...]] [-t TAG [TAG...]]
+  {' ' * len(UPDATE_PROGRAM)} [--order-by FIELD [--desc]] [--limit NUM]
+  {' ' * len(UPDATE_PROGRAM)} [--remove-tag TAG [TAG ...]] [--no-confirm]
+  
+  Update task metadata.\
 """
 
 UPDATE_HELP = f"""\
 {UPDATE_USAGE}
 
-Arguments:
-  ID                    Unique UUID.
-  FIELD                 Task metadata field name.
-  VALUE                 New value.
-
-Options:
-  -h, --help            Show this message and exit.\
-"""
-
-
-class TaskUpdateApp(Application):
-    """Update individual task attribute directly."""
-
-    interface = Interface(UPDATE_PROGRAM, UPDATE_USAGE, UPDATE_HELP)
-
-    uuid: str
-    interface.add_argument('uuid')
-
-    field: str
-    interface.add_argument('field', choices=list(Task.columns)[1:])  # NOTE: not ID!
-
-    value: str
-    interface.add_argument('value')
-
-    exceptions = {
-        Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-        **get_shared_exception_mapping(__name__)
-    }
-
-    def run(self: TaskUpdateApp) -> None:
-        """Update individual task attribute directly."""
-        ensuredb()
-        check_uuid(self.uuid)
-        try:
-            if self.field == 'tag':
-                Task.update(self.uuid, tag={**Task.from_id(self.uuid).tag,
-                                            **Tag.parse_cmdline_list([self.value, ])})
-            else:
-                if Task.columns.get(self.field) is str:
-                    # We want to coerce the value (e.g., as an int or None)
-                    # But also allow for, e.g., args==1 which expects type str.
-                    value = None if self.value.lower() in {'none', 'null'} else self.value
-                else:
-                    value = smart_coerce(self.value)
-                Task.update(self.uuid, **{self.field: value, })
-        except StaleDataError as err:
-            raise Task.NotFound(str(err)) from err
-
-
-UPDATE_ALL_PROGRAM = 'hyper-shell task update-all'
-UPDATE_ALL_SYNOPSIS = f'{UPDATE_ALL_PROGRAM} [-h] ARG [ARG...] [--cancel | --revert | --delete]'
-UPDATE_ALL_USAGE = f"""\
-Usage:
-  {UPDATE_ALL_SYNOPSIS}
-  {' ' * len(UPDATE_ALL_PROGRAM)} [--failed | --succeeded | --completed | --remaining]
-  {' ' * len(UPDATE_ALL_PROGRAM)} [-w COND [COND ...]] [-t TAG [TAG...]]
-  {' ' * len(UPDATE_ALL_PROGRAM)} [--order-by FIELD [--desc]] [--limit NUM]
-  {' ' * len(UPDATE_ALL_PROGRAM)} [--remove-tag TAG [TAG ...]] [--no-confirm]
-  
-  Update task metadata.\
-"""
-
-UPDATE_ALL_HELP = f"""\
-{UPDATE_ALL_USAGE}
-
   Include any number of FIELD=VALUE or tag KEY:VALUE positional arguments.
   The -w/--where and -t/--with-tag operate just as in the search command.
 
-  Using --cancel sets schedule_time to now and exit_status to -1. 
+  Using --cancel sets schedule_time to now and exit_status to {CANCEL_STATUS}. 
   Using --revert reverts everything as if the task was new again.
   Using --delete drops the row from the database entirely.
 
@@ -741,23 +686,23 @@ Options:
       --revert               Revert specified tasks.
       --delete               Delete specified tasks.
       --remove-tag  TAG...   Remove specified tags by name.
-  -w, --where       COND...  List of conditional statements.
-  -t, --with-tag    TAG...   List of tags.
+  -w, --where       COND...  Filter on conditional expression.
+  -t, --with-tag    TAG...   Filter by tag.
   -s, --order-by    FIELD    Order matches by FIELD.
   -l, --limit       NUM      Limit matches.
-  -F, --failed               Alias for `exit_status != 0`
-  -S, --succeeded            Alias for `exit_status == 0`
-  -C, --completed            Alias for `exit_status != null`
-  -R, --remaining            Alias for `exit_status == null`
+  -F, --failed               Alias for `-w exit_status != 0`.
+  -S, --succeeded            Alias for `-w exit_status == 0`.
+  -C, --completed            Alias for `-w exit_status != null`.
+  -R, --remaining            Alias for `-w exit_status == null`.
   -f, --no-confirm           Do not ask for confirmation.
   -h, --help                 Show this message and exit.\
 """
 
 
-class TaskUpdateAllApp(Application, SearchableMixin):
-    """Update many tasks at once."""
+class TaskUpdateApp(Application, SearchableMixin):
+    """Update task metadata."""
 
-    interface = Interface(UPDATE_ALL_PROGRAM, UPDATE_ALL_USAGE, UPDATE_ALL_HELP)
+    interface = Interface(UPDATE_PROGRAM, UPDATE_USAGE, UPDATE_HELP)
 
     update_args: List[str]
     interface.add_argument('update_args', nargs='*')
@@ -809,7 +754,7 @@ class TaskUpdateAllApp(Application, SearchableMixin):
         **get_shared_exception_mapping(__name__)
     }
 
-    def run(self: TaskUpdateAllApp) -> None:
+    def run(self: TaskUpdateApp) -> None:
         """Update task attributes in bulk."""
         ensuredb()
         if len(self.update_args) == 3 and UUID_PATTERN.match(self.update_args[0]):
@@ -817,7 +762,7 @@ class TaskUpdateAllApp(Application, SearchableMixin):
         else:
             self.update_tasks()
 
-    def update_legacy(self: TaskUpdateAllApp) -> None:
+    def update_legacy(self: TaskUpdateApp) -> None:
         """Implement legacy interface to update single task."""
         uuid, field, value = self.update_args
         if field not in Task.columns:
@@ -835,7 +780,7 @@ class TaskUpdateAllApp(Application, SearchableMixin):
         except StaleDataError as err:
             raise Task.NotFound(str(err)) from err
 
-    def update_tasks(self: TaskUpdateAllApp) -> None:
+    def update_tasks(self: TaskUpdateApp) -> None:
         """Normal mode updates many tasks."""
 
         field_updates, tag_updates = self.process_arguments()
@@ -870,7 +815,7 @@ class TaskUpdateAllApp(Application, SearchableMixin):
 
         if self.cancel_mode:
             field_updates['schedule_time'] = datetime.now().astimezone()
-            field_updates['exit_status'] = -1
+            field_updates['exit_status'] = CANCEL_STATUS
 
         if self.revert_mode:
             field_updates['schedule_time'] = None
@@ -951,7 +896,7 @@ class TaskUpdateAllApp(Application, SearchableMixin):
         Session.commit()
         log.info(f'Updated {count} tasks')
 
-    def process_arguments(self: TaskUpdateAllApp) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def process_arguments(self: TaskUpdateApp) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Process positional arguments and build dictionaries for changes."""
         field_updates = {}
         tag_updates = {}
@@ -996,167 +941,6 @@ class TaskUpdateAllApp(Application, SearchableMixin):
         return d
 
 
-CANCEL_PROGRAM = 'hyper-shell task cancel'
-CANCEL_SYNOPSIS = f'{CANCEL_PROGRAM} [-h] ID'
-CANCEL_USAGE = f"""\
-Usage: 
-  {CANCEL_SYNOPSIS}
-  Cancel existing task.\
-"""
-
-CANCEL_HELP = f"""\
-{CANCEL_USAGE}
-
-  Cancellation does not delete a task from the database.
-  We set schedule_time and exit_status to stop it from running.
-  
-Arguments:
-  ID                    Unique UUID.
-
-Options:
-  -h, --help            Show this message and exit.\
-"""
-
-
-# Special exit status indicates cancellation
-CANCEL_STATUS: Final[int] = -1
-
-
-class TaskCancelApp(Application):
-    """Cancel existing task."""
-
-    interface = Interface(CANCEL_PROGRAM, CANCEL_USAGE, CANCEL_HELP)
-
-    uuid: str
-    interface.add_argument('uuid')
-
-    exceptions = {
-        Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
-        **get_shared_exception_mapping(__name__)
-    }
-
-    def run(self: TaskCancelApp) -> None:
-        """Update individual task attribute directly."""
-        ensuredb()
-        check_uuid(self.uuid)
-        task = Task.from_id(self.uuid)
-        if task.exit_status == CANCEL_STATUS:
-            log.critical(f'Task already cancelled ({task.schedule_time})')
-            return
-        elif task.exit_status is not None:
-            log.critical(f'Task already completed with exit code {task.exit_status} ({task.completion_time})')
-            return
-        elif task.client_id is not None:
-            log.critical(f'Task already running ({task.client_host}: {task.client_id})')
-            return
-        elif task.schedule_time is not None:
-            log.critical(f'Task already scheduled ({task.schedule_time})')
-            return
-        else:
-            Task.update(task.id, schedule_time=datetime.now().astimezone(), exit_status=CANCEL_STATUS)
-
-
-CANCEL_ALL_PROGRAM = 'hyper-shell task cancel-all'
-CANCEL_ALL_SYNOPSIS = f'{CANCEL_ALL_PROGRAM} [-h] [-w COND [COND ...]] [-t TAG [TAG...]] [-R]'
-CANCEL_ALL_USAGE = f"""\
-Usage:
-  {CANCEL_ALL_SYNOPSIS}
-  Cancel many tasks at once.\
-"""
-
-CANCEL_ALL_HELP = f"""\
-{CANCEL_ALL_USAGE}
-
-  Cancellation does not delete a task from the database.
-  We set schedule_time and exit_status to stop it from running.
-  
-  It is good practice to include -R/--remaining to automatically
-  ignore completed tasks and avoid warnings.
-
-Options:
-  -w, --where      COND...   List of conditional statements.
-  -t, --with-tag   TAG...    List of tags.
-  -R, --remaining            Alias for `exit_status == null`
-  -h, --help                 Show this message and exit.\
-"""
-
-
-class TaskCancelAllApp(Application, SearchableMixin):
-    """Cancel many tasks at once."""
-
-    interface = Interface(CANCEL_ALL_PROGRAM, CANCEL_ALL_USAGE, CANCEL_ALL_HELP)
-
-    field_names: List[str] = []  # Empty field_names returns full Task object
-
-    where_clauses: List[str] = None
-    interface.add_argument('-w', '--where', nargs='*', default=[], dest='where_clauses')
-
-    taglist: List[str] = None
-    interface.add_argument('-t', '--with-tag', nargs='*', default=[], dest='taglist')
-
-    # NOTE: we do not allow --failed, --completed, or --succeeded
-    show_remaining: bool = False
-    interface.add_argument('-R', '--remaining', action='store_true', dest='show_remaining')
-
-    exceptions = {
-        **get_shared_exception_mapping(__name__)
-    }
-
-    def run(self: TaskCancelAllApp) -> None:
-        """Invoke TaskCancelApp for each task found."""
-
-        ensuredb()
-        query = self.build_query()
-
-        if config.database.provider == 'sqlite':
-            site = config.database.file
-        else:
-            site = config.database.get('host', 'localhost')
-
-        print(f'Inspecting database: {config.database.provider} ({site}) ...')
-        count = query.count()
-        if count == 0:
-            print(f'Cancellation affects {count} tasks, stopping')
-            return
-
-        response = input(f'Cancelling {count} tasks, continue? yes/[no]: ').strip().lower()
-        if response in ['n', 'no', '']:
-            print('Stopping')
-            return
-        if response not in ['y', 'yes']:
-            print(f'Stopping (invalid response: "{response}")')
-            return
-
-        count_cancelled = 0
-        tasks = query.all()
-        tasks_it = iter(tasks)
-        while batch := tuple(itertools.islice(tasks_it, 100)):
-            batch_ok = []
-            for task in batch:
-                if task.exit_status == CANCEL_STATUS:
-                    log.warning(f'Task ({task.id}) already cancelled ({task.schedule_time})')
-                    continue
-                elif task.exit_status is not None:
-                    log.warning(f'Task ({task.id}) already completed with exit code '
-                                f'{task.exit_status} ({task.completion_time})')
-                    continue
-                elif task.client_id is not None:
-                    log.warning(f'Task ({task.id}) already running ({task.client_host}: {task.client_id})')
-                    continue
-                elif task.schedule_time is not None:
-                    log.warning(f'Task ({task.id}) already scheduled ({task.schedule_time})')
-                    continue
-                else:
-                    batch_ok.append(task)
-            if batch_ok:
-                count_cancelled += len(batch_ok)
-                Task.update_all([
-                    {'id': task.id, 'schedule_time': datetime.now().astimezone(), 'exit_status': CANCEL_STATUS}
-                    for task in batch_ok
-                ])
-        log.info(f'Cancelled {count_cancelled} tasks')
-
-
 TASK_PROGRAM = 'hyper-shell task'
 TASK_USAGE = f"""\
 Usage: 
@@ -1167,9 +951,6 @@ Usage:
   {RUN_SYNOPSIS}
   {SEARCH_SYNOPSIS}
   {UPDATE_SYNOPSIS}
-  {UPDATE_ALL_SYNOPSIS}
-  {CANCEL_SYNOPSIS}
-  {CANCEL_ALL_SYNOPSIS}
   
   Search, submit, track, and manage tasks.\
 """
@@ -1184,7 +965,6 @@ Commands:
   run              {TaskRunApp.__doc__}
   search           {TaskSearchApp.__doc__}
   update           {TaskUpdateApp.__doc__}
-  update-all       {TaskUpdateAllApp.__doc__}
 
 Options:
   -h, --help       Show this message and exit.\
@@ -1206,9 +986,6 @@ class TaskGroupApp(ApplicationGroup):
         'run': TaskRunApp,
         'search': TaskSearchApp,
         'update': TaskUpdateApp,
-        'update-all': TaskUpdateAllApp,
-        'cancel': TaskCancelApp,
-        'cancel-all': TaskCancelAllApp,
     }
 
 
@@ -1266,7 +1043,7 @@ class Tag:
     name: str
     value: JSONValue = ''
 
-    def to_dict(self: Tag) -> Dict[str, str]:
+    def to_dict(self: Tag) -> Dict[str, JSONValue]:
         """Format tag specification as dictionary."""
         return {self.name: self.value, }
 
