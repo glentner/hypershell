@@ -53,7 +53,7 @@ log = Logger.with_name(__name__)
 
 
 SUBMIT_PROGRAM = 'hyper-shell task submit'
-SUBMIT_SYNOPSIS = f'{SUBMIT_PROGRAM} [-h] [-t TAG [TAG...]] ARGS...'
+SUBMIT_SYNOPSIS = f'{SUBMIT_PROGRAM} [-h] [-t TAG [TAG...]] -- ARGS...'
 SUBMIT_USAGE = f"""\
 Usage:
   {SUBMIT_SYNOPSIS}
@@ -259,17 +259,17 @@ WAIT_HELP = f"""\
 {WAIT_USAGE}
 
 Arguments:
-  ID                     Unique UUID.
+  ID                      Unique UUID.
 
 Options:
-  -n, --interval  SEC    Time to wait between polling (default: {DEFAULT_INTERVAL}).
-  -i, --info             Print info on task.
-  -f, --format   FORMAT  Format task info ([normal], json, yaml).
-      --json             Format info as JSON.
-      --yaml             Format info as YAML.
-  -s, --status           Print exit status for task.
-  -r, --return           Use exit status from task.
-  -h, --help             Show this message and exit.\
+  -n, --interval  SEC     Time to wait between polling (default: {DEFAULT_INTERVAL}).
+  -i, --info              Print info on task.
+  -f, --format    FORMAT  Format task info ([normal], json, yaml).
+      --json              Format info as JSON.
+      --yaml              Format info as YAML.
+  -s, --status            Print exit status for task.
+  -r, --return            Use exit status from task.
+  -h, --help              Show this message and exit.\
 """
 
 
@@ -499,6 +499,7 @@ Options:
   -w, --where      COND...   Filter on conditional expression.
   -t, --with-tag   TAG...    Filter by tag.
   -s, --order-by   FIELD     Order output by field.
+      --desc                 Descending order (requires --order-by).
   -F, --failed               Alias for `-w exit_status != 0`.
   -S, --succeeded            Alias for `-w exit_status == 0`.
   -C, --completed            Alias for `-w exit_status != null`.
@@ -689,6 +690,7 @@ Options:
   -w, --where       COND...  Filter on conditional expression.
   -t, --with-tag    TAG...   Filter by tag.
   -s, --order-by    FIELD    Order matches by FIELD.
+      --desc                 Descending order (requires --order-by).
   -l, --limit       NUM      Limit matches.
   -F, --failed               Alias for `-w exit_status != 0`.
   -S, --succeeded            Alias for `-w exit_status == 0`.
