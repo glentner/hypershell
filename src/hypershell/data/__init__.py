@@ -15,7 +15,6 @@ import functools
 from cmdkit.app import Application, exit_status
 from cmdkit.cli import Interface
 from cmdkit.config import ConfigurationError
-from cmdkit.ansi import colorize_usage
 from sqlalchemy import inspect
 from sqlalchemy.orm import close_all_sessions
 from sqlalchemy.exc import OperationalError
@@ -81,10 +80,10 @@ def ensuredb(auto_init: bool = False) -> None:
 INITDB_PROGRAM = 'hyper-shell initdb'
 INITDB_USAGE = f"""\
 Usage:
-{INITDB_PROGRAM} [-h] [--truncate [--yes]]
+  {INITDB_PROGRAM} [-h] [--truncate [--yes]]
 
-Initialize database (not needed for SQLite).
-Use --truncate to zero out the task metadata.\
+  Initialize database (not needed for SQLite).
+  Use --truncate to zero out the task metadata.\
 """
 
 INITDB_HELP = f"""\
@@ -100,9 +99,7 @@ Options:
 class InitDBApp(Application):
     """Initialize database (not needed for SQLite)."""
 
-    interface = Interface(INITDB_PROGRAM,
-                          colorize_usage(INITDB_USAGE),
-                          colorize_usage(INITDB_HELP))
+    interface = Interface(INITDB_PROGRAM, INITDB_USAGE, INITDB_HELP)
 
     ALLOW_NOARGS = True
 
