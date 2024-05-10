@@ -97,6 +97,9 @@ default = Namespace({
     },
     'ssh': {
         'config': os.path.join(home, '.ssh', 'config'),
+        'nodelist': {
+            # Populated by user configuration
+        }
     },
     'autoscale': {
         'policy': 'fixed',  # Either 'fixed' or 'dynamic'
