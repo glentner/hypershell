@@ -47,7 +47,7 @@ from queue import Queue, Empty as QueueEmpty, Full as QueueFull
 from subprocess import Popen, TimeoutExpired
 from socket import gaierror
 from dataclasses import dataclass
-from multiprocessing import AuthenticationError
+from multiprocessing import AuthenticationError, cpu_count
 
 # external libs
 from cmdkit.app import Application, exit_status
@@ -58,7 +58,7 @@ from cmdkit.config import Namespace
 from hypershell.data.model import Task
 from hypershell.core.heartbeat import Heartbeat, ClientState
 from hypershell.core.platform import default_path
-from hypershell.core.config import default, config, load_task_env
+from hypershell.core.config import default, config, load_task_env, SSH_GROUPS
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueClient, QueueConfig
@@ -957,6 +957,10 @@ class ClientApp(Application):
 
     capture: bool = False
     interface.add_argument('-c', '--capture', action='store_true')
+
+    # Hidden options used as helpers for shell completion
+    interface.add_argument('--available-cores', action='version', version=str(cpu_count()))
+    interface.add_argument('--available-ssh-groups', action='version', version='\n'.join(SSH_GROUPS))
 
     exceptions = {
         EOFError: functools.partial(handle_disconnect, logger=log),

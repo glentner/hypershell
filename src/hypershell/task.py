@@ -28,7 +28,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from cmdkit.app import Application, ApplicationGroup, exit_status
 from cmdkit.cli import Interface, ArgumentError
-from sqlalchemy import Column, type_coerce, JSON, text
+from sqlalchemy import Column, type_coerce, JSON, text, func, distinct
 from sqlalchemy.exc import StatementError
 from sqlalchemy.orm import Query
 from sqlalchemy.orm.exc import StaleDataError
@@ -562,6 +562,12 @@ class TaskSearchApp(Application, SearchableMixin):
     output_delimiter: str = '<default>'  # <space> if plain, ',' if --csv, else not valid
     interface.add_argument('-d', '--delimiter', default=output_delimiter, dest='output_delimiter')
 
+    list_tag_keys: bool = False
+    list_tag_values: bool = False
+    tag_search_interface = interface.add_mutually_exclusive_group()
+    tag_search_interface.add_argument('--tag-keys', action='store_true', dest='list_tag_keys')
+    tag_search_interface.add_argument('--tag-values', action='store_true', dest='list_tag_values')
+
     exceptions = {
         StatementError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
         **get_shared_exception_mapping(__name__)
@@ -570,12 +576,47 @@ class TaskSearchApp(Application, SearchableMixin):
     def run(self: TaskSearchApp) -> None:
         """Search for tasks in database."""
         ensuredb()
+        if self.list_tag_keys:
+            self.print_tag_keys()
+            return
+        if self.list_tag_values:
+            self.print_tag_values()
+            return
         self.check_field_names()
         self.check_output_format()
         if self.show_count:
             print(self.build_query().count())
         else:
             self.print_output(self.build_query().all())
+
+    @staticmethod
+    def print_tag_keys() -> None:
+        """Print distinct tags present in the database."""
+        if config.database.provider == 'sqlite':
+            for (key, ) in Session.execute(
+                    text('select distinct tag.key from task, json_each(tag) as tag')
+            ):
+                print(key)
+        else:
+            subquery = Session.query(func.jsonb_object_keys(Task.tag).label('tag_key')).subquery()
+            for (key, ) in Session.query(subquery.c.tag_key.distinct()):
+                print(key)
+
+    def print_tag_values(self: TaskSearchApp) -> None:
+        """Print distinct values for given tag in the database."""
+        if len(self.field_names) != 1:
+            raise ArgumentError(f'Expected single name for --tag-values')
+        name, = self.field_names
+        if config.database.provider == 'sqlite':
+            for (value, ) in Session.execute(
+                    text("""select distinct t.value from task, json_each(tag) as t
+                            where json_extract(tag, :a) is not null and t.key = :b""")
+                    .params(a=f'$."{name}"', b=name)
+            ):
+                print(value)
+        else:
+            for (value, ) in Session.query(distinct(Task.tag[name])).filter(Task.tag[name].isnot(None)):
+                print(value)
 
     @functools.cached_property
     def print_output(self: TaskSearchApp) -> Callable[[List[Tuple]], None]:
@@ -979,6 +1020,7 @@ class TaskGroupApp(ApplicationGroup):
     interface = Interface(TASK_PROGRAM, TASK_USAGE, TASK_HELP)
 
     interface.add_argument('command')
+    interface.add_argument('--list-columns', action='version', version=' '.join(Task.columns))
 
     command = None
     commands = {

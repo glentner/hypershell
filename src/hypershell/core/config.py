@@ -6,14 +6,16 @@
 
 # type annotations
 from __future__ import annotations
-from typing import TypeVar, Union, List, Optional, Protocol
+from typing import TypeVar, Union, List, Optional, Protocol, Final, Iterator
 
 # standard libs
 import os
+import re
 import sys
 import shutil
 import tomlkit
 import logging
+import socket
 import functools
 from datetime import datetime
 
@@ -28,7 +30,8 @@ from hypershell.core.exceptions import write_traceback
 # public interface
 __all__ = ['config', 'update', 'default', 'ConfigurationError', 'Namespace', 'blame',
            'load', 'reload', 'load_file', 'reload_file', 'load_env', 'reload_env', 'load_task_env',
-           'DEFAULT_LOGGING_STYLE', 'LOGGING_STYLES', ]
+           'DEFAULT_LOGGING_STYLE', 'LOGGING_STYLES', 'ACTIVE_CONFIG_VARS', 'SSH_GROUPS',
+           'find_available_ports']
 
 # partial logging (not yet configured - initialized afterward)
 log = logging.getLogger(__name__)
@@ -203,7 +206,7 @@ def build_preloads(base: Configuration) -> Namespace:
 
 class LoaderImpl(Protocol):
     """Loader interface for building configuration."""
-    def __call__(self: LoaderImpl, **preloads: Namespace) -> Configuration: ...
+    def __call__(self: LoaderImpl, **preload: Namespace) -> Configuration: ...
 
 
 def build_configuration(loader: LoaderImpl) -> Configuration:
@@ -226,6 +229,35 @@ try:
 except Exception as error:
     write_traceback(error, module=__name__)
     sys.exit(exit_status.bad_config)
+
+
+ACTIVE_CONFIG_VARS: Final[List[str]] = [
+    re.sub(r'_(?!(env|eval))', r'.', name.lower())
+    for name in Namespace(config).to_env().flatten()
+]
+
+
+SSH_GROUPS = []
+try:
+    if isinstance(config.ssh.nodelist, dict):
+        SSH_GROUPS = list(config.ssh.nodelist)
+except KeyError:
+    pass
+
+
+def find_available_ports(start: int = default.server.port,
+                         end: int = default.server.port + 1_000) -> Iterator[int]:
+    """Yield available ports by testing each in turn."""
+    for port in range(start, end + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1)
+            try:
+                sock.bind(("0.0.0.0", port))
+                yield port
+            except socket.error:
+                pass
+    else:
+        raise RuntimeError(f'Could not find available port in range {start}-{end}')
 
 
 DEFAULT_CONFIG_HEADERS = f"""\

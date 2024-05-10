@@ -51,6 +51,7 @@ import time
 from enum import Enum
 from datetime import datetime, timedelta
 from functools import cached_property
+from itertools import islice
 from queue import Empty as QueueEmpty, Full as QueueFull
 
 # external libs
@@ -59,7 +60,7 @@ from cmdkit.cli import Interface, ArgumentError
 
 # internal libs
 from hypershell.core.exceptions import get_shared_exception_mapping
-from hypershell.core.config import config, default
+from hypershell.core.config import config, default, find_available_ports
 from hypershell.core.logging import Logger
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
@@ -850,6 +851,10 @@ class ServerApp(Application):
     output_interface = interface.add_mutually_exclusive_group()
     output_interface.add_argument('--print', action='store_true', dest='print_mode')
     output_interface.add_argument('-f', '--failures', default=None, dest='failure_path')
+
+    # Hidden options used as helpers for shell completion
+    interface.add_argument('--available-ports', action='version',
+                           version='\n'.join(map(str, islice(find_available_ports(), 10))))
 
     exceptions = {
         **get_shared_exception_mapping(__name__)

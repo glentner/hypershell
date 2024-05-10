@@ -10,12 +10,15 @@ from typing import Any
 
 # standard libs
 import os
+import io
 import sys
 import json
+import contextlib
 import subprocess
 
 # external libs
 import toml
+from pygments.styles import STYLE_MAP as CONSOLE_THEMES
 from cmdkit.app import Application, ApplicationGroup
 from cmdkit.cli import Interface, ArgumentError
 from cmdkit.config import ConfigurationError
@@ -25,9 +28,10 @@ from rich.syntax import Syntax
 # internal libs
 from hypershell.core.platform import path
 from hypershell.core.types import smart_coerce
-from hypershell.core.config import load_file, update, config as full_config
 from hypershell.core.logging import Logger
 from hypershell.core.exceptions import get_shared_exception_mapping
+from hypershell.core.config import (load_file, update, ACTIVE_CONFIG_VARS,
+                                    default as default_config, config as full_config)
 
 # public interface
 __all__ = ['ConfigApp', ]
@@ -130,6 +134,14 @@ class ConfigGetApp(Application):
 
     raw_mode: bool = False
     interface.add_argument('-r', '--raw', action='store_true', dest='raw_mode')
+
+    # Hidden options used as helpers for completion script
+    list_available: bool = False
+    list_console_themes: bool = False
+    completion_interface = interface.add_mutually_exclusive_group()
+    completion_interface.add_argument('--list-available', action='version', version=' '.join(ACTIVE_CONFIG_VARS))
+    completion_interface.add_argument('--list-console-themes', action='version',
+                                      version=' '.join(list(CONSOLE_THEMES)))
 
     exceptions = {
         **get_shared_exception_mapping(__name__)
