@@ -88,7 +88,7 @@ class ConfigEditApp(Application):
 
 
 GET_PROGRAM = 'hyper-shell config get'
-GET_SYNOPSIS = f'{GET_PROGRAM} [-h] SECTION[...].VAR [-x] [-r] [--user | --system]'
+GET_SYNOPSIS = f'{GET_PROGRAM} [-h] SECTION[...].VAR [-x] [-r] [--user | --system | --local | --default]'
 GET_USAGE = f"""\
 Usage:
   {GET_SYNOPSIS}
@@ -110,6 +110,8 @@ Arguments:
 Options:
       --user                Load from user configuration.
       --system              Load from system configuration.
+      --local               Load from local configuration.
+      --default             Check default value.
   -x, --expand              Expand variable.
   -r, --raw                 Disable formatting on single value output.
   -h, --help                Show this message and exit.\
@@ -128,6 +130,8 @@ class ConfigGetApp(Application):
     site_interface = interface.add_mutually_exclusive_group()
     site_interface.add_argument('--user', action='store_const', const='user', dest='site_name')
     site_interface.add_argument('--system', action='store_const', const='system', dest='site_name')
+    site_interface.add_argument('--local', action='store_const', const='local', dest='site_name')
+    site_interface.add_argument('--default', action='store_const', const='default', dest='site_name')
 
     expand: bool = False
     interface.add_argument('-x', '--expand', action='store_true')
@@ -153,6 +157,9 @@ class ConfigGetApp(Application):
         if self.site_name is None:
             config_path = 'configuration'  # Note: not meaningful for merged configuration
             config = full_config
+        elif self.site_name == 'default':
+            config_path = 'default'
+            config = default_config
         else:
             config_path = path[self.site_name].config
             if os.path.exists(config_path):
@@ -261,6 +268,7 @@ Arguments:
 Options:
       --user              Apply to user configuration (default).
       --system            Apply to system configuration.
+      --local             Apply to local configuration.
   -h, --help              Show this message and exit.\
 """
 
@@ -280,6 +288,7 @@ class ConfigSetApp(Application):
     site_interface = interface.add_mutually_exclusive_group()
     site_interface.add_argument('--user', action='store_const', const='user', dest='site_name', default=site_name)
     site_interface.add_argument('--system', action='store_const', const='system', dest='site_name')
+    site_interface.add_argument('--local', action='store_const', const='local', dest='site_name')
 
     exceptions = {
         **get_shared_exception_mapping(__name__)
