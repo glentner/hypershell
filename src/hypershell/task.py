@@ -338,7 +338,7 @@ class TaskWaitApp(Application):
 
 
 RUN_PROGRAM = 'hyper-shell task run'
-RUN_SYNOPSIS = f'{RUN_PROGRAM} [-h] [-n SEC] ARGS...'
+RUN_SYNOPSIS = f'{RUN_PROGRAM} [-h] [-n SEC] [-t TAG [TAG...]] -- ARGS...'
 RUN_USAGE = f"""\
 Usage: 
   {RUN_SYNOPSIS}
@@ -349,11 +349,12 @@ RUN_HELP = f"""\
 {RUN_USAGE}
 
 Arguments:
-  ARGS                  Command-line arguments.
+  ARGS                    Command-line arguments.
 
 Options:
-  -n, --interval  SEC   Time to wait between polling (default: {DEFAULT_INTERVAL}).
-  -h, --help            Show this message and exit.\
+  -n, --interval  SEC     Time to wait between polling (default: {DEFAULT_INTERVAL}).
+  -t, --tag       TAG...  Assign tags as `key:value`.
+  -h, --help              Show this message and exit.\
 """
 
 
@@ -368,6 +369,9 @@ class TaskRunApp(Application):
     interval: int = DEFAULT_INTERVAL
     interface.add_argument('-n', '--interval', type=int, default=interval)
 
+    taglist: List[str] = []
+    interface.add_argument('-t', '--tag', nargs='*', dest='taglist')
+
     exceptions = {
         **get_shared_exception_mapping(__name__)
     }
@@ -375,7 +379,8 @@ class TaskRunApp(Application):
     def run(self: TaskRunApp) -> None:
         """Submit task and wait for completion."""
         ensuredb()
-        task = Task.new(args=' '.join(self.argv))
+        task = Task.new(args=' '.join(self.argv),
+                        tag=(None if not self.taglist else Tag.parse_cmdline_list(self.taglist)))
         Task.add(task)
         TaskWaitApp(uuid=task.id, interval=self.interval).run()
         TaskInfoApp(uuid=task.id, print_stdout=True).run()
