@@ -331,6 +331,9 @@ class ConfigWhichApp(Application):
     varpath: str = None
     interface.add_argument('varpath', metavar='VAR')
 
+    scope_only: bool = False
+    interface.add_argument('--scope', action='store_true', dest='scope_only')
+
     exceptions = {
         **get_shared_exception_mapping(__name__)
     }
@@ -342,10 +345,40 @@ class ConfigWhichApp(Application):
         except KeyError:
             log.critical(f'"{self.varpath}" not found')
             return
-        if site in ('default', 'env', 'logging', ):
+        if self.scope_only:
             print(site)
+            return
+        try:
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                with ConfigGetApp.from_cmdline([self.varpath, '--raw']) as app:
+                    app.run()
+        except ConfigurationError:
+            value = 'null'
         else:
-            print(f'{site}: {path[site].config}')
+            value = stdout.getvalue().strip()
+        try:
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                with ConfigGetApp.from_cmdline([self.varpath, '--raw', '--default']) as app:
+                    app.run()
+        except ConfigurationError:
+            default_value = 'null'
+        else:
+            default_value = stdout.getvalue().strip()
+        if '[' in value:
+            value = '[...]'
+        if '[' in default_value:
+            default_value = '[...]'
+        if site in ('default', 'logging', ):
+            print(f'{value} ({site})')
+        elif site == 'env':
+            env_varname = 'HYPERSHELL_' + self.varpath.upper().replace('.', '_')
+            if value == '[...]':
+                for name in full_config.namespaces.env.to_env().flatten(prefix='HYPERSHELL'):
+                    if name.startswith(env_varname):
+                        env_varname = name
+            print(f'{value} (env: {env_varname} | default: {default_value})')
+        else:
+            print(f'{value} ({site}: {path[site].config} | default: {default_value})')
 
 
 if os.name == 'nt':
