@@ -27,15 +27,20 @@ Release v\ |release| (:ref:`Getting Started <getting_started>`)
 
 .. include:: _include/desc.rst
 
+Built on Python and tested on Linux, macOS, and Windows.
+
 Several tools offer similar functionality but not all together in a single tool with
 the user ergonomics we provide. Novel design elements include but are not limited to
-(1) cross-platform, (2) client-server design, (3) staggered launch for large scales,
-(4) persistent hosting of the server, and optionally (5) a database in-the-loop for
-persisting task metadata and automated retries.
 
-*HyperShell* is pure Python and is tested on Linux, macOS, and Windows 10 in
-Python 3.9+ environments. The server and client don't even need to use the same
-platform simultaneously.
+* **Cross-platform:** run on any platform where Python runs. In fact, the server and
+  client can run on different platforms in the same cluster.
+* **Client-server:** workloads do not need to be monolithic. Run the server with
+  Postgres as a persistent service on a dedicate system, and submit/update/search
+  tasks from your local machine. Clients can scale out/in as needed.
+* **Staggered launch:** At the largest scales (1000s of nodes, 100k+ of workers),
+  the launch process can be challenging. Come up gradually to balance the workload.
+* **Database in-the-loop:** for persisting task metadata and automated retries.
+
 
 -------------------
 
@@ -57,7 +62,7 @@ for managing tasks and scheduling. In this case, we can run this small example w
 
     .. code-block:: shell
 
-        seq 4 | hyper-shell cluster -N2 -t 'echo {}' --no-db
+        seq 4 | hyper-shell cluster -t 'echo {}' --no-db
 
     .. details:: Output
 
@@ -93,12 +98,35 @@ see additional detail about what is running, where, and when.
             2022-03-14 12:29:19.671 a03.cluster.xyz   INFO [hypershell.client] Running task (09587f55-4b50-4e2b-a528-55c60667b62a)
             2022-03-14 12:29:19.674 a04.cluster.xyz   INFO [hypershell.client] Running task (1336f778-c9ab-4111-810e-229d572be62e)
 
+|
+
+Use the provided launcher on HPC clusters to bring up workers within your job allocation.
+Specify which program to use with the ``--launcher`` option. Achieve higher throughput by
+aggregating tasks in bundles with ``-b``, ``--bundlesize``.
+
+.. admonition:: Distributed Cluster over Slurm
+    :class: note
+
+    .. code-block:: shell
+
+        hyper-shell cluster tasks.in -N128 -b128 --launcher=srun --max-retries=2 --delay-start=-60 >task.out
+
+    .. details:: Logs
+
+        .. code-block:: none
+
+            2022-03-14 12:29:19.659 a00.cluster.xyz   INFO [hypershell.client] Running task (5fb74a31-fc38-4535-8b45-c19bc3dbedee)
+            2022-03-14 12:29:19.665 a01.cluster.xyz   INFO [hypershell.client] Running task (c1d32c32-3e76-48e0-b2c3-9420ea20b41b)
+            2022-03-14 12:29:19.668 a02.cluster.xyz   INFO [hypershell.client] Running task (4a6e19ec-d325-468f-a55b-03a797eb51d5)
+            2022-03-14 12:29:19.671 a03.cluster.xyz   INFO [hypershell.client] Running task (09587f55-4b50-4e2b-a528-55c60667b62a)
+            2022-03-14 12:29:19.674 a04.cluster.xyz   INFO [hypershell.client] Running task (1336f778-c9ab-4111-810e-229d572be62e)
+
 
 |
 
 **Flexible**
 
-One of several novel features of *hyper-shell*, however, is the ability to independently
+One of several novel features of *hyper-shell*, is the ability to independently
 stand up the *server* on one machine and then connect to that server using a *client* from
 a different environment.
 
@@ -111,7 +139,7 @@ with a private *key* (``-k/--auth``).
 
     .. code-block:: shell
 
-        hyper-shell server -H '0.0.0.0' -k '<AUTHKEY>' --print < tasks.in > tasks.failed
+        hyper-shell server --forever --bind '0.0.0.0' --auth '<AUTHKEY>'
 
 
 Connect to the running server from a different host (even from a different platform, e.g., Windows).
@@ -123,7 +151,7 @@ will each pull tasks off the queue asynchronously, balancing the load.
 
     .. code-block:: shell
 
-        hyper-shell client -H '<HOSTNAME>' -k '<AUTHKEY>'
+        hyper-shell client --host '<HOSTNAME>' --auth '<AUTHKEY>' --capture
 
 |
 
