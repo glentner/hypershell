@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2024 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """SSH-based cluster implementation."""
@@ -214,4 +214,3 @@ class NodeList(list):
 def compile_env() -> str:
     """Build environment variable argument expansion for remote client launch command."""
     return ' '.join([f'{key}="{value}"' for key, value in Namespace.from_env('HYPERSHELL').items()])
-
