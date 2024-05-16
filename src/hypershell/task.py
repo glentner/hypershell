@@ -859,6 +859,7 @@ class TaskUpdateApp(Application, SearchableMixin):
         if self.delete_mode:
             query.delete()
             Session.commit()
+            log.info(f'Deleted {count} tasks')
             return
 
         if self.cancel_mode:
