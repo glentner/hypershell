@@ -41,7 +41,7 @@ log = Logger.with_name(__name__)
 
 
 EDIT_PROGRAM = 'hyper-shell config edit'
-EDIT_SYNOPSIS = f'{EDIT_PROGRAM} [-h] [--user | --system]'
+EDIT_SYNOPSIS = f'{EDIT_PROGRAM} [-h] [--system | --user | --local]'
 EDIT_USAGE = f"""\
 Usage:
   {EDIT_SYNOPSIS}
@@ -54,8 +54,9 @@ EDIT_HELP = f"""\
 {EDIT_USAGE}
 
 Options:
-      --user           Edit user configuration (default).
       --system         Edit system configuration.
+      --user           Edit user configuration. (default)
+      --local          Edit local configuration.
   -h, --help           Show this message and exit.\
 """
 
@@ -67,8 +68,9 @@ class ConfigEditApp(Application):
 
     site_name: str = 'user'
     site_interface = interface.add_mutually_exclusive_group()
-    site_interface.add_argument('--user', action='store_const', const='user')
-    site_interface.add_argument('--system', action='store_const', const='system')
+    site_interface.add_argument('--system', action='store_const', const='system', dest='site_name')
+    site_interface.add_argument('--user', action='store_const', const='user', dest='site_name')
+    site_interface.add_argument('--local', action='store_const', const='local', dest='site_name')
 
     exceptions = {
         **get_shared_exception_mapping(__name__)
@@ -77,10 +79,12 @@ class ConfigEditApp(Application):
     def run(self: ConfigEditApp) -> None:
         """Business logic for `config edit`."""
 
-        config_path = path[self.site_name].config
         editor = os.getenv('EDITOR', os.getenv('VISUAL', None))
         if not editor:
             raise RuntimeError('EDITOR or VISUAL environment variable not defined')
+
+        config_path = path[self.site_name].config
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
 
         log.debug(f'Opening {config_path}')
         log.debug(f'Editor: {editor}')
@@ -88,7 +92,7 @@ class ConfigEditApp(Application):
 
 
 GET_PROGRAM = 'hyper-shell config get'
-GET_SYNOPSIS = f'{GET_PROGRAM} [-h] SECTION[...].VAR [-x] [-r] [--user | --system | --local | --default]'
+GET_SYNOPSIS = f'{GET_PROGRAM} [-h] SECTION[...].VAR [-x] [-r] [--system | --user | --local | --default]'
 GET_USAGE = f"""\
 Usage:
   {GET_SYNOPSIS}
@@ -98,7 +102,7 @@ Usage:
 GET_HELP = f"""\
 {GET_USAGE}
 
-  If --user/--system not specified, the output is the merged configuration
+  If source is not specified, the output is the merged configuration
   from all sources. Use `hyper-shell config which` to see where a specific
   option originates from.
   
@@ -108,10 +112,10 @@ Arguments:
   SECTION[...].VAR          Path to variable (default: '.').
 
 Options:
-      --user                Load from user configuration.
       --system              Load from system configuration.
+      --user                Load from user configuration.
       --local               Load from local configuration.
-      --default             Check default value.
+      --default             Load from default configuration.
   -x, --expand              Expand variable.
   -r, --raw                 Disable formatting on single value output.
   -h, --help                Show this message and exit.\
@@ -128,8 +132,8 @@ class ConfigGetApp(Application):
 
     site_name: str = None
     site_interface = interface.add_mutually_exclusive_group()
-    site_interface.add_argument('--user', action='store_const', const='user', dest='site_name')
     site_interface.add_argument('--system', action='store_const', const='system', dest='site_name')
+    site_interface.add_argument('--user', action='store_const', const='user', dest='site_name')
     site_interface.add_argument('--local', action='store_const', const='local', dest='site_name')
     site_interface.add_argument('--default', action='store_const', const='default', dest='site_name')
 
@@ -251,7 +255,7 @@ class ConfigGetApp(Application):
 
 
 SET_PROGRAM = 'hyper-shell config set'
-SET_SYNOPSIS = f'{SET_PROGRAM} [-h] SECTION[...].VAR VALUE [--user | --system]'
+SET_SYNOPSIS = f'{SET_PROGRAM} [-h] SECTION[...].VAR VALUE [--system | --user | --local]'
 SET_USAGE = f"""\
 Usage: 
   {SET_SYNOPSIS}
@@ -266,8 +270,8 @@ Arguments:
   VALUE                   Value to be set.
 
 Options:
-      --user              Apply to user configuration (default).
       --system            Apply to system configuration.
+      --user              Apply to user configuration. (default)
       --local             Apply to local configuration.
   -h, --help              Show this message and exit.\
 """
@@ -328,6 +332,7 @@ Arguments:
   SECTION[...].VAR        Path to variable.
 
 Options:
+      --scope             Output originating scope name only.
   -h, --help              Show this message and exit.\
 """
 
