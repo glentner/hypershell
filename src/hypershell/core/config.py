@@ -74,29 +74,29 @@ default = Namespace({
     },
     'task': {
         'cwd': os.getcwd(),
-        'timeout': None,  # Seconds, period to wait before killing tasks
+        'timeout': None,    # seconds, period to wait before killing tasks
     },
     'submit': {
-        'bundlesize': 1,
-        'bundlewait': 5  # seconds
+        'bundlesize': 1,    # size of task bundle to accumulate before committing
+        'bundlewait': 5     # seconds to wait before committing regardless of size
     },
     'server': {
         'bind': 'localhost',
         'port': 50_001,
         'auth': '__HYPERSHELL__BAD__AUTHKEY__',
-        'queuesize': 1,  # only allow a single bundle (scheduler must wait)
+        'queuesize': 1,     # only allow a single bundle (scheduler must wait)
         'bundlesize': 1,
-        'bundlewait': 5,   # seconds
+        'bundlewait': 5,    # seconds
         'attempts': 1,
-        'eager': False,  # prefer failed tasks to new tasks
-        'wait': 5,  # seconds to wait between database queries
-        'evict': 600,  # assume client is gone if no heartbeat after this many seconds
+        'eager': False,     # prefer failed tasks to new tasks
+        'wait': 5,          # seconds to wait between database queries
+        'evict': 600,       # assume client is gone if no heartbeat after this many seconds
     },
     'client': {
-        'bundlesize': 1,
-        'bundlewait': 5,  # Seconds
-        'heartrate': 10,  # Seconds, period to wait between heartbeats
-        'timeout': None,  # seconds, period to wait on tasks before shutting down
+        'bundlesize': 1,    # size of task bundle to accumulate before returning
+        'bundlewait': 5,    # seconds to wait before returning regardless of size
+        'heartrate': 10,    # seconds to wait between heartbeats
+        'timeout': None,    # seconds to wait for bundle from server before shutting down
     },
     'ssh': {
         'config': os.path.join(home, '.ssh', 'config'),
