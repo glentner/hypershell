@@ -1,5 +1,14 @@
-Update individual task metadata.
+Update task metadata.
 
-Manually override task metadata after it has been submitted.
-Most fields should not be modified in this way, and may in fact
-be itself overwritten when the task is returned from the client.
+Include any number of `FIELD=VALUE` or tag `KEY:VALUE` positional arguments.
+
+The ``-w``/``--where`` and ``-t``/``--with-tag`` operate just as in the search command.
+
+Using ``--cancel`` sets schedule_time to now and exit_status to -1.
+
+Using ``--revert`` reverts everything as if the task was new again.
+
+Using ``--delete`` drops the row from the database entirely.
+
+The legacy interface for updating a single task with the `ID`, `FIELD`,
+and `VALUE` as positional arguments remains valid.

@@ -1,2 +1,2 @@
 ``hyper-shell`` ``config`` ``set`` ``[-h]``
-    ``SECTION[...].VAR`` ``VALUE`` ``[--user | --system]``
+    ``SECTION[...].VAR`` ``VALUE`` ``[--system | --user | --local]``
