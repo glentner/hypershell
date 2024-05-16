@@ -3,11 +3,16 @@
 Command-line Interface
 ======================
 
-`Under construction` ...
+Most people will use *HyperShell* from the command-line.
+See our :ref:`Python API <library>` for use as a library.
+Everything shown here is available on Linux and macOS as a *manual page*.
+
+
+Subcommands
+-----------
 
 
 .. toctree::
-    :hidden:
     :maxdepth: 1
 
     cluster <cluster>
