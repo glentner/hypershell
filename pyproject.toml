@@ -15,6 +15,7 @@ keywords = [
     "command-line-tool",
     "shell-scripting",
     "high-performance-computing",
+    "high-throughput-computing",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
