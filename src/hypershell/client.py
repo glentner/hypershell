@@ -30,7 +30,7 @@ Warning:
 
 # type annotations
 from __future__ import annotations
-from typing import List, Tuple, Optional, Callable, Dict, IO, Type
+from typing import List, Tuple, Optional, Callable, Dict, IO, Type, Final
 from types import TracebackType
 
 # standard libs
@@ -39,7 +39,6 @@ import sys
 import time
 import json
 import random
-import signal
 import functools
 from enum import Enum
 from datetime import datetime, timedelta
@@ -61,6 +60,7 @@ from hypershell.core.platform import default_path
 from hypershell.core.config import default, config, load_task_env, SSH_GROUPS
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
+from hypershell.core.signal import check_signal, SIGNAL_MAP, SIGUSR1, SIGUSR2, SIGINT
 from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.logging import HOSTNAME, INSTANCE, Logger
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
@@ -68,10 +68,24 @@ from hypershell.core.exceptions import (handle_exception, handle_disconnect,
                                         handle_address_unknown, HostAddressInfo, get_shared_exception_mapping)
 
 # public interface
-__all__ = ['run_client', 'ClientThread', 'ClientApp', 'ClientInfo', 'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY', ]
+__all__ = ['run_client', 'ClientThread', 'ClientApp', 'ClientInfo', 'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY',
+           'set_client_standalone']
 
 # initialize logger
 log = Logger.with_name(__name__)
+
+
+# NOTE:
+#   The UNIX signal facility works on stand-alone server/client, but when running a LocalCluster with
+#   a client as a local thread, the USR1/USR2 signals prevent clients from sending the proper finalization
+#   messages. This flag is set by LocalCluster to prevent greedy client-side shutdown behavior.
+CLIENT_STANDALONE_MODE: bool = True
+
+
+def set_client_standalone(mode: bool) -> None:
+    """Set global flag to prevent greedy shutdown from USR1/USR2 signals."""
+    global CLIENT_STANDALONE_MODE
+    CLIENT_STANDALONE_MODE = mode
 
 
 @dataclass
@@ -177,6 +191,9 @@ class ClientScheduler(StateMachine):
 
     def get_remote(self: ClientScheduler) -> SchedulerState:
         """Get the next task bundle from the server."""
+        if check_signal() in (SIGUSR1, SIGUSR2) and CLIENT_STANDALONE_MODE:
+            log.warning(f'Signal interrupt ({SIGNAL_MAP[check_signal()]})')
+            return SchedulerState.FINAL
         try:
             self.bundle = self.queue.scheduled.get(timeout=2)
             self.queue.scheduled.task_done()
@@ -390,6 +407,10 @@ class ClientCollectorThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
+# Default seconds to wait between signal escalation (INT, TERM, KILL)
+DEFAULT_TASK_SIGNALWAIT: Final[int] = default.task.signalwait
+
+
 def task_env(task: Task) -> Dict[str, str]:
     """Build environment dictionary for the given `task`."""
     task_data = task.to_json()
@@ -411,12 +432,14 @@ class TaskState(State, Enum):
     CREATE_TASK = 2
     START_TASK = 3
     WAIT_TASK = 4
-    STOP_TASK = 5
-    TERM_TASK = 6
-    KILL_TASK = 7
-    PUT_LOCAL = 8
-    FINAL = 9
-    HALT = 10
+    CHECK_TASK = 5
+    WAIT_SIGNAL = 6
+    STOP_TASK = 7
+    TERM_TASK = 8
+    KILL_TASK = 9
+    PUT_LOCAL = 10
+    FINAL = 11
+    HALT = 12
 
 
 class TaskExecutor(StateMachine):
@@ -430,7 +453,10 @@ class TaskExecutor(StateMachine):
     redirect_errors: IO
     capture: bool
 
+    elapsed: timedelta
     timeout: Optional[int]
+    signalwait: int
+    stop_requested: Optional[datetime]
     attempted_sigint: bool
     attempted_sigterm: bool
     attempted_sigkill: bool
@@ -449,7 +475,8 @@ class TaskExecutor(StateMachine):
                  redirect_output: IO = None,
                  redirect_errors: IO = None,
                  capture: bool = False,
-                 timeout: int = None) -> None:
+                 timeout: int = None,
+                 signalwait: int = DEFAULT_TASK_SIGNALWAIT) -> None:
         """Initialize task executor."""
         self.id = id
         self.template = Template(template)
@@ -459,6 +486,7 @@ class TaskExecutor(StateMachine):
         self.redirect_errors = redirect_errors or sys.stderr
         self.capture = capture
         self.timeout = timeout
+        self.signalwait = signalwait
 
     @functools.cached_property
     def actions(self: TaskExecutor) -> Dict[TaskState, Callable[[], TaskState]]:
@@ -468,6 +496,8 @@ class TaskExecutor(StateMachine):
             TaskState.CREATE_TASK: self.create_task,
             TaskState.START_TASK: self.start_task,
             TaskState.WAIT_TASK: self.wait_task,
+            TaskState.CHECK_TASK: self.check_task,
+            TaskState.WAIT_SIGNAL: self.wait_signal,
             TaskState.STOP_TASK: self.stop_task,
             TaskState.TERM_TASK: self.term_task,
             TaskState.KILL_TASK: self.kill_task,
@@ -514,6 +544,7 @@ class TaskExecutor(StateMachine):
         self.task.start_time = datetime.now().astimezone()
         # NOTE: enforce tz aware submit_time (in case of sqlite backend)
         self.task.waited = int((self.task.start_time - self.task.submit_time.astimezone()).total_seconds())
+        self.stop_requested = None
         self.attempted_sigint = False
         self.attempted_sigterm = False
         self.attempted_sigkill = False
@@ -537,27 +568,54 @@ class TaskExecutor(StateMachine):
                 self.redirect_errors.close()
             return TaskState.PUT_LOCAL
         except TimeoutExpired:
-            # Only include time elapsed to the nearest second (we don't need fractions)
-            elapsed = timedelta(seconds=round((datetime.now().astimezone() - self.task.start_time).total_seconds()))
-            log.trace(f'Waiting on task ({self.task.id}: {elapsed})')
-            if self.timeout is None or elapsed.total_seconds() < self.timeout:
-                return TaskState.WAIT_TASK
-            elif self.attempted_sigint is False:
-                log.warning(f'Task exceeded walltime limit ({elapsed})')
-                return TaskState.STOP_TASK
-            elif self.attempted_sigterm is False:
-                log.error(f'Interrupt ignored ({self.task.id})')
-                return TaskState.TERM_TASK
+            # Only display time elapsed to the nearest second
+            self.elapsed = timedelta(seconds=round((datetime.now().astimezone() -
+                                                    self.task.start_time).total_seconds()))
+            log.trace(f'Waiting on task ({self.task.id}: {self.elapsed})')
+            if self.stop_requested:
+                return TaskState.WAIT_SIGNAL
             else:
-                log.error(f'Terminate ignored ({self.task.id})')
-                return TaskState.KILL_TASK
+                return TaskState.CHECK_TASK
+
+    def check_task(self: TaskExecutor) -> TaskState:
+        """Check for timeout or interrupts."""
+        if check_signal() == SIGUSR2:  # NOTE: regardless of CLIENT_STANDALONE_MODE
+            log.warning(f'Signal interrupt (SIGUSR2: executor-{self.id})')
+            self.stop_requested = datetime.now()
+            return TaskState.WAIT_SIGNAL
+        elif self.timeout is None or self.elapsed.total_seconds() < self.timeout:
+            return TaskState.WAIT_TASK
+        else:
+            log.warning(f'Task exceeded walltime limit ({self.elapsed})')
+            self.stop_requested = datetime.now()
+            return TaskState.WAIT_SIGNAL
+
+    def wait_signal(self: TaskExecutor) -> TaskState:
+        """Wait on interrupts."""
+        if self.attempted_sigint is False:
+            return TaskState.STOP_TASK
+        elif (datetime.now() - self.stop_requested).total_seconds() < 1 * self.signalwait:
+            return TaskState.WAIT_TASK
+        elif self.attempted_sigterm is False:
+            log.error(f'Interrupt ignored ({self.task.id})')
+            return TaskState.TERM_TASK
+        elif (datetime.now() - self.stop_requested).total_seconds() < 2 * self.signalwait:
+            return TaskState.WAIT_TASK
+        elif self.attempted_sigkill is False:
+            log.error(f'Terminate ignored ({self.task.id})')
+            return TaskState.KILL_TASK
+        elif (datetime.now() - self.stop_requested).total_seconds() < 3 * self.signalwait:
+            return TaskState.WAIT_TASK
+        else:
+            log.critical(f'Process ignored SIGKILL ({self.task.id}: {self.process.pid})')
+            log.critical(f'Shutting down executor ({self.id})')
+            return TaskState.FINAL
 
     def stop_task(self: TaskExecutor) -> TaskState:
         """Send SIGINT to task process."""
         log.debug(f'Sending SIGINT ({self.task.id}: {self.process.pid})')
-        self.process.send_signal(signal.SIGINT)
+        self.process.send_signal(SIGINT)
         self.attempted_sigint = True
-        time.sleep(2)  # additional grace period
         return TaskState.WAIT_TASK
 
     def term_task(self: TaskExecutor) -> TaskState:
@@ -565,21 +623,14 @@ class TaskExecutor(StateMachine):
         log.debug(f'Sending SIGTERM ({self.task.id}: {self.process.pid})')
         self.process.terminate()
         self.attempted_sigterm = True
-        time.sleep(2)  # additional grace period
         return TaskState.WAIT_TASK
 
     def kill_task(self: TaskExecutor) -> TaskState:
         """Send SIGKILL or halt executor if ignored."""
-        if self.attempted_sigkill is False:
-            log.debug(f'Sending SIGKILL ({self.task.id}: {self.process.pid})')
-            self.process.kill()
-            self.attempted_sigkill = True
-            time.sleep(2)  # additional grace period
-            return TaskState.WAIT_TASK
-        else:
-            log.critical(f'Process ignored SIGKILL ({self.task.id}: {self.process.pid})')
-            log.critical(f'Shutting down executor ({self.id})')
-            return TaskState.FINAL
+        log.debug(f'Sending SIGKILL ({self.task.id}: {self.process.pid})')
+        self.process.kill()
+        self.attempted_sigkill = True
+        return TaskState.WAIT_TASK
 
     def put_local(self: TaskExecutor) -> TaskState:
         """Put completed task on outbound queue."""

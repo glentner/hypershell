@@ -65,6 +65,7 @@ from hypershell.core.logging import Logger
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
 from hypershell.core.queue import QueueServer, QueueConfig
+from hypershell.core.signal import check_signal, SIGNAL_MAP, SIGUSR1, SIGUSR2
 from hypershell.core.heartbeat import Heartbeat, ClientState
 from hypershell.data.model import Task, Client
 from hypershell.data import ensuredb, DATABASE_ENABLED
@@ -160,6 +161,9 @@ class Scheduler(StateMachine):
 
     def load_bundle(self: Scheduler) -> SchedulerState:
         """Load the next task bundle from the database."""
+        if check_signal() in (SIGUSR1, SIGUSR2):
+            log.warning(f'Signal interrupt ({SIGNAL_MAP[check_signal()]})')
+            return SchedulerState.FINAL
         self.tasks = Task.next(limit=self.bundlesize, attempts=self.attempts, eager=self.eager)
         if self.tasks:
             self.startup_phase = False

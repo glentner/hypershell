@@ -18,7 +18,7 @@ from hypershell.core.logging import Logger
 from hypershell.core.template import DEFAULT_TEMPLATE
 from hypershell.submit import DEFAULT_BUNDLEWAIT
 from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
-from hypershell.client import ClientThread, DEFAULT_DELAY
+from hypershell.client import ClientThread, DEFAULT_DELAY, set_client_standalone
 
 # public interface
 __all__ = ['run_local', 'LocalCluster']
@@ -76,6 +76,7 @@ class LocalCluster(Thread):
 
     def run_with_exceptions(self: LocalCluster) -> None:
         """Start child threads, wait."""
+        set_client_standalone(False)
         self.server.start()
         time.sleep(2)  # NOTE: give the server a chance to start
         self.client.start()

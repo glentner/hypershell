@@ -75,6 +75,7 @@ default = Namespace({
     'task': {
         'cwd': os.getcwd(),
         'timeout': None,    # seconds, period to wait before killing tasks
+        'signalwait': 10,   # seconds to wait between signal escalation (INT, TERM, KILL)
     },
     'submit': {
         'bundlesize': 1,    # size of task bundle to accumulate before committing

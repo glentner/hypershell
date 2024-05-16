@@ -14,6 +14,7 @@ from cmdkit.cli import Interface
 
 # internal libs
 from hypershell.core.logging import Logger, initialize_logging
+from hypershell.core.signal import register_handlers
 from hypershell.submit import SubmitApp
 from hypershell.server import ServerApp
 from hypershell.client import ClientApp
@@ -109,4 +110,5 @@ class HyperShellApp(ApplicationGroup):
 def main() -> int:
     """Entry-point for console application."""
     initialize_logging()
+    register_handlers()
     return HyperShellApp.main(sys.argv[1:])
