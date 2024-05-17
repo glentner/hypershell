@@ -700,7 +700,7 @@ CANCEL_STATUS: Final[int] = -1
 
 
 UPDATE_PROGRAM = 'hyper-shell task update'
-UPDATE_SYNOPSIS = f'{UPDATE_PROGRAM} [-h] ARG [ARG...] [--cancel | --revert | --delete]'
+UPDATE_SYNOPSIS = f'{UPDATE_PROGRAM} [-h] ARG [ARG...] [--cancel | --revert | --delete] ...'
 UPDATE_USAGE = f"""\
 Usage:
   {UPDATE_SYNOPSIS}
@@ -863,6 +863,12 @@ class TaskUpdateApp(Application, SearchableMixin):
             return
 
         if self.cancel_mode:
+            if self.limit:
+                prev_count = sum([1 for task in query if task.schedule_time is not None])
+            else:
+                prev_count = query.filter(Task.schedule_time.isnot(None)).count()
+            if prev_count > 0:
+                log.warning(f'{prev_count} cancelled tasks already scheduled')
             field_updates['schedule_time'] = datetime.now().astimezone()
             field_updates['exit_status'] = CANCEL_STATUS
 
