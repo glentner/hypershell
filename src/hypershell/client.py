@@ -540,15 +540,15 @@ class TaskExecutor(StateMachine):
 
     def start_task(self: TaskExecutor) -> TaskState:
         """Start current task locally."""
+        # NOTE: enforce tz aware submit_time (in case of sqlite backend)
+        self.task.start_time = datetime.now().astimezone()
+        self.task.waited = int((self.task.start_time - self.task.submit_time.astimezone()).total_seconds())
         env = task_env(self.task)
         if self.capture:
             self.task.outpath = env['TASK_OUTPATH']
             self.task.errpath = env['TASK_ERRPATH']
             self.redirect_output = open(self.task.outpath, mode='w')
             self.redirect_errors = open(self.task.errpath, mode='w')
-        self.task.start_time = datetime.now().astimezone()
-        # NOTE: enforce tz aware submit_time (in case of sqlite backend)
-        self.task.waited = int((self.task.start_time - self.task.submit_time.astimezone()).total_seconds())
         self.stop_requested = None
         self.attempted_sigint = False
         self.attempted_sigterm = False
