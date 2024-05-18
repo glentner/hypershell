@@ -30,16 +30,17 @@ Release v\ |release| (:ref:`Getting Started <getting_started>`)
 Built on Python and tested on Linux, macOS, and Windows.
 
 Several tools offer similar functionality but not all together in a single tool with
-the user ergonomics we provide. Novel design elements include but are not limited to
+the user ergonomics we provide. Novel design elements include but are not limited to:
 
 * **Cross-platform:** run on any platform where Python runs. In fact, the server and
   client can run on different platforms in the same cluster.
-* **Client-server:** workloads do not need to be monolithic. Run the server with
-  Postgres as a persistent service on a dedicate system, and submit/update/search
-  tasks from your local machine. Clients can scale out/in as needed.
+* **Client-server:** workloads do not need to be monolithic. Run the server as a
+  stand-alone service with SQLite or Postgres as a persistent database and dynamically
+  scale clients as needed.
 * **Staggered launch:** At the largest scales (1000s of nodes, 100k+ of workers),
   the launch process can be challenging. Come up gradually to balance the workload.
-* **Database in-the-loop:** for persisting task metadata and automated retries.
+* **Database in-the-loop:** run in-memory for quick, ad-hoc workloads. Otherwise,
+  include a database for persistence, recovery when restarting, and search.
 
 
 -------------------
@@ -54,8 +55,8 @@ Features
 Take a listing of shell commands and process them in parallel.
 In this example, we use the ``-t`` option to specify a template for the input arguments
 which are not fully formed shell commands. Larger workloads will want to use a database
-for managing tasks and scheduling. In this case, we can run this small example with
-``--no-db`` to disable the database and submit tasks directly to the shared queue.
+for managing tasks and scheduling. Without having configured the database the program
+will manage tasks entirely within memory.
 
 .. admonition:: Hello World
     :class: note
@@ -68,6 +69,7 @@ for managing tasks and scheduling. In this case, we can run this small example w
 
         .. code-block:: none
 
+            WARNING [hypershell.server] No database configured - automatically disabled
             0
             1
             2
@@ -102,7 +104,10 @@ see additional detail about what is running, where, and when.
 
 Use the provided launcher on HPC clusters to bring up workers within your job allocation.
 Specify which program to use with the ``--launcher`` option. Achieve higher throughput by
-aggregating tasks in bundles with ``-b``, ``--bundlesize``.
+aggregating tasks in bundles with ``-b``, ``--bundlesize``. Add a database configuration to
+allow for retries with ``-r``, ``--max-retries``. Using a negative value for ``--delay-start``
+causes the remote clients to sleep some random interval in seconds up to that value. In this
+example we stagger the launch process over one minute.
 
 .. admonition:: Distributed Cluster over Slurm
     :class: note
@@ -139,7 +144,7 @@ with a private *key* (``-k/--auth``).
 
     .. code-block:: shell
 
-        hyper-shell server --forever --bind '0.0.0.0' --auth '<AUTHKEY>'
+        hs server --forever --bind '0.0.0.0' --auth '<AUTHKEY>'
 
 
 Connect to the running server from a different host (even from a different platform, e.g., Windows).
@@ -157,13 +162,13 @@ will each pull tasks off the queue asynchronously, balancing the load.
 
 **Dynamic**
 
-Special variables are automatically defined for each individual task. For example, ``TASK_ID`` gives
-a unique UUID for each task (regardless of which client executes the task).
+Individual task metadata is exposed to tasks as environment variables. For example, ``TASK_ID`` provides
+the UUID for the task, and ``TASK_SUBMIT_TIME`` records the date and time the task was submitted.
 
-Further, any environment variable defined with the ``HYPERSHELL_EXPORT_`` prefix will be injected into
+Any environment variable defined with the ``HYPERSHELL_EXPORT_`` prefix will be injected into
 the environment of each task, *sans prefix*.
 
-Use ``-t`` (short for ``--template``) to expand a template, ``{}`` can be used to insert the incoming
+Use ``-t`` (short for ``--template``) to expand a template; ``{}`` can be used to insert the incoming
 task arguments (alternatively, use ``TASK_ARGS``). Be sure to use single quotes to delay the variable
 expansion. Many meta-patterns are supported (see full overview of :ref:`templates <templates>`):
 
