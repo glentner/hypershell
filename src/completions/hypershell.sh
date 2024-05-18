@@ -365,7 +365,7 @@ function _hs_task_search ()
 
 	local i=1 opt= active_collector=none
 
-	while [[ ${i} -le ${COMP_CWORD} ]]; do
+	while [[ ${i} -lt ${COMP_CWORD} ]]; do
 		opt="${COMP_WORDS[i]}"
 		case "${opt}" in
 			--)            active_collector=--;   break;;
@@ -430,7 +430,7 @@ function _hs_task_update ()
 
 	local i=1 opt= active_collector=none
 
-	while [[ ${i} -le ${COMP_CWORD} ]]; do
+	while [[ ${i} -lt ${COMP_CWORD} ]]; do
 		opt="${COMP_WORDS[i]}"
 		case "${opt}" in
 			--)            active_collector=--;     break;;
@@ -443,7 +443,7 @@ function _hs_task_update ()
 	done
 
 	local all_opts="-h --help -w --where -t --with-tag -s --order-by --desc
-	--cancel --remove --delete --remove-tag -F --failed -C
+	--cancel --revert --delete --remove-tag -F --failed -C
 	--completed -S --succeeded -R --remaining -l --limit -f --no-confirm --"
 
 	local pos_args=
