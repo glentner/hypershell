@@ -1,6 +1,6 @@
-``hyper-shell`` ``task`` ``update`` ``[-h]`` ``ID`` ``FIELD`` ``VALUE``
+``hs`` ``task`` ``update`` ``[-h]`` ``ID`` ``FIELD`` ``VALUE``
 
-``hyper-shell`` ``task`` ``update``
+``hs`` ``task`` ``update``
     ``[ARG [ARG ...]]``
     ``[--cancel | --revert | --delete | --remove-tag KEY [KEY...]]``
     ``[-w COND [COND ...]]`` ``[-t TAG [TAG...]]``

@@ -30,7 +30,7 @@ For example, set the logging level at the user level with a command:
 
     .. code-block:: shell
 
-        hyper-shell config set logging.level info --user
+        hs config set logging.level info --user
 
 The file should now look something like this:
 

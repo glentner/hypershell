@@ -1,5 +1,5 @@
-hyper-shell
-===========
+HyperShell
+==========
 
 Release v\ |release| (:ref:`Getting Started <getting_started>`)
 
@@ -62,7 +62,7 @@ for managing tasks and scheduling. In this case, we can run this small example w
 
     .. code-block:: shell
 
-        seq 4 | hyper-shell cluster -t 'echo {}' --no-db
+        seq 4 | hs cluster -t 'echo {}'
 
     .. details:: Output
 
@@ -86,7 +86,7 @@ see additional detail about what is running, where, and when.
 
     .. code-block:: shell
 
-        hyper-shell cluster tasks.in -N4 --ssh-group=xyz --capture
+        hs cluster tasks.in -N16 --ssh-group=xyz --capture
 
     .. details:: Logs
 
@@ -109,7 +109,7 @@ aggregating tasks in bundles with ``-b``, ``--bundlesize``.
 
     .. code-block:: shell
 
-        hyper-shell cluster tasks.in -N128 -b128 --launcher=srun --max-retries=2 --delay-start=-60 >task.out
+        hs cluster tasks.in -N128 -b128 --launcher=srun --max-retries=2 --delay-start=-60 >task.out
 
     .. details:: Logs
 
@@ -126,11 +126,11 @@ aggregating tasks in bundles with ``-b``, ``--bundlesize``.
 
 **Flexible**
 
-One of several novel features of *hyper-shell*, is the ability to independently
+One of several novel features of `HyperShell`, is the ability to independently
 stand up the *server* on one machine and then connect to that server using a *client* from
 a different environment.
 
-Start the *hyper-shell server* and set the bind address to ``0.0.0.0`` to allow remote connections.
+Start the server with a bind address of ``0.0.0.0`` to allow remote connections.
 The server schedules tasks on a distributed queue. It is recommended that you protect your instance
 with a private *key* (``-k/--auth``).
 
@@ -151,7 +151,7 @@ will each pull tasks off the queue asynchronously, balancing the load.
 
     .. code-block:: shell
 
-        hyper-shell client --host '<HOSTNAME>' --auth '<AUTHKEY>' --capture
+        hs client --host '<HOSTNAME>' --auth '<AUTHKEY>' --capture
 
 |
 
@@ -177,7 +177,7 @@ expansion. Many meta-patterns are supported (see full overview of :ref:`template
 
     .. code-block:: shell
 
-        hyper-shell cluster tasks.in -N12 -t './some_program.py {} >outputs/{/-}.out'
+        hs cluster tasks.in -N12 -t './some_program.py {} >outputs/{/-}.out'
 
 Capturing `stdout` and `stderr` is supported directly in fact with the ``--capture`` option.
 See the full documentation for environment variables under :ref:`configuration <config>`.

@@ -96,9 +96,9 @@ Options
 
     If a database is configured for use with the workflow (e.g., PostgreSQL), auto-initialize
     tables if they don't already exist. This is a short-hand for pre-creating tables with the
-    ``hyper-shell initdb`` command. This happens by default with SQLite databases.
+    ``hs initdb`` command. This happens by default with SQLite databases.
 
-    Mutually exclusive to ``--no-db``. See ``hyper-shell initdb`` command.
+    Mutually exclusive to ``--no-db``. See ``hs initdb`` command.
 
 ``--no-confirm``
     Disable client confirmation of task bundle received.

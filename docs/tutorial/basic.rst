@@ -31,7 +31,7 @@ and re-direct outputs to individual files in the project directory.
         .. code-block:: shell
 
             find data/ -maxdepth 1 -type f -name '*.h5' |\
-                hyper-shell cluster -N4 -b4 -w60 -t 'bin/code.py {} >output/{/-}.out'
+                hs cluster -N4 -b4 -w60 -t 'bin/code.py {} >output/{/-}.out'
 
     .. details:: Logs
 
@@ -180,4 +180,3 @@ and re-direct outputs to individual files in the project directory.
             DEBUG [hypershell.client] Done
             DEBUG [hypershell.server] Done (receiver)
             DEBUG [hypershell.server] Done
-

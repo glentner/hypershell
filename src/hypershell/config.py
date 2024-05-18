@@ -103,7 +103,7 @@ GET_HELP = f"""\
 {GET_USAGE}
 
   If source is not specified, the output is the merged configuration
-  from all sources. Use `hyper-shell config which` to see where a specific
+  from all sources. Use `hs config which` to see where a specific
   option originates from.
   
   If a single value is requested, use -r/--raw to strip formatting. 

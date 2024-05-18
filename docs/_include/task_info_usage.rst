@@ -1,2 +1,2 @@
-``hyper-shell`` ``task`` ``info`` ``[-h]``
+``hs`` ``task`` ``info`` ``[-h]``
     ``ID`` ``[--stdout | --stderr | -x FIELD]`` ``[-f FORMAT]``

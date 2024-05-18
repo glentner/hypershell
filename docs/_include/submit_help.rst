@@ -40,9 +40,9 @@ Options
 
     If a database is configured for use with the workflow (e.g., PostgreSQL), auto-initialize
     tables if they don't already exist. This is a short-hand for pre-creating tables with the
-    ``hyper-shell initdb`` command. This happens by default with SQLite databases.
+    ``hs initdb`` command. This happens by default with SQLite databases.
 
-    See ``hyper-shell initdb`` command.
+    See ``hs initdb`` command.
 
 ``--tag`` *TAG*...
     Assign one or more tags.

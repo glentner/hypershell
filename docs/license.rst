@@ -13,7 +13,7 @@ or similar. For some, this is an appropriate choice. However, a project that
 is released under a GPL licence cannot be used as part of any commercial product
 or service (without it also being made open source).
 
-Under the Apache Software License, anyone is free to use *hyper-shell* as part
+Under the Apache Software License, anyone is free to use `HyperShell` as part
 of a proprietary, closed-source project. That's a good thing!
 
 |

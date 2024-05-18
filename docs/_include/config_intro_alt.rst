@@ -1,5 +1,5 @@
-Most of the choices that ``hyper-shell`` makes about timing, task bundling, coordination, logging,
-and such are configurable by the user. This configuration is loaded when ``hyper-shell`` starts
+Most of the choices that `HyperShell` makes about timing, task bundling, coordination, logging,
+and such are configurable by the user. This configuration is loaded when the program starts
 and is constructed from several sources including an ordered merger of files, environment variables,
 and command-line options.
 
@@ -23,7 +23,7 @@ For example, set the logging level at the user level with a command:
 
 .. code-block:: shell
 
-    $ hyper-shell config set logging.level info --user
+    $ hs config set logging.level info --user
 
 The file should now look something like this:
 

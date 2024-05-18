@@ -109,7 +109,7 @@ default = Namespace({
         'policy': 'fixed',  # Either 'fixed' or 'dynamic'
         'factor': 1,
         'period': 60,  # seconds to wait between checks
-        'launcher': '',  # empty means just 'hyper-shell client'
+        'launcher': '',  # empty means just 'hs client'
         'size': {
             'init': 1,
             'min': 0,
