@@ -58,7 +58,7 @@
 
     ``.schema``
         Not applicable for all RDMS providers.
-        For PostgreSQL the default schema is ``public``.
+        For Postgres the default schema is ``public``.
         Specifying the schema may be useful for having multiple instances within the same database.
 
     ``.host``
@@ -66,7 +66,7 @@
 
     ``.port``
         Port number to connect with database server.
-        The default value depends on the provider, e.g., 5432 for PostgreSQL.
+        The default value depends on the provider, e.g., 5432 for Postgres.
 
     ``.user``
         Username for databaser server account.
@@ -311,7 +311,7 @@
             Maximum size of cluster (default: 2).
 
             For a *dynamic* autoscaling policy, this sets an upper limit on the number of launched
-            clients. WHen this number is reached, scaling stops regardless of task pressure.
+            clients. When this number is reached, scaling stops regardless of task pressure.
 
 ``[console]``
     Rich text display and output parameters.
@@ -319,7 +319,7 @@
     ``.theme``
         Color scheme to use by default in output (such as with ``task info`` and ``task search``).
 
-        This option is passed to the `rich` library.
+        This option is passed to the `rich <https://rich.readthedocs.io/en/latest/>`_ library.
 
 ``[export]``
     Any variable defined here is injected as an environment variable for tasks.

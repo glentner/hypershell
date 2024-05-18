@@ -38,7 +38,7 @@ Options
 ``--initdb``
     Auto-initialize database.
 
-    If a database is configured for use with the workflow (e.g., PostgreSQL), auto-initialize
+    If a database is configured for use with the workflow (e.g., Postgres), auto-initialize
     tables if they don't already exist. This is a short-hand for pre-creating tables with the
     ``hs initdb`` command. This happens by default with SQLite databases.
 

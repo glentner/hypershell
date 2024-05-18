@@ -11,7 +11,7 @@ Options
     Cancel specified tasks.
 
     Cancelling a task means it will no longer be scheduled.
-    This is done by setting the schedule time to `now` and the `exit_status` to -1.
+    This is done by setting the `schedule_time` to `now` and the `exit_status` to -1.
     A task cannot be cancelled after it is sent to remote clients.
 
 ``--revert``
