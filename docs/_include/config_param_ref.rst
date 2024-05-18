@@ -238,6 +238,9 @@
         Executors will send a progression of SIGINT, SIGTERM, and SIGKILL.
         If the process still persists the executor itself will shutdown.
 
+    ``.signalwait``
+        Wait period in seconds between signal escalation on task cancellation.
+
 ``[ssh]``
     SSH configuration section.
 
