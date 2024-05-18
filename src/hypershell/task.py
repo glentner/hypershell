@@ -432,7 +432,7 @@ class SearchableMixin:
             if config.database.provider == 'sqlite':
                 # NOTE: sqlalchemy adds `json_quote(json_extract(task.tag, ?)) is not null`
                 # and cannot find a way to exclude `json_quote`, so we do it ourselves
-                query = query.filter(text('json_extract(task.tag, :tag) is not null')).params(tag=f'$."{name}"')
+                query = query.filter(text('json_extract(task.tag, :key) is not null')).params(key=f'$."{name}"')
             else:
                 query = query.filter(Task.tag[name].isnot(None))
         for name, value in tags_with_value.items():
