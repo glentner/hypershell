@@ -25,7 +25,7 @@ from hypershell.core.thread import Thread
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.queue import QueueConfig
 from hypershell.core.template import DEFAULT_TEMPLATE
-from hypershell.client import DEFAULT_DELAY
+from hypershell.client import DEFAULT_DELAY, DEFAULT_SIGNALWAIT
 from hypershell.submit import DEFAULT_BUNDLEWAIT
 from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 
@@ -75,7 +75,8 @@ class SSHCluster(Thread):
                  delay_start: float = DEFAULT_DELAY,
                  capture: bool = False,
                  client_timeout: int = None,
-                 task_timeout: int = None) -> None:
+                 task_timeout: int = None,
+                 task_signalwait: int = DEFAULT_SIGNALWAIT) -> None:
         """Initialize server and client threads."""
         if nodelist is None:
             raise AttributeError('Expected nodelist')
@@ -101,7 +102,8 @@ class SSHCluster(Thread):
         self.client_argv = [
             [*launcher, *launcher_args, host, *launcher_env, remote_exe, 'client', '-H', HOSTNAME,
              '-p', str(bind[1]), '-N', str(num_tasks), '-b', str(bundlesize), '-w', str(bundlewait),
-             '-t', f'\'{template}\'', '-k', auth, '-d', str(delay_start), *client_args]
+             '-t', f'\'{template}\'', '-k', auth, '-d', str(delay_start),
+             '-S', str(task_signalwait), *client_args]
             for host in nodelist
         ]
         super().__init__(name='hypershell-cluster')

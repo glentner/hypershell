@@ -3,6 +3,7 @@
 
 """Remote cluster implementation."""
 
+
 # type annotations
 from __future__ import annotations
 from typing import Tuple, List, Dict, IO, Iterable, Callable, Type
@@ -26,7 +27,7 @@ from hypershell.core.thread import Thread
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.template import DEFAULT_TEMPLATE
 from hypershell.data.model import Task, Client
-from hypershell.client import DEFAULT_DELAY
+from hypershell.client import DEFAULT_DELAY, DEFAULT_SIGNALWAIT
 from hypershell.submit import DEFAULT_BUNDLEWAIT
 from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 
@@ -80,7 +81,8 @@ class RemoteCluster(Thread):
                  no_confirm: bool = False,
                  capture: bool = False,
                  client_timeout: int = None,
-                 task_timeout: int = None) -> None:
+                 task_timeout: int = None,
+                 task_signalwait: int = DEFAULT_SIGNALWAIT) -> None:
         """Initialize server and client threads with external launcher."""
         auth = secrets.token_hex(64)
         self.server = ServerThread(source=source, auth=auth, bundlesize=bundlesize, bundlewait=bundlewait,
@@ -104,7 +106,7 @@ class RemoteCluster(Thread):
         self.client_argv = [
             *launcher, *launcher_args, remote_exe, 'client',
             '-H', HOSTNAME, '-p', str(bind[1]), '-N', str(num_tasks), '-b', str(bundlesize), '-w', str(bundlewait),
-            '-t', template, '-k', auth, '-d', str(delay_start), *client_args
+            '-t', template, '-k', auth, '-d', str(delay_start), '-S', str(task_signalwait), *client_args
         ]
         super().__init__(name='hypershell-cluster')
 
@@ -405,7 +407,8 @@ class AutoScalingCluster(Thread):
                  in_memory: bool = False,  # noqa: ignored (passed by ClusterApp)
                  no_confirm: bool = False,  # noqa: ignored (passed by ClusterApp)
                  client_timeout: int = None,
-                 task_timeout: int = None
+                 task_timeout: int = None,
+                 task_signalwait: int = DEFAULT_SIGNALWAIT,
                  ) -> None:
         """Initialize server and autoscaler."""
         auth = secrets.token_hex(64)
@@ -427,7 +430,7 @@ class AutoScalingCluster(Thread):
         launcher.extend([
             *launcher_args, remote_exe, 'client',
             '-H', HOSTNAME, '-p', str(bind[1]), '-N', str(num_tasks), '-b', str(bundlesize), '-w', str(bundlewait),
-            '-t', template, '-k', auth, '-d', str(delay_start), *client_args
+            '-t', template, '-k', auth, '-d', str(delay_start), '-S', str(task_signalwait), *client_args
         ])
         self.autoscaler = AutoScalerThread(launcher, policy=policy, factor=factor, period=period,
                                            init_size=init_size, min_size=min_size, max_size=max_size)

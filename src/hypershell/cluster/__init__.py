@@ -25,7 +25,7 @@ from hypershell.core.logging import Logger
 from hypershell.core.template import DEFAULT_TEMPLATE
 from hypershell.core.exceptions import get_shared_exception_mapping
 from hypershell.data import initdb, checkdb
-from hypershell.client import DEFAULT_NUM_TASKS, DEFAULT_DELAY
+from hypershell.client import DEFAULT_NUM_TASKS, DEFAULT_DELAY, DEFAULT_SIGNALWAIT
 from hypershell.server import DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 from hypershell.submit import DEFAULT_BUNDLEWAIT
 from hypershell.cluster.ssh import run_ssh, SSHCluster, NodeList
@@ -91,6 +91,7 @@ Options:
   -f, --failures      PATH     File path to write failed task args (default: <none>).
   -T, --timeout       SEC      Automatically shutdown clients if no tasks received (default: never).
   -W, --task-timeout  SEC      Task-level walltime limit (default: none).
+  -S, --signalwait    SEC      Task-level signal escalation wait period (default: {DEFAULT_SIGNALWAIT}).
   -A, --autoscaling  [MODE]    Enable autoscaling (default: disabled). Used with --launcher.
   -F, --factor        VALUE    Scaling factor (default: 1).
   -P, --period        SEC      Scaling period in seconds (default: {DEFAULT_AUTOSCALE_PERIOD}).
@@ -183,6 +184,9 @@ class ClusterApp(Application):
     interface.add_argument('-T', '--timeout', type=int, default=client_timeout, dest='client_timeout')
     interface.add_argument('-W', '--task-timeout', type=int, default=task_timeout, dest='task_timeout')
 
+    task_signalwait: int = config.task.signalwait
+    interface.add_argument('-S', '--signalwait', type=int, default=task_signalwait, dest='task_signalwait')
+
     autoscaling_policy: str = None
     autoscaling_factor: float = config.autoscale.factor
     autoscaling_period: int = config.autoscale.period
@@ -209,7 +213,8 @@ class ClusterApp(Application):
                  in_memory=self.in_memory, no_confirm=self.no_confirm, forever_mode=self.forever_mode,
                  restart_mode=self.restart_mode, redirect_failures=self.failure_stream,
                  delay_start=self.delay_start, capture=self.capture,
-                 client_timeout=self.client_timeout, task_timeout=self.task_timeout)
+                 client_timeout=self.client_timeout, task_timeout=self.task_timeout,
+                 task_signalwait=self.task_signalwait)
 
     def run_local(self: ClusterApp, **options) -> None:
         """Run local cluster."""

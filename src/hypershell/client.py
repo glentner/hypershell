@@ -68,7 +68,8 @@ from hypershell.core.exceptions import (handle_exception, handle_disconnect,
                                         handle_address_unknown, HostAddressInfo, get_shared_exception_mapping)
 
 # public interface
-__all__ = ['run_client', 'ClientThread', 'ClientApp', 'ClientInfo', 'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY',
+__all__ = ['run_client', 'ClientThread', 'ClientApp', 'ClientInfo',
+           'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY', 'DEFAULT_SIGNALWAIT',
            'set_client_standalone']
 
 # initialize logger
@@ -408,7 +409,7 @@ class ClientCollectorThread(Thread):
 
 
 # Default seconds to wait between signal escalation (INT, TERM, KILL)
-DEFAULT_TASK_SIGNALWAIT: Final[int] = default.task.signalwait
+DEFAULT_SIGNALWAIT: Final[int] = default.task.signalwait
 
 
 def task_env(task: Task) -> Dict[str, str]:
@@ -481,7 +482,7 @@ class TaskExecutor(StateMachine):
                  redirect_errors: IO = None,
                  capture: bool = False,
                  timeout: int = None,
-                 signalwait: int = DEFAULT_TASK_SIGNALWAIT) -> None:
+                 signalwait: int = DEFAULT_SIGNALWAIT) -> None:
         """Initialize task executor."""
         self.id = id
         self.template = Template(template)
@@ -668,13 +669,14 @@ class TaskThread(Thread):
                  capture: bool = False,
                  redirect_output: IO = None,
                  redirect_errors: IO = None,
-                 timeout: int = None) -> None:
+                 timeout: int = None,
+                 signalwait: int = DEFAULT_SIGNALWAIT) -> None:
         """Initialize task executor."""
         self.id = id
         super().__init__(name=f'hypershell-executor-{id}')
         self.machine = TaskExecutor(id=id, inbound=inbound, outbound=outbound, template=template,
                                     redirect_output=redirect_output, redirect_errors=redirect_errors,
-                                    capture=capture, timeout=timeout)
+                                    capture=capture, timeout=timeout, signalwait=signalwait)
 
     def run_with_exceptions(self: TaskThread) -> None:
         """Run machine."""
@@ -826,7 +828,8 @@ class ClientThread(Thread):
                  delay_start: float = DEFAULT_DELAY,
                  no_confirm: bool = False,
                  client_timeout: int = None,
-                 task_timeout: int = None) -> None:
+                 task_timeout: int = None,
+                 task_signalwait: int = DEFAULT_SIGNALWAIT) -> None:
         """Initialize queue manager and child threads."""
         super().__init__(name='hypershell-client')
         self.num_tasks = num_tasks
@@ -843,7 +846,8 @@ class ClientThread(Thread):
         self.executors = [TaskThread(id=count+1,
                                      inbound=self.inbound, outbound=self.outbound,
                                      redirect_output=redirect_output, redirect_errors=redirect_errors,
-                                     template=template, capture=capture, timeout=task_timeout)
+                                     template=template, capture=capture, timeout=task_timeout,
+                                     signalwait=task_signalwait)
                           for count in range(num_tasks)]
 
     def run_with_exceptions(self: ClientThread) -> None:
@@ -912,18 +916,27 @@ class ClientThread(Thread):
 
 
 def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
-               bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-               address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
-               template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None,
-               capture: bool = False, heartrate: int = DEFAULT_HEARTRATE,
-               delay_start: float = DEFAULT_DELAY, no_confirm: bool = False,
-               client_timeout: int = None, task_timeout: int = None) -> None:
+               bundlesize: int = DEFAULT_BUNDLESIZE,
+               bundlewait: int = DEFAULT_BUNDLEWAIT,
+               address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port),
+               auth: str = QueueConfig.auth,
+               template: str = DEFAULT_TEMPLATE,
+               redirect_output: IO = None,
+               redirect_errors: IO = None,
+               capture: bool = False,
+               heartrate: int = DEFAULT_HEARTRATE,
+               delay_start: float = DEFAULT_DELAY,
+               no_confirm: bool = False,
+               client_timeout: int = None,
+               task_timeout: int = None,
+               task_signalwait: int = DEFAULT_SIGNALWAIT) -> None:
     """Run client until disconnect signal received."""
     thread = ClientThread.new(num_tasks=num_tasks, bundlesize=bundlesize, bundlewait=bundlewait,
                               address=address, auth=auth, template=template, capture=capture,
                               redirect_output=redirect_output, redirect_errors=redirect_errors,
                               heartrate=heartrate, delay_start=delay_start, no_confirm=no_confirm,
-                              client_timeout=client_timeout, task_timeout=task_timeout)
+                              client_timeout=client_timeout, task_timeout=task_timeout,
+                              task_signalwait=task_signalwait)
     try:
         thread.join()
     except Exception:
@@ -964,6 +977,7 @@ Options:
   -c, --capture             Capture individual task <stdout> and <stderr>.
   -T, --timeout       SEC   Automatically shutdown if no tasks received (default: never).
   -W, --task-timeout  SEC   Task-level walltime limit (default: none).
+  -S, --signalwait    SEC   Task-level signal escalation wait period (default: {DEFAULT_SIGNALWAIT}).
   -h, --help                Show this message and exit.\
 """
 
@@ -1002,6 +1016,9 @@ class ClientApp(Application):
     client_timeout: int = config.client.timeout
     interface.add_argument('-T', '--timeout', type=int, default=client_timeout, dest='client_timeout')
     interface.add_argument('-W', '--task-timeout', type=int, default=task_timeout, dest='task_timeout')
+
+    task_signalwait: int = config.task.signalwait
+    interface.add_argument('-S', '--task-signalwait', type=int, default=task_signalwait, dest='task_signalwait')
 
     no_confirm: bool = False
     interface.add_argument('--no-confirm', action='store_true')
@@ -1044,7 +1061,8 @@ class ClientApp(Application):
                        no_confirm=self.no_confirm,
                        heartrate=config.client.heartrate,
                        client_timeout=self.client_timeout,
-                       task_timeout=self.task_timeout)
+                       task_timeout=self.task_timeout,
+                       task_signalwait=self.task_signalwait)
         except gaierror:
             raise HostAddressInfo(f'Could not resolve host \'{self.host}\'')
 

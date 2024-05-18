@@ -18,7 +18,7 @@ from hypershell.core.logging import Logger
 from hypershell.core.template import DEFAULT_TEMPLATE
 from hypershell.submit import DEFAULT_BUNDLEWAIT
 from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
-from hypershell.client import ClientThread, DEFAULT_DELAY, set_client_standalone
+from hypershell.client import ClientThread, DEFAULT_DELAY, DEFAULT_SIGNALWAIT, set_client_standalone
 
 # public interface
 __all__ = ['run_local', 'LocalCluster']
@@ -61,7 +61,8 @@ class LocalCluster(Thread):
                  delay_start: float = DEFAULT_DELAY,
                  capture: bool = False,
                  client_timeout: int = None,
-                 task_timeout: int = None) -> None:
+                 task_timeout: int = None,
+                 task_signalwait: int = DEFAULT_SIGNALWAIT) -> None:
         """Initialize server and client threads."""
         auth = secrets.token_hex(64)
         self.server = ServerThread(source=source, auth=auth, in_memory=in_memory, no_confirm=no_confirm,
@@ -71,7 +72,8 @@ class LocalCluster(Thread):
         self.client = ClientThread(num_tasks=num_tasks, template=template, auth=auth, no_confirm=no_confirm,
                                    bundlesize=bundlesize, bundlewait=bundlewait, delay_start=delay_start,
                                    redirect_output=redirect_output, redirect_errors=redirect_errors,
-                                   capture=capture, client_timeout=client_timeout, task_timeout=task_timeout)
+                                   capture=capture, client_timeout=client_timeout, task_timeout=task_timeout,
+                                   task_signalwait=task_signalwait)
         super().__init__(name='hypershell-cluster')
 
     def run_with_exceptions(self: LocalCluster) -> None:
