@@ -2,7 +2,7 @@
     Logging configuration. See also :ref:`logging <logging>` section.
 
     ``.level``
-        One of ``DEVEL``, ``TRACE``, ``DEBUG``, ``INFO``, ``WARNING``,
+        One of ``TRACE``, ``DEBUG``, ``INFO``, ``WARNING``,
         ``ERROR``, or ``CRITICAL`` (default: ``WARNING``)
 
         ``INFO`` level messages are reserved for clients when tasks begin running.
@@ -18,9 +18,6 @@
         Some of these are expected (such as incorrect command-line arguments) but in
         the event of an uncaught exception within the application a full traceback is
         written to a file and logged.
-
-        ``DEVEL`` messages are meant for development purposes and track every single
-        state-transition in all component threads.
 
     ``.datefmt``
         Date/time format, standard codes apply (default: ``'%Y-%m-%d %H:%M:%S'```)
