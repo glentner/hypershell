@@ -182,6 +182,21 @@ expansion. Many meta-patterns are supported (see full overview of :ref:`template
 Capturing `stdout` and `stderr` is supported directly in fact with the ``--capture`` option.
 See the full documentation for environment variables under :ref:`configuration <config>`.
 
+Add arbitrary tags to one or whole collections of tasks to track additional context.
+
+.. admonition:: Include user-defined tags
+    :class: note
+
+    .. code-block:: shell
+
+        hs submit tasks.in --tag prod instr:B12 site:us-west-1 batch:12
+
+    .. details:: Logs
+
+        .. code-block:: none
+
+            INFO [hypershell.submit] Submitted 20 tasks
+
 |
 
 .. toctree::

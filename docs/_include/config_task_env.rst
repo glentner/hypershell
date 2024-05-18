@@ -59,8 +59,14 @@ A few common environment variables are defined for every task.
 
 |
 
-Further, any environment variable starting with ``HYPERSHELL_EXPORT_`` will be injected
-into the task environment sans prefix; e.g., ``HYPERSHELL_EXPORT_FOO`` would define
+Any user-defined tags are included as environment variables as well with
+``TASK_TAG_`` as a prefix. For example, some tag ``site:us-west-1`` would be
+exposed as ``TASK_TAG_SITE=us-west-1``.
+
+|
+
+Further, any environment variable defined by the user with ``HYPERSHELL_EXPORT_`` will be
+injected into the task environment sans prefix; e.g., ``HYPERSHELL_EXPORT_FOO`` would define
 ``FOO`` in the task environment. You can also define such variables in the ``export``
 section of your configuration file(s); e.g.,
 
