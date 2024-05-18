@@ -63,6 +63,7 @@ from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
 from hypershell.core.exceptions import get_shared_exception_mapping
+from hypershell.core.types import JSONValue
 from hypershell.data.model import Task
 from hypershell.data import initdb, checkdb
 from hypershell.task import Tag
@@ -510,7 +511,7 @@ class LiveSubmitThread(Thread):
 
 def submit_from(source: Iterable[str], queue_config: QueueConfig = None,
                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-                template: str = DEFAULT_TEMPLATE, tags: Dict[str, str] = None) -> int:
+                template: str = DEFAULT_TEMPLATE, tags: Dict[str, JSONValue] = None) -> int:
     """Submit all task arguments from `source`, return count of submitted tasks."""
     if not queue_config:
         thread = SubmitThread.new(source=source, bundlesize=bundlesize, bundlewait=bundlewait,
@@ -529,11 +530,11 @@ def submit_from(source: Iterable[str], queue_config: QueueConfig = None,
 
 def submit_file(path: str, queue_config: QueueConfig = None,
                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-                template: str = DEFAULT_TEMPLATE, **options) -> int:
+                template: str = DEFAULT_TEMPLATE, tags: Dict[str, JSONValue] = None, **options) -> int:
     """Submit tasks by reading argument lines from local file `path`."""
     with open(path, mode='r', **options) as stream:
         return submit_from(stream, queue_config=queue_config, bundlesize=bundlesize,
-                           bundlewait=bundlewait, template=template)
+                           bundlewait=bundlewait, template=template, tags=tags)
 
 
 APP_NAME = 'hyper-shell submit'
