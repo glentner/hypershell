@@ -77,7 +77,7 @@ def ensuredb(auto_init: bool = False) -> None:
         checkdb()
 
 
-INITDB_PROGRAM = 'hyper-shell initdb'
+INITDB_PROGRAM = 'hs initdb'
 INITDB_USAGE = f"""\
 Usage:
   {INITDB_PROGRAM} [-h] [--truncate [--yes]]

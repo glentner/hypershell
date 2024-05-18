@@ -52,7 +52,7 @@ __all__ = ['TaskGroupApp', 'Tag', ]
 log = Logger.with_name(__name__)
 
 
-SUBMIT_PROGRAM = 'hyper-shell task submit'
+SUBMIT_PROGRAM = 'hs task submit'
 SUBMIT_SYNOPSIS = f'{SUBMIT_PROGRAM} [-h] [-t TAG [TAG...]] -- ARGS...'
 SUBMIT_USAGE = f"""\
 Usage:
@@ -108,7 +108,7 @@ def check_uuid(value: str) -> None:
         raise ArgumentError(f'Bad UUID: \'{value}\'')
 
 
-INFO_PROGRAM = 'hyper-shell task info'
+INFO_PROGRAM = 'hs task info'
 INFO_SYNOPSIS = f'{INFO_PROGRAM} [-h] ID [--stdout | --stderr | -x FIELD] [-f FORMAT]'
 INFO_USAGE = f"""\
 Usage: 
@@ -247,7 +247,7 @@ class TaskInfoApp(Application):
 DEFAULT_INTERVAL = 5
 
 
-WAIT_PROGRAM = 'hyper-shell task wait'
+WAIT_PROGRAM = 'hs task wait'
 WAIT_SYNOPSIS = f'{WAIT_PROGRAM} [-h] ID [-n SEC] [--info [-f FORMAT] | --status | --return]'
 WAIT_USAGE = f"""\
 Usage: 
@@ -337,7 +337,7 @@ class TaskWaitApp(Application):
             break
 
 
-RUN_PROGRAM = 'hyper-shell task run'
+RUN_PROGRAM = 'hs task run'
 RUN_SYNOPSIS = f'{RUN_PROGRAM} [-h] [-n SEC] [-t TAG [TAG...]] -- ARGS...'
 RUN_USAGE = f"""\
 Usage: 
@@ -483,13 +483,13 @@ class SearchableMixin:
                 raise ArgumentError(f'Invalid field name "{name}"')
 
 
-SEARCH_PROGRAM = 'hyper-shell task search'
+SEARCH_PROGRAM = 'hs task search'
 SEARCH_SYNOPSIS = f'{SEARCH_PROGRAM} [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]] ...'
 SEARCH_USAGE = f"""\
 Usage:
-  hyper-shell task search [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]]
-                          [--order-by FIELD [--desc]] [--count | --limit NUM]
-                          [--format FORMAT | --json | --csv]  [-d CHAR]
+  hs task search [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]]
+                 [--order-by FIELD [--desc]] [--count | --limit NUM]
+                 [-f FORMAT | --json | --csv]  [-d CHAR]
 
   Search tasks in the database.\
 """
@@ -699,15 +699,13 @@ class TaskSearchApp(Application, SearchableMixin):
 CANCEL_STATUS: Final[int] = -1
 
 
-UPDATE_PROGRAM = 'hyper-shell task update'
+UPDATE_PROGRAM = 'hs task update'
 UPDATE_SYNOPSIS = f'{UPDATE_PROGRAM} [-h] ARG [ARG...] [--cancel | --revert | --delete] ...'
 UPDATE_USAGE = f"""\
 Usage:
-  {UPDATE_SYNOPSIS}
-  {' ' * len(UPDATE_PROGRAM)} [--failed | --succeeded | --completed | --remaining]
-  {' ' * len(UPDATE_PROGRAM)} [-w COND [COND ...]] [-t TAG [TAG...]]
-  {' ' * len(UPDATE_PROGRAM)} [--order-by FIELD [--desc]] [--limit NUM]
-  {' ' * len(UPDATE_PROGRAM)} [--remove-tag TAG [TAG ...]] [--no-confirm]
+  hs task update [-h] ARG [ARG...] [--cancel | --revert | --delete] [--remove-tag TAG [TAG ...]]
+                 [-w COND [COND ...]] [-t TAG [TAG...]] [--order-by FIELD [--desc]] [--limit NUM]
+                 [--failed | --succeeded | --completed | --remaining] [--no-confirm]
   
   Update task metadata.\
 """
@@ -996,7 +994,7 @@ class TaskUpdateApp(Application, SearchableMixin):
         return d
 
 
-TASK_PROGRAM = 'hyper-shell task'
+TASK_PROGRAM = 'hs task'
 TASK_USAGE = f"""\
 Usage: 
   {TASK_PROGRAM} [-h]

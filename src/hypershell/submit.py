@@ -537,7 +537,7 @@ def submit_file(path: str, queue_config: QueueConfig = None,
                            bundlewait=bundlewait, template=template, tags=tags)
 
 
-APP_NAME = 'hyper-shell submit'
+APP_NAME = 'hs submit'
 APP_USAGE = f"""\
 Usage:
   {APP_NAME} [-h] [FILE] [-b NUM] [-w SEC] [-t CMD] [--initdb] [--tag TAG [TAG...]]

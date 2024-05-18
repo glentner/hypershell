@@ -759,12 +759,11 @@ def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, in_memory: bool = False,
         raise
 
 
-APP_NAME = 'hyper-shell server'
+APP_NAME = 'hs server'
 APP_USAGE = f"""\
 Usage:
-  hyper-shell server [-h] [FILE | --forever | --restart] [-b NUM] [-w SEC] [-r NUM [--eager]]
-                     [-H ADDR] [-p PORT] [-k KEY] [--no-db | --initdb] [--print | -f PATH] 
-                     [--no-confirm]
+  hs server [-h] [FILE | --forever | --restart] [-b NUM] [-w SEC] [-r NUM [--eager]]
+            [-H ADDR] [-p PORT] [-k KEY] [--no-db | --initdb] [--print | -f PATH] [--no-confirm]
 
   Launch server, schedule directly or asynchronously from database.\
 """

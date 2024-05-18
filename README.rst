@@ -27,15 +27,20 @@ HyperShell v2: Distributed Task Execution for HPC
 processing shell commands over a distributed, asynchronous queue. It is a highly
 scalable workflow automation tool for *many-task* scenarios.
 
-Several tools offer similar functionality but not all together in a single tool with
-the ergonomics we provide. Novel design elements include but are not limited to
-(1) cross-platform, (2) client-server design, (3) staggered launch for large scales,
-(4) persistent hosting of the server, and optionally (5) a database in-the-loop for
-persisting task metadata and automated retries.
+Built on Python and tested on Linux, macOS, and Windows.
 
-*HyperShell* is pure Python and is tested on Linux, macOS, and Windows 10 in
-Python 3.9+ environments. The server and client don't even need to use the same
-platform simultaneously.
+Several tools offer similar functionality but not all together in a single tool with
+the user ergonomics we provide. Novel design elements include but are not limited to
+
+* **Cross-platform:** run on any platform where Python runs. In fact, the server and
+  client can run on different platforms in the same cluster.
+* **Client-server:** workloads do not need to be monolithic. Run the server as a
+  stand-alone service with SQLite or Postgres as a persistent database and dynamically
+  scale clients as needed.
+* **Staggered launch:** At the largest scales (1000s of nodes, 100k+ of workers),
+  the launch process can be challenging. Come up gradually to balance the workload.
+* **Database in-the-loop:** run in-memory for quick, ad-hoc workloads. Otherwise,
+  include a database for persistence, recovery when restarting, and search.
 
 
 Documentation

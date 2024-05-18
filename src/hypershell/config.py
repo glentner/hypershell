@@ -40,7 +40,7 @@ __all__ = ['ConfigApp', ]
 log = Logger.with_name(__name__)
 
 
-EDIT_PROGRAM = 'hyper-shell config edit'
+EDIT_PROGRAM = 'hs config edit'
 EDIT_SYNOPSIS = f'{EDIT_PROGRAM} [-h] [--system | --user | --local]'
 EDIT_USAGE = f"""\
 Usage:
@@ -91,7 +91,7 @@ class ConfigEditApp(Application):
         subprocess.run([editor, config_path])
 
 
-GET_PROGRAM = 'hyper-shell config get'
+GET_PROGRAM = 'hs config get'
 GET_SYNOPSIS = f'{GET_PROGRAM} [-h] SECTION[...].VAR [-x] [-r] [--system | --user | --local | --default]'
 GET_USAGE = f"""\
 Usage:
@@ -254,7 +254,7 @@ class ConfigGetApp(Application):
         return value
 
 
-SET_PROGRAM = 'hyper-shell config set'
+SET_PROGRAM = 'hs config set'
 SET_SYNOPSIS = f'{SET_PROGRAM} [-h] SECTION[...].VAR VALUE [--system | --user | --local]'
 SET_USAGE = f"""\
 Usage: 
@@ -317,7 +317,7 @@ class ConfigSetApp(Application):
         update(self.site_name, config)
 
 
-WHICH_PROGRAM = 'hyper-shell config which'
+WHICH_PROGRAM = 'hs config which'
 WHICH_SYNOPSIS = f'{WHICH_PROGRAM} [-h] SECTION[...].VAR'
 WHICH_USAGE = f"""\
 Usage: 
@@ -403,7 +403,7 @@ else:
     USER_CONFIG_PATH = '~/.hypershell/config.toml'
 
 
-PROGRAM = 'hyper-shell config'
+PROGRAM = 'hs config'
 USAGE = f"""\
 Usage:
   {PROGRAM} [-h]

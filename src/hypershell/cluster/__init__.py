@@ -44,13 +44,13 @@ __all__ = ['run_local', 'run_cluster', 'run_ssh',
 log = Logger.with_name(__name__)
 
 
-APP_NAME = 'hyper-shell cluster'
+APP_NAME = 'hs cluster'
 APP_USAGE = """\
 Usage:
   hyper-shell cluster [-h] [FILE | --restart | --forever] [-N NUM] [-t CMD] [-b SIZE] [-w SEC]
                       [-p PORT] [-r NUM [--eager]] [-f PATH] [--capture | [-o PATH] [-e PATH]]
                       [--ssh [HOST... | --ssh-group NAME] [--env] | --mpi | --launcher=ARGS...]
-                      [--no-db | --initdb] [--no-confirm] [--delay-start SEC] [-T SEC] [-W SEC]
+                      [--no-db | --initdb] [--no-confirm] [-d SEC] [-T SEC] [-W SEC] [-S SEC]
                       [--autoscaling [MODE] [-P SEC] [-F VALUE] [-I NUM] [-X NUM] [-Y NUM]]
 
   Start cluster locally, over SSH, or with a custom launcher.\
