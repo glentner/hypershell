@@ -488,8 +488,12 @@ SEARCH_SYNOPSIS = f'{SEARCH_PROGRAM} [-h] [FIELD [FIELD ...]] [-w COND [COND ...
 SEARCH_USAGE = f"""\
 Usage:
   hs task search [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]]
+                 [--failed | --succeeded | --completed | --remaining]
                  [--order-by FIELD [--desc]] [--count | --limit NUM]
                  [-f FORMAT | --json | --csv]  [-d CHAR]
+  
+  hs task search --tag-keys
+  hs task search --tag-values KEY
 
   Search tasks in the database.\
 """
@@ -501,20 +505,22 @@ Arguments:
   FIELD                      Select specific named fields.
 
 Options:
-  -w, --where      COND...   Filter on conditional expression.
-  -t, --with-tag   TAG...    Filter by tag.
-  -s, --order-by   FIELD     Order output by field.
+  -w, --where       COND...  Filter on conditional expression.
+  -t, --with-tag    TAG...   Filter by tag.
+  -s, --order-by    FIELD    Order output by field.
       --desc                 Descending order (requires --order-by).
   -F, --failed               Alias for `-w exit_status != 0`.
   -S, --succeeded            Alias for `-w exit_status == 0`.
   -C, --completed            Alias for `-w exit_status != null`.
   -R, --remaining            Alias for `-w exit_status == null`.
-  -f, --format     FORMAT    Format output (normal, plain, table, csv, json).
+  -f, --format      FORMAT   Format output (normal, plain, table, csv, json).
       --json                 Format output as JSON (alias for `--format=json`).
       --csv                  Format output as CSV (alias for `--format=csv`.
-  -d, --delimiter  CHAR      Field seperator for plain/csv formats.
-  -l, --limit      NUM       Limit the number of results.
+  -d, --delimiter   CHAR     Field seperator for plain/csv formats.
+  -l, --limit       NUM      Limit the number of results.
   -c, --count                Show count of results.
+      --tag-keys             Show all distinct tag keys.
+      --tag-values  KEY      Show all distinct tag values for given key.
   -h, --help                 Show this message and exit.\
 """
 
