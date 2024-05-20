@@ -318,7 +318,7 @@ class ConfigSetApp(Application):
 
 
 WHICH_PROGRAM = 'hs config which'
-WHICH_SYNOPSIS = f'{WHICH_PROGRAM} [-h] SECTION[...].VAR'
+WHICH_SYNOPSIS = f'{WHICH_PROGRAM} [-h] SECTION[...].VAR [--site]'
 WHICH_USAGE = f"""\
 Usage: 
   {WHICH_SYNOPSIS}
@@ -332,7 +332,7 @@ Arguments:
   SECTION[...].VAR        Path to variable.
 
 Options:
-      --scope             Output originating scope name only.
+      --site              Output originating site name only.
   -h, --help              Show this message and exit.\
 """
 
@@ -345,8 +345,8 @@ class ConfigWhichApp(Application):
     varpath: str = None
     interface.add_argument('varpath', metavar='VAR')
 
-    scope_only: bool = False
-    interface.add_argument('--scope', action='store_true', dest='scope_only')
+    site_only: bool = False
+    interface.add_argument('--site', action='store_true', dest='site_only')
 
     exceptions = {
         **get_shared_exception_mapping(__name__)
@@ -359,7 +359,7 @@ class ConfigWhichApp(Application):
         except KeyError:
             log.critical(f'"{self.varpath}" not found')
             return
-        if self.scope_only:
+        if self.site_only:
             print(site)
             return
         try:

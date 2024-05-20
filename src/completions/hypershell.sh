@@ -154,10 +154,10 @@ function _hs_config_which ()
 
 	case "${COMP_CWORD}" in
 		3)
-			COMPREPLY=($(compgen -W ". `hs config get --list-available` -h --help" -- "${current}"))
+			COMPREPLY=($(compgen -W ". `hs config get --list-available` -h --help --site" -- "${current}"))
 			;;
 		*)
-			COMPREPLY=($(compgen -W "-h --help" -- "${current}"))
+			COMPREPLY=($(compgen -W "-h --help --site" -- "${current}"))
 			;;
 	esac
 }
