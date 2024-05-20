@@ -29,7 +29,7 @@ from hypershell.core.exceptions import write_traceback
 
 # public interface
 __all__ = ['config', 'update', 'default', 'ConfigurationError', 'Namespace', 'blame',
-           'load', 'reload', 'load_file', 'reload_file', 'load_env', 'reload_env', 'load_task_env',
+           'load', 'reload', 'reload_local', 'load_file', 'reload_file', 'load_env', 'reload_env', 'load_task_env',
            'DEFAULT_LOGGING_STYLE', 'LOGGING_STYLES', 'ACTIVE_CONFIG_VARS', 'SSH_GROUPS',
            'find_available_ports']
 
@@ -62,9 +62,11 @@ LOGGING_STYLES = {
 # environment variables and configuration files are automatically
 # depth-first merged with defaults
 default = Namespace({
+
     'database': {
         'provider': 'sqlite',
     },
+
     'logging': {
         'color': True,
         'level': 'warning',
@@ -72,15 +74,18 @@ default = Namespace({
         'style': DEFAULT_LOGGING_STYLE,
         **LOGGING_STYLES.get(DEFAULT_LOGGING_STYLE),
     },
+
     'task': {
         'cwd': os.getcwd(),
         'timeout': None,    # seconds, period to wait before killing tasks
         'signalwait': 10,   # seconds to wait between signal escalation (INT, TERM, KILL)
     },
+
     'submit': {
         'bundlesize': 1,    # size of task bundle to accumulate before committing
         'bundlewait': 5     # seconds to wait before committing regardless of size
     },
+
     'server': {
         'bind': 'localhost',
         'port': 50_001,
@@ -93,18 +98,19 @@ default = Namespace({
         'wait': 5,          # seconds to wait between database queries
         'evict': 600,       # assume client is gone if no heartbeat after this many seconds
     },
+
     'client': {
         'bundlesize': 1,    # size of task bundle to accumulate before returning
         'bundlewait': 5,    # seconds to wait before returning regardless of size
         'heartrate': 10,    # seconds to wait between heartbeats
         'timeout': None,    # seconds to wait for bundle from server before shutting down
     },
+
     'ssh': {
         'config': os.path.join(home, '.ssh', 'config'),
-        'nodelist': {
-            # Populated by user configuration
-        }
+        'nodelist': {}  # Populated by user configuration
     },
+
     'autoscale': {
         'policy': 'fixed',  # Either 'fixed' or 'dynamic'
         'factor': 1,
@@ -116,12 +122,13 @@ default = Namespace({
             'max': 2,
         },
     },
+
     'console': {
         'theme': 'monokai',
     },
-    'export': {
-        # NOTE: defining HYPERSHELL_EXPORT_XXX defines XXX within task env
-    }
+
+    # NOTE: defining HYPERSHELL_EXPORT_XXX defines XXX within task env
+    'export': {}
 })
 
 
@@ -152,24 +159,30 @@ def load_env() -> Environ:
     return reload_env()
 
 
-def partial_load(**preload: Namespace) -> Configuration:
+def partial_load(system: Optional[str] = path.system.config,
+                 user: Optional[str] = path.user.config,
+                 local: Optional[str] = path.local.config,
+                 **preload: Namespace) -> Configuration:
     """Load configuration from files and merge environment variables."""
     return Configuration(**{
         'default': default, **preload,
-        'system': load_file(path.system.config),
-        'user': load_file(path.user.config),
-        'local': load_file(path.local.config),
+        'system': {} if not system else load_file(system),
+        'user': {} if not user else load_file(user),
+        'local': {} if not user else load_file(local),
         'env': load_env(),
     })
 
 
-def partial_reload(**preload: Namespace) -> Configuration:
+def partial_reload(system: Optional[str] = path.system.config,
+                   user: Optional[str] = path.user.config,
+                   local: Optional[str] = path.local.config,
+                   **preload: Namespace) -> Configuration:
     """Force reload configuration from files and merge environment variables."""
     return Configuration(**{
         'default': default, **preload,
-        'system': reload_file(path.system.config),
-        'user': reload_file(path.user.config),
-        'local': reload_file(path.local.config),
+        'system': {} if not system else reload_file(system),
+        'user': {} if not user else reload_file(user),
+        'local': {} if not local else reload_file(local),
         'env': reload_env(),
     })
 
@@ -207,7 +220,11 @@ def build_preloads(base: Configuration) -> Namespace:
 
 class LoaderImpl(Protocol):
     """Loader interface for building configuration."""
-    def __call__(self: LoaderImpl, **preload: Namespace) -> Configuration: ...
+    def __call__(self: LoaderImpl,
+                 system: Optional[str] = path.system.config,
+                 user: Optional[str] = path.user.config,
+                 local: Optional[str] = path.local.config,
+                 **preload: Namespace) -> Configuration: ...
 
 
 def build_configuration(loader: LoaderImpl) -> Configuration:
@@ -225,8 +242,18 @@ def reload() -> Configuration:
     return build_configuration(loader=partial_reload)
 
 
+def reload_local(filepath: Optional[str] = None) -> Configuration:
+    """Load configuration but only include one file."""
+    loader = functools.partial(partial_reload, system=None, user=None, local=filepath)
+    return build_configuration(loader=loader)
+
+
 try:
-    config = load()
+    if (local_config := os.getenv('HYPERSHELL_CONFIG_FILE', None)) is not None:
+        path.local.config = local_config  # Modified as to not lie to the user
+        config = reload_local(local_config)
+    else:
+        config = load()
 except Exception as error:
     write_traceback(error, module=__name__)
     sys.exit(exit_status.bad_config)
