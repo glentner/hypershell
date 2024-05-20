@@ -396,11 +396,17 @@ class ConfigWhichApp(Application):
 
 
 if os.name == 'nt':
-    SYSTEM_CONFIG_PATH = '%ProgramData%\\HyperShell\\Config.toml'
-    USER_CONFIG_PATH = '%AppData%\\HyperShell\\Config.toml'
+    CONFIG_PATH_INFO = f"""\
+  --system         %ProgramData%\\HyperShell\\Config.toml
+  --user           %AppData%\\HyperShell\\Config.toml
+  --local          {path.local.config}
+"""
 else:
-    SYSTEM_CONFIG_PATH = '/etc/hypershell.toml'
-    USER_CONFIG_PATH = '~/.hypershell/config.toml'
+    CONFIG_PATH_INFO = f"""\
+  --system         /etc/hypershell.toml
+  --user           ~/.hypershell/config.toml
+  --local          {path.local.config}
+"""
 
 
 PROGRAM = 'hs config'
@@ -428,8 +434,7 @@ Options:
   -h, --help       Show this message and exit.
 
 Files:
-  --user           {USER_CONFIG_PATH}
-  --system         {SYSTEM_CONFIG_PATH}
+{CONFIG_PATH_INFO}\
 """
 
 
