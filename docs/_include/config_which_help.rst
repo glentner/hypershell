@@ -7,5 +7,5 @@ SECTION[...].VAR
 Options
 ^^^^^^^
 
-``--scope``
-    Output originating scope name only.
+``--site``
+    Output originating site name only.
