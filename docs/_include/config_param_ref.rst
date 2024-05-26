@@ -239,7 +239,9 @@
         If the process still persists the executor itself will shutdown.
 
     ``.signalwait``
-        Wait period in seconds between signal escalation on task cancellation.
+        Wait period in seconds between signal escalation on task cancellation (default: 10).
+
+        See also ``-S``, ``--signalwait`` command-line option.
 
 ``[ssh]``
     SSH configuration section.
