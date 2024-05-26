@@ -1,4 +1,4 @@
-Submit tasks from a file.
+Submit tasks from file.
 
 Tasks are accumulated and published in bundles to the database.
 The ``-b``/``--bundlesize`` and ``-w``/``--bundlewait`` options control the

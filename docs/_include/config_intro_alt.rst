@@ -1,4 +1,4 @@
-Most of the choices that `HyperShell` makes about timing, task bundling, coordination, logging,
+Most of the choices the program makes about timing, task bundling, coordination, logging,
 and such are configurable by the user. This configuration is loaded when the program starts
 and is constructed from several sources including an ordered merger of files, environment variables,
 and command-line options.

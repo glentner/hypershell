@@ -24,36 +24,38 @@ Features
 What's in a name?
 ^^^^^^^^^^^^^^^^^
 
-The original ``hyper-shell`` name is still valid and will remain available
-for backwards compatibility. Going forward, users can invoke the program with
-fewer characters, now simply ``hs``.
+The original ``hyper-shell`` name is still valid and will remain available for backwards
+compatibility. But going forward we are dropping the hyphen *everywhere*, preferring simply
+*hypershell* in writing and ``hs`` at the command-line.
 
 But why?
 
-First, it has been our experience that ``hyper-shell`` is simply a lot of
-characters to type when developing workflows interactively. It has the benefits
-of uniqueness on any given system; and it remains a good practice to use in
-scripts in the same way long-form options are. Conversely, just as it is more
-ergonomic to use short-form, single letter options at the command-line, even
-stacked, so too is the ability to invoke programs with fewer characters.
+At the outset of the project we liked the hyphen for the program name at the command-line;
+it was aesthetic and distinct. But the hyphen cannot go everywhere we need it to. It cannot go
+in the environment variables, it cannot go in the package name, and it feels out of place on the
+file system. It remains a point of confusion for users who are unsure how to refer to the project,
+so we're deprecating the hyphen *everywhere*.
 
-This change is an addition to the user-experience, not a revocation.
+Furthermore, it has been our experience that ``hyper-shell`` is simply a lot of characters to type
+when developing workflows interactively. It has the benefits of uniqueness on any given system; and
+it remains a good practice to use in scripts in the same way long-form options are. Conversely, just
+as it is more ergonomic to use short-form, single letter options at the command-line, even stacked,
+so too is the ability to invoke programs with fewer characters.
 
 |
 
 New capabilities for task management
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Previously the ``hs task update`` command would only allow you to specify a
-single task UUID, a field to change, and the new value.
-In `Issue #27 <https://github.com/glentner/hyper-shell/issues/27>`_ we consider
-the much need capability to *cancel* a task. But now what about other sorts of
-not only singular, but bulk changes we would want to make? Such as, *deletion*,
-or task *reversion*, or what about applying tags en masse?
+Previously the ``hs task update`` command would only allow you to specify a single task
+UUID, a field to change, and the new value.
+In `Issue #27 <https://github.com/glentner/hyper-shell/issues/27>`_ we consider the much
+need capability to *cancel* a task. But what about other sorts of actions (singular and
+bulk) such as *deletion*, *reversion*, or even updating tags en masse?
 
 Instead of creating many additional subcommands, we have extended the original
-update command to now allow for arbitrarily many field and tag modifications
-in a single call. As well, we support ``--cancel``, ``--revert``, and ``--delete``
+update command to allow for arbitrarily many field and tag modifications
+in a single call. As well, we've added ``--cancel``, ``--revert``, and ``--delete``
 as special cases that apply managed changes.
 
 We've ported over the same machinery that underlies the ``hs task search`` command
@@ -184,7 +186,7 @@ to the ``task.timeout`` feature, we send ``SIGINT``, ``SIGTERM``, and ``SIGKILL`
 fashion to halt running tasks.
 
 With regard to signals, we have also added a user configurable parameter
-``-S``, ``--signalwait`` (or ``task.signalwait``, 10 seconds being the default). This is the period
+``-S``, ``--signalwait`` (or ``task.signalwait``, 10 seconds by default). This is the period
 in seconds the client will wait between signal escalations when halting a task.
 
 |

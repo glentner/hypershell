@@ -332,4 +332,4 @@
     Example,
 
     ``foo = 1``
-        The environment variable ``FOO=1`` would defined for all tasks.
+        The environment variable ``FOO=1`` would be defined for all tasks.
