@@ -220,6 +220,10 @@ where the name aligns to the path to some option, delimited by underscores,
 will set that option.
 
 Example, ``HYPERSHELL_CLIENT_TIMEOUT`` maps to the corresponding configuration option.
+The following environment variables must be specified as such and cannot be configurable
+within files.
+
+.. include:: _include/config_site_vars.rst
 
 .. include:: _include/config_task_env_alt.rst
 
