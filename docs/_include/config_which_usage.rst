@@ -1,2 +1,2 @@
-``hyper-shell`` ``config`` ``which`` ``[-h]``
-    ``SECTION[...].VAR``
+``hs`` ``config`` ``which`` ``[-h]``
+    ``SECTION[...].VAR`` ``[--site]``

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2024 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """Run full cluster with server and managed clients."""
@@ -11,6 +11,7 @@ from types import TracebackType
 
 # standard libs
 import sys
+import shlex
 from functools import cached_property
 
 # external libs
@@ -18,14 +19,13 @@ from cmdkit.app import Application
 from cmdkit.cli import Interface, ArgumentError
 
 # internal libs
-from hypershell.core.ansi import colorize_usage
 from hypershell.core.config import config, blame
 from hypershell.core.queue import QueueConfig
 from hypershell.core.logging import Logger
 from hypershell.core.template import DEFAULT_TEMPLATE
 from hypershell.core.exceptions import get_shared_exception_mapping
 from hypershell.data import initdb, checkdb
-from hypershell.client import DEFAULT_NUM_TASKS, DEFAULT_DELAY
+from hypershell.client import DEFAULT_NUM_TASKS, DEFAULT_DELAY, DEFAULT_SIGNALWAIT
 from hypershell.server import DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 from hypershell.submit import DEFAULT_BUNDLEWAIT
 from hypershell.cluster.ssh import run_ssh, SSHCluster, NodeList
@@ -44,16 +44,16 @@ __all__ = ['run_local', 'run_cluster', 'run_ssh',
 log = Logger.with_name(__name__)
 
 
-APP_NAME = 'hyper-shell cluster'
-APP_USAGE = f"""\
+APP_NAME = 'hs cluster'
+APP_USAGE = """\
 Usage:
-hyper-shell cluster [-h] [FILE | --restart | --forever] [-N NUM] [-t CMD] [-b SIZE] [-w SEC]
-                    [-p PORT] [-r NUM [--eager]] [-f PATH] [--capture | [-o PATH] [-e PATH]]
-                    [--ssh [HOST... | --ssh-group NAME] [--env] | --mpi | --launcher=ARGS...]
-                    [--no-db | --initdb] [--no-confirm] [--delay-start SEC] [-T SEC] [-W SEC]
-                    [--autoscaling [MODE] [-P SEC] [-F VALUE] [-I NUM] [-X NUM] [-Y NUM]] 
+  hs cluster [-h] [FILE | --restart | --forever] [-N NUM] [-t CMD] [-b SIZE] [-w SEC]
+             [-p PORT] [-r NUM [--eager]] [-f PATH] [--capture | [-o PATH] [-e PATH]]
+             [--ssh [HOST... | --ssh-group NAME] [--env] | --mpi | --launcher=ARGS...]
+             [--no-db | --initdb] [--no-confirm] [-d SEC] [-T SEC] [-W SEC] [-S SEC]
+             [--autoscaling [MODE] [-P SEC] [-F VALUE] [-I NUM] [-X NUM] [-Y NUM]]
 
-Start cluster locally, over SSH, or with a custom launcher.\
+  Start cluster locally, over SSH, or with a custom launcher.\
 """
 
 APP_HELP = f"""\
@@ -83,13 +83,15 @@ Options:
       --ssh-args      ARGS     Command-line arguments for SSH.
       --ssh-group     NAME     SSH nodelist group in config.
   -E, --env                    Send environment variables.
+      --remote-exe    PATH     Path to executable on remote hosts.
   -d, --delay-start   SEC      Delay time for launching clients (default: {DEFAULT_DELAY}).
-  -c, --capture                Capture individual task <stdout> and <stderr>.         
+  -c, --capture                Capture individual task <stdout> and <stderr>.
   -o, --output        PATH     File path for task outputs (default: <stdout>).
   -e, --errors        PATH     File path for task errors (default: <stderr>).
   -f, --failures      PATH     File path to write failed task args (default: <none>).
   -T, --timeout       SEC      Automatically shutdown clients if no tasks received (default: never).
   -W, --task-timeout  SEC      Task-level walltime limit (default: none).
+  -S, --signalwait    SEC      Task-level signal escalation wait period (default: {DEFAULT_SIGNALWAIT}).
   -A, --autoscaling  [MODE]    Enable autoscaling (default: disabled). Used with --launcher.
   -F, --factor        VALUE    Scaling factor (default: 1).
   -P, --period        SEC      Scaling period in seconds (default: {DEFAULT_AUTOSCALE_PERIOD}).
@@ -104,12 +106,9 @@ class ClusterApp(Application):
     """Run managed cluster."""
 
     name = APP_NAME
-    interface = Interface(APP_NAME,
-                          colorize_usage(APP_USAGE),
-                          colorize_usage(APP_HELP))
+    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
 
     filepath: str
-    source: Optional[IO] = None
     interface.add_argument('filepath', nargs='?', default=None)
 
     num_tasks: int = 1
@@ -185,6 +184,9 @@ class ClusterApp(Application):
     interface.add_argument('-T', '--timeout', type=int, default=client_timeout, dest='client_timeout')
     interface.add_argument('-W', '--task-timeout', type=int, default=task_timeout, dest='task_timeout')
 
+    task_signalwait: int = config.task.signalwait
+    interface.add_argument('-S', '--signalwait', type=int, default=task_signalwait, dest='task_signalwait')
+
     autoscaling_policy: str = None
     autoscaling_factor: float = config.autoscale.factor
     autoscaling_period: int = config.autoscale.period
@@ -211,7 +213,8 @@ class ClusterApp(Application):
                  in_memory=self.in_memory, no_confirm=self.no_confirm, forever_mode=self.forever_mode,
                  restart_mode=self.restart_mode, redirect_failures=self.failure_stream,
                  delay_start=self.delay_start, capture=self.capture,
-                 client_timeout=self.client_timeout, task_timeout=self.task_timeout)
+                 client_timeout=self.client_timeout, task_timeout=self.task_timeout,
+                 task_signalwait=self.task_signalwait)
 
     def run_local(self: ClusterApp, **options) -> None:
         """Run local cluster."""
@@ -233,7 +236,7 @@ class ClusterApp(Application):
             nodelist = NodeList.from_config(self.ssh_group)
         else:
             nodelist = NodeList.from_cmdline(self.ssh_mode if self.ssh_mode != '<default>' else None)
-        run_ssh(**options, launcher='ssh', launcher_args=[self.ssh_args, ], nodelist=nodelist,
+        run_ssh(**options, launcher='ssh', launcher_args=shlex.split(self.ssh_args), nodelist=nodelist,
                 remote_exe=self.remote_exe, bind=('0.0.0.0', self.port), export_env=self.export_env)
 
     def run_autoscaling(self: ClusterApp, **options) -> None:

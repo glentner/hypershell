@@ -1,1 +1,1 @@
-``hyper-shell`` ``initdb`` ``[-h]`` ``[--truncate [--yes]]``
+``hs`` ``initdb`` ``[-h]`` ``[--truncate [--yes]]``

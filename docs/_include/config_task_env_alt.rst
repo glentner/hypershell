@@ -43,6 +43,12 @@ A few common environment variables are defined for every task.
 ``TASK_CWD``
     Current working directory for the current task.
 
+``TASK_START_TIME``
+    Timestamp task began execution.
+
+``TASK_WAITED``
+    Time in seconds between task submit time and schedule time.
+
 ``TASK_OUTPATH``
     Absolute file path where standard output is directed (if defined).
 

@@ -20,7 +20,7 @@ Options
     here is typically available on most platforms and is not expected by any known major software.
 
 ``-k``, ``--auth`` *KEY*
-    Cryptographic authorization key to connect with server (default: <not secure>).
+    Cryptographic authentication key to connect with server (default: <not secure>).
 
     The default *KEY* used by the server and client is not secure and only a place holder.
     It is expected that the user choose a secure *KEY*. The `cluster` automatically generates
@@ -73,11 +73,11 @@ Options
 ``--initdb``
     Auto-initialize database.
 
-    If a database is configured for use with the workflow (e.g., PostgreSQL), auto-initialize
+    If a database is configured for use with the workflow (e.g., Postgres), auto-initialize
     tables if they don't already exist. This is a short-hand for pre-creating tables with the
-    ``hyper-shell initdb`` command. This happens by default with SQLite databases.
+    ``hs initdb`` command. This happens by default with SQLite databases.
 
-    Mutually exclusive to ``--no-db``. See ``hyper-shell initdb`` command.
+    Mutually exclusive to ``--no-db``. See ``hs initdb`` command.
 
 ``--no-confirm``
     Disable client confirmation of task bundle received.

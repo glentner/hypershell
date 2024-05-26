@@ -1,21 +1,24 @@
 Most of the choices that `HyperShell` makes about timing, task bundling, coordination, logging,
-and such are configurable by the user. This configuration is loaded when `HyperShell` starts
+and such are configurable by the user. This configuration is loaded when the program starts
 and is constructed from several sources including an ordered merger of files, environment variables,
 and command-line options.
 
-In order of precedence (lowest to highest), three files are loaded:
+In order of precedence (lowest to highest), three files are loaded for `system`, `user` and `local`
+configuration. See below the section on file system paths for more details.
 
-|
+On Linux (for example):
 
-================  =================================  ==========================================
-Level             BSD/Linux                          Windows
-================  =================================  ==========================================
-System            ``/etc/hypershell.toml``           ``%ProgramData%\HyperShell\Config.toml``
-User              ``~/.hypershell/config.toml``      ``%AppData%\HyperShell\Config.toml``
-Local             ``./.hypershell/config.toml``      ``.\.hypershell\Config.toml``
-================  =================================  ==========================================
+.. table::
+    :widths: 30 70
 
-|
+    ================  =================================
+    Site              Path (Linux / POSIX)
+    ================  =================================
+    System            ``/etc/hypershell.toml``
+    User              ``~/.hypershell/config.toml``
+    Local             ``./.hypershell/config.toml``
+    ================  =================================
+
 
 The `TOML <https://toml.io>`_ format is modern and minimal.
 
@@ -30,7 +33,7 @@ For example, set the logging level at the user level with a command:
 
     .. code-block:: shell
 
-        hyper-shell config set logging.level info --user
+        hs config set logging.level info --user
 
 The file should now look something like this:
 

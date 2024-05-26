@@ -7,7 +7,7 @@ Getting Started
 Installation
 ------------
 
-It is recommend that you install *hyper-shell* inside a virtual environment.
+It is recommend that you install `HyperShell` inside a virtual environment.
 See the :ref:`installation <install>` guide for more options
 and additional notes and recommendations.
 
@@ -38,14 +38,14 @@ Complete, specific examples are also available in the tutorials section.
 In most cases, using the *cluster* subcommand is best. If you have some
 file, ``tasks.in``, that lists shell commands that you might otherwise
 execute alone (which would run each line in serial), pass that file
-to *hyper-shell* to process those commands in parallel.
+to `HyperShell` to process those commands in parallel.
 
 .. admonition:: Basic Usage
     :class: note
 
     .. code-block:: shell
 
-        hyper-shell cluster tasks.in
+        hs cluster tasks.in
 
 
 To specify the number of tasks to execute simultaneously, use ``--num-cores``
@@ -56,7 +56,7 @@ To specify the number of tasks to execute simultaneously, use ``--num-cores``
 
     .. code-block:: shell
 
-        hyper-shell cluster tasks.in -N16
+        hs cluster tasks.in -N16
 
 
 Assuming the individual commands run on a single-core (they themselves are
@@ -73,4 +73,4 @@ option. This output file will contain lines from the input file that failed.
 
     .. code-block:: shell
 
-        hyper-shell cluster tasks.in -N16 -f tasks.failed
+        hs cluster tasks.in -N16 -f tasks.failed

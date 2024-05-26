@@ -10,24 +10,19 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 
-import re
 import datetime
-
-# parse version from module source
-with open('../src/hypershell/__init__.py', mode='r') as stream:
-    __version__ = re.search(r'__version__\s*=\s*[\'"]([^\'"]*)[\'"]', stream.read().strip()).group(1)
-
+import hypershell
 
 # -- Project information -----------------------------------------------------
 
 year = datetime.datetime.now().year
-project = 'hyper-shell'
+project = 'hypershell'
 copyright = f'2019-{year} Geoffrey Lentner'  # noqa: shadows builtin name?
 author = 'Geoffrey Lentner <glentner@purdue.edu>'
 
 # The full version, including alpha/beta/rc tags
-release = __version__
-version = __version__
+release = hypershell.__version__
+version = hypershell.__version__
 
 
 # -- General configuration ---------------------------------------------------
@@ -37,6 +32,7 @@ version = __version__
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx',
     'sphinx.ext.extlinks',
     'sphinx.ext.viewcode',
@@ -105,13 +101,21 @@ rst_epilog = f"""
 
 
 # manual pages options
-man_pages = [(
-    'manual',
-    'hyper-shell',
-    'Process shell commands over a distributed, asynchronous queue',
-    'Geoffrey Lentner <glentner@purdue.edu>.',
-    '1'
-),
+man_pages = [
+    (
+        'manual',
+        'hyper-shell',
+        'Process shell commands over a distributed, asynchronous queue',
+        'Geoffrey Lentner <glentner@purdue.edu>.',
+        '1'
+    ),
+    (
+        'manual',
+        'hs',
+        'Process shell commands over a distributed, asynchronous queue',
+        'Geoffrey Lentner <glentner@purdue.edu>.',
+        '1'
+    ),
 ]
 
 

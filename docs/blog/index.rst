@@ -7,6 +7,22 @@ A place for announcements, release notes, thoughts and ideas for the project.
 
 -----
 
+:ref:`Release Notes (v2.5.0) <20240518_2_5_0_release>`
+------------------------------------------------------
+
+`May 18, 2024`
+
+The v2.5.0 release includes major new features along with numerous fixes and improvements.
+
+- New command-line program name.
+- Task update command capabilities.
+- Shell completions.
+- UNIX signal interrupts for graceful shutdowns.
+- Configuration management improvements.
+- Tagging system improvements.
+
+-----
+
 :ref:`Release Notes (v2.4.0) <20230602_2_4_0_release>`
 ------------------------------------------------------
 
@@ -49,7 +65,7 @@ a few quality of life improvements, and a fix for SSH-mode.
     :hidden:
     :maxdepth: 1
 
+    20240518_2_5_0_release
     20230602_2_4_0_release
     20230413_2_3_0_release
     20230329_2_2_0_release
-

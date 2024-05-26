@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2024 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """Automatic type coercion of input data."""
@@ -8,15 +8,20 @@
 from typing import TypeVar
 
 # public interface
-__all__ = ['smart_coerce', 'ValueType']
+__all__ = ['smart_coerce', 'JSONValue']
 
 
 # Each possible input type
-ValueType = TypeVar('ValueType', bool, int, float, str, type(None))
+JSONValue = TypeVar('JSONValue', bool, int, float, str, type(None))
 
 
-def smart_coerce(value: str) -> ValueType:
+def smart_coerce(value: str) -> JSONValue:
     """Automatically coerce string to typed value."""
+    cmp_val = value.lower()
+    if cmp_val in ('null', 'none'):
+        return None
+    if cmp_val in ('true', 'false'):
+        return cmp_val == 'true'
     try:
         return int(value)
     except ValueError:
@@ -24,12 +29,4 @@ def smart_coerce(value: str) -> ValueType:
     try:
         return float(value)
     except ValueError:
-        pass
-    if value.lower() in ('null', 'none', ):
-        return None
-    elif value.lower() in ('true', ):
-        return True
-    elif value.lower() in ('false', ):
-        return False
-    else:
         return value

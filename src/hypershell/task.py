@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2024 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """Task based operations."""
@@ -6,7 +6,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import List, Dict, Callable, IO, Tuple, Any, Optional, Type
+from typing import List, Dict, Callable, IO, Tuple, Any, Optional, Type, Final
 
 # standard libs
 import os
@@ -16,7 +16,8 @@ import csv
 import json
 import time
 import functools
-from datetime import timedelta
+import itertools
+from datetime import timedelta, datetime
 from dataclasses import dataclass
 from shutil import copyfileobj
 
@@ -27,20 +28,20 @@ from rich.syntax import Syntax
 from rich.table import Table
 from cmdkit.app import Application, ApplicationGroup, exit_status
 from cmdkit.cli import Interface, ArgumentError
-from sqlalchemy import Column, type_coerce, JSON, text
+from sqlalchemy import Column, type_coerce, JSON, text, func, distinct
 from sqlalchemy.exc import StatementError
 from sqlalchemy.orm import Query
 from sqlalchemy.orm.exc import StaleDataError
 from sqlalchemy.sql.elements import BinaryExpression
 
 # internal libs
-from hypershell.core.ansi import colorize_usage
 from hypershell.core.platform import default_path
 from hypershell.core.config import config
 from hypershell.core.exceptions import handle_exception, handle_exception_silently, get_shared_exception_mapping
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.remote import SSHConnection
-from hypershell.core.types import smart_coerce
+from hypershell.core.types import smart_coerce, JSONValue
+from hypershell.data.core import Session
 from hypershell.data.model import Task, to_json_type
 from hypershell.data import ensuredb
 
@@ -51,12 +52,12 @@ __all__ = ['TaskGroupApp', 'Tag', ]
 log = Logger.with_name(__name__)
 
 
-SUBMIT_PROGRAM = 'hyper-shell task submit'
+SUBMIT_PROGRAM = 'hs task submit'
+SUBMIT_SYNOPSIS = f'{SUBMIT_PROGRAM} [-h] [-t TAG [TAG...]] -- ARGS...'
 SUBMIT_USAGE = f"""\
 Usage:
-{SUBMIT_PROGRAM} [-h] [-t TAG [TAG...]] ARGS...
-
-Submit individual task to database.\
+  {SUBMIT_SYNOPSIS}
+  Submit individual task to database.\
 """
 
 SUBMIT_HELP = f"""\
@@ -74,9 +75,7 @@ Options:
 class TaskSubmitApp(Application):
     """Submit task to database."""
 
-    interface = Interface(SUBMIT_PROGRAM,
-                          colorize_usage(SUBMIT_USAGE),
-                          colorize_usage(SUBMIT_HELP))
+    interface = Interface(SUBMIT_PROGRAM, SUBMIT_USAGE, SUBMIT_HELP)
 
     argv: List[str] = []
     interface.add_argument('argv', nargs='+')
@@ -109,12 +108,12 @@ def check_uuid(value: str) -> None:
         raise ArgumentError(f'Bad UUID: \'{value}\'')
 
 
-INFO_PROGRAM = 'hyper-shell task info'
+INFO_PROGRAM = 'hs task info'
+INFO_SYNOPSIS = f'{INFO_PROGRAM} [-h] ID [--stdout | --stderr | -x FIELD] [-f FORMAT]'
 INFO_USAGE = f"""\
 Usage: 
-{INFO_PROGRAM} [-h] ID [--stdout | --stderr | -x FIELD] [-f FORMAT]
-
-Get metadata and/or task outputs.\
+  {INFO_SYNOPSIS}
+  Get metadata and/or task outputs.\
 """
 
 INFO_HELP = f"""\
@@ -137,9 +136,7 @@ Options:
 class TaskInfoApp(Application):
     """Get metadata/status/outputs of task."""
 
-    interface = Interface(INFO_PROGRAM,
-                          colorize_usage(INFO_USAGE),
-                          colorize_usage(INFO_HELP))
+    interface = Interface(INFO_PROGRAM, INFO_USAGE, INFO_HELP)
 
     uuid: str
     interface.add_argument('uuid')
@@ -250,38 +247,36 @@ class TaskInfoApp(Application):
 DEFAULT_INTERVAL = 5
 
 
-WAIT_PROGRAM = 'hyper-shell task wait'
+WAIT_PROGRAM = 'hs task wait'
+WAIT_SYNOPSIS = f'{WAIT_PROGRAM} [-h] ID [-n SEC] [--info [-f FORMAT] | --status | --return]'
 WAIT_USAGE = f"""\
 Usage: 
-{WAIT_PROGRAM} [-h] ID [-n SEC] [--info [-f FORMAT] | --status | --return]
-
-Wait for task to complete.\
+  {WAIT_SYNOPSIS}
+  Wait for task to complete.\
 """
 
 WAIT_HELP = f"""\
 {WAIT_USAGE}
 
 Arguments:
-  ID                     Unique UUID.
+  ID                      Unique UUID.
 
 Options:
-  -n, --interval  SEC    Time to wait between polling (default: {DEFAULT_INTERVAL}).
-  -i, --info             Print info on task.
-  -f, --format   FORMAT  Format task info ([normal], json, yaml).
-      --json             Format info as JSON.
-      --yaml             Format info as YAML.
-  -s, --status           Print exit status for task.
-  -r, --return           Use exit status from task.
-  -h, --help             Show this message and exit.\
+  -n, --interval  SEC     Time to wait between polling (default: {DEFAULT_INTERVAL}).
+  -i, --info              Print info on task.
+  -f, --format    FORMAT  Format task info ([normal], json, yaml).
+      --json              Format info as JSON.
+      --yaml              Format info as YAML.
+  -s, --status            Print exit status for task.
+  -r, --return            Use exit status from task.
+  -h, --help              Show this message and exit.\
 """
 
 
 class TaskWaitApp(Application):
     """Wait for task to complete."""
 
-    interface = Interface(WAIT_PROGRAM,
-                          colorize_usage(WAIT_USAGE),
-                          colorize_usage(WAIT_HELP))
+    interface = Interface(WAIT_PROGRAM, WAIT_USAGE, WAIT_HELP)
 
     uuid: str
     interface.add_argument('uuid')
@@ -342,38 +337,40 @@ class TaskWaitApp(Application):
             break
 
 
-RUN_PROGRAM = 'hyper-shell task run'
+RUN_PROGRAM = 'hs task run'
+RUN_SYNOPSIS = f'{RUN_PROGRAM} [-h] [-n SEC] [-t TAG [TAG...]] -- ARGS...'
 RUN_USAGE = f"""\
 Usage: 
-{RUN_PROGRAM} [-h] [-n SEC] ARGS... 
-
-Submit individual task and wait for completion.\
+  {RUN_SYNOPSIS}
+  Submit individual task and wait for completion.\
 """
 
 RUN_HELP = f"""\
 {RUN_USAGE}
 
 Arguments:
-  ARGS                  Command-line arguments.
+  ARGS                    Command-line arguments.
 
 Options:
-  -n, --interval  SEC   Time to wait between polling (default: {DEFAULT_INTERVAL}).
-  -h, --help            Show this message and exit.\
+  -n, --interval  SEC     Time to wait between polling (default: {DEFAULT_INTERVAL}).
+  -t, --tag       TAG...  Assign tags as `key:value`.
+  -h, --help              Show this message and exit.\
 """
 
 
 class TaskRunApp(Application):
     """Submit task and wait for completion."""
 
-    interface = Interface(RUN_PROGRAM,
-                          colorize_usage(RUN_USAGE),
-                          colorize_usage(RUN_HELP))
+    interface = Interface(RUN_PROGRAM, RUN_USAGE, RUN_HELP)
 
     argv: List[str] = []
     interface.add_argument('argv', nargs='+')
 
     interval: int = DEFAULT_INTERVAL
     interface.add_argument('-n', '--interval', type=int, default=interval)
+
+    taglist: List[str] = []
+    interface.add_argument('-t', '--tag', nargs='*', dest='taglist')
 
     exceptions = {
         **get_shared_exception_mapping(__name__)
@@ -382,45 +379,12 @@ class TaskRunApp(Application):
     def run(self: TaskRunApp) -> None:
         """Submit task and wait for completion."""
         ensuredb()
-        task = Task.new(args=' '.join(self.argv))
+        task = Task.new(args=' '.join(self.argv),
+                        tag=(None if not self.taglist else Tag.parse_cmdline_list(self.taglist)))
         Task.add(task)
         TaskWaitApp(uuid=task.id, interval=self.interval).run()
         TaskInfoApp(uuid=task.id, print_stdout=True).run()
         TaskInfoApp(uuid=task.id, print_stderr=True).run()
-
-
-SEARCH_PROGRAM = 'hyper-shell task search'
-SEARCH_USAGE = f"""\
-Usage:
-hyper-shell task search [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]]
-                        [--order-by FIELD [--desc]] [--count | --limit NUM]
-                        [--format FORMAT | --json | --csv]  [-d CHAR]
-                        
-Search for tasks in the database.\
-"""
-
-SEARCH_HELP = f"""\
-{SEARCH_USAGE}
-
-Arguments:
-  FIELD                      Select specific named fields.
-
-Options:
-  -w, --where      COND...   List of conditional statements.
-  -t, --with-tag   TAG...    List of tags.
-  -s, --order-by   FIELD     Order output by field.
-      --failed               Alias for `exit_status != 0`
-      --succeeded            Alias for `exit_status == 0`
-      --finished             Alias for `exit_status != null`
-      --remaining            Alias for `exit_status == null`
-      --format     FORMAT    Format output (normal, plain, table, csv, json).
-      --json                 Format output as JSON (alias for `--format=json`).
-      --csv                  Format output as CSV (alias for `--format=csv`.
-  -d, --delimiter  CHAR      Field seperator for plain/csv formats.
-  -l, --limit      NUM       Limit the number of results.
-  -c, --count                Show count of results.
-  -h, --help                 Show this message and exit.\
-"""
 
 
 # Listing of all field names in order (default for search)
@@ -431,12 +395,140 @@ ALL_FIELDS = list(Task.columns)
 DELIMITER_MAX_SIZE = 100
 
 
-class TaskSearchApp(Application):
+class SearchableMixin:
+    """Mixin class implements task search for multiple commands."""
+
+    field_names: List[str] = ALL_FIELDS
+    where_clauses: List[str] = None
+    taglist: List[str] = None
+    limit: int = None
+
+    # Not needed by some applications
+    order_by: str = None
+    order_desc: bool = False
+
+    show_failed: bool = False
+    show_completed: bool = False
+    show_succeeded: bool = False
+    show_remaining: bool = False
+
+    def build_query(self: SearchableMixin) -> Query:
+        """Build original query interface."""
+        query = Task.query(*self.fields)
+        query = self.__build_order_by_clause(query)
+        query = self.__build_where_clause(query)
+        query = self.__build_where_clause_for_tags(query)
+        return query.limit(self.limit)
+
+    def __build_where_clause_for_tags(self: SearchableMixin, query: Query) -> Query:
+        """Add JSON-based tag where-clauses to query if necessary."""
+        tags_name_only = []
+        tags_with_value = Tag.parse_cmdline_list(self.taglist)
+        for name in list(tags_with_value.keys()):
+            if isinstance(tags_with_value[name], str) and not tags_with_value[name]:
+                tags_name_only.append(name)
+                tags_with_value.pop(name)
+        for name in tags_name_only:
+            if config.database.provider == 'sqlite':
+                # NOTE: sqlalchemy adds `json_quote(json_extract(task.tag, ?)) is not null`
+                # and cannot find a way to exclude `json_quote`, so we do it ourselves
+                query = query.filter(text('json_extract(task.tag, :key) is not null')).params(key=f'$."{name}"')
+            else:
+                query = query.filter(Task.tag[name].isnot(None))
+        for name, value in tags_with_value.items():
+            if config.database.provider == 'sqlite' and value in (True, False):
+                value = int(value)  # NOTE: SQLite stores as 0/1 not JSON true/false :(
+            query = query.filter(Task.tag[name] == type_coerce(value, JSON))
+        return query
+
+    def __build_where_clause(self: SearchableMixin, query: Query) -> Query:
+        """Add explicit where-clauses to query if necessary."""
+        for where_clause in self.__build_filters():
+            query = query.filter(where_clause.compile())
+        return query
+
+    def __build_order_by_clause(self: SearchableMixin, query: Query) -> Query:
+        """Add order by clause to query if necessary."""
+        if self.order_by:
+            field = getattr(Task, self.order_by)
+            if self.order_desc:
+                field = field.desc()
+            query = query.order_by(field)
+        return query
+
+    def __build_filters(self: SearchableMixin) -> List[WhereClause]:
+        """Create list of field selectors from command-line arguments."""
+        if self.show_failed:
+            self.where_clauses.append('exit_status != 0')
+        if self.show_succeeded:
+            self.where_clauses.append('exit_status == 0')
+        if self.show_completed:
+            self.where_clauses.append('exit_status != null')
+        if self.show_remaining:
+            self.where_clauses.append('exit_status == null')
+        if not self.where_clauses:
+            return []
+        else:
+            return [WhereClause.from_cmdline(arg) for arg in self.where_clauses]
+
+    @functools.cached_property
+    def fields(self: SearchableMixin) -> List[Column]:
+        """Field instances to query against."""
+        return [getattr(Task, name) for name in self.field_names]
+
+    def check_field_names(self: SearchableMixin) -> None:
+        """Check field names are valid."""
+        for name in self.field_names:
+            if name not in Task.columns:
+                raise ArgumentError(f'Invalid field name "{name}"')
+
+
+SEARCH_PROGRAM = 'hs task search'
+SEARCH_SYNOPSIS = f'{SEARCH_PROGRAM} [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]] ...'
+SEARCH_USAGE = f"""\
+Usage:
+  hs task search [-h] [FIELD [FIELD ...]] [-w COND [COND ...]] [-t TAG [TAG...]]
+                 [--failed | --succeeded | --completed | --remaining]
+                 [--order-by FIELD [--desc]] [--count | --limit NUM]
+                 [-f FORMAT | --json | --csv]  [-d CHAR]
+  
+  hs task search --tag-keys
+  hs task search --tag-values KEY
+
+  Search tasks in the database.\
+"""
+
+SEARCH_HELP = f"""\
+{SEARCH_USAGE}
+
+Arguments:
+  FIELD                      Select specific named fields.
+
+Options:
+  -w, --where       COND...  Filter on conditional expression.
+  -t, --with-tag    TAG...   Filter by tag.
+  -s, --order-by    FIELD    Order output by field.
+      --desc                 Descending order (requires --order-by).
+  -F, --failed               Alias for `-w exit_status != 0`.
+  -S, --succeeded            Alias for `-w exit_status == 0`.
+  -C, --completed            Alias for `-w exit_status != null`.
+  -R, --remaining            Alias for `-w exit_status == null`.
+  -f, --format      FORMAT   Format output (normal, plain, table, csv, json).
+      --json                 Format output as JSON (alias for `--format=json`).
+      --csv                  Format output as CSV (alias for `--format=csv`.
+  -d, --delimiter   CHAR     Field seperator for plain/csv formats.
+  -l, --limit       NUM      Limit the number of results.
+  -c, --count                Show count of results.
+      --tag-keys             Show all distinct tag keys.
+      --tag-values  KEY      Show all distinct tag values for given key.
+  -h, --help                 Show this message and exit.\
+"""
+
+
+class TaskSearchApp(Application, SearchableMixin):
     """Search for tasks in database."""
 
-    interface = Interface(SEARCH_PROGRAM,
-                          colorize_usage(SEARCH_USAGE),
-                          colorize_usage(SEARCH_HELP))
+    interface = Interface(SEARCH_PROGRAM, SEARCH_USAGE, SEARCH_HELP)
 
     field_names: List[str] = ALL_FIELDS
     interface.add_argument('field_names', nargs='*', default=field_names)
@@ -459,24 +551,33 @@ class TaskSearchApp(Application):
     interface.add_argument('-c', '--count', action='store_true', dest='show_count')
 
     show_failed: bool = False
-    show_finished: bool = False
+    show_completed: bool = False
     show_succeeded: bool = False
     show_remaining: bool = False
     search_alias_interface = interface.add_mutually_exclusive_group()
-    search_alias_interface.add_argument('--failed', action='store_true', dest='show_failed')
-    search_alias_interface.add_argument('--finished', action='store_true', dest='show_finished')
-    search_alias_interface.add_argument('--remaining', action='store_true', dest='show_remaining')
-    search_alias_interface.add_argument('--succeeded', action='store_true', dest='show_succeeded')
+    search_alias_interface.add_argument('-F', '--failed', action='store_true', dest='show_failed')
+    search_alias_interface.add_argument('-C', '--completed', action='store_true', dest='show_completed')
+    search_alias_interface.add_argument('-S', '--succeeded', action='store_true', dest='show_succeeded')
+    search_alias_interface.add_argument('-R', '--remaining', action='store_true', dest='show_remaining')
+    search_alias_interface.add_argument('--finished', action='store_true', dest='show_completed')
+    # NOTE: --finished retained for backwards compatibility
 
     output_format: str = '<default>'  # 'plain' if field_names else 'normal'
     output_formats: List[str] = ['normal', 'plain', 'table', 'json', 'csv']
     output_interface = interface.add_mutually_exclusive_group()
-    output_interface.add_argument('--format', default=output_format, dest='output_format', choices=output_formats)
+    output_interface.add_argument('-f', '--format', default=output_format,
+                                  dest='output_format', choices=output_formats)
     output_interface.add_argument('--json', action='store_const', const='json', dest='output_format')
     output_interface.add_argument('--csv', action='store_const', const='csv', dest='output_format')
 
     output_delimiter: str = '<default>'  # <space> if plain, ',' if --csv, else not valid
     interface.add_argument('-d', '--delimiter', default=output_delimiter, dest='output_delimiter')
+
+    list_tag_keys: bool = False
+    list_tag_values: bool = False
+    tag_search_interface = interface.add_mutually_exclusive_group()
+    tag_search_interface.add_argument('--tag-keys', action='store_true', dest='list_tag_keys')
+    tag_search_interface.add_argument('--tag-values', action='store_true', dest='list_tag_values')
 
     exceptions = {
         StatementError: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
@@ -486,6 +587,12 @@ class TaskSearchApp(Application):
     def run(self: TaskSearchApp) -> None:
         """Search for tasks in database."""
         ensuredb()
+        if self.list_tag_keys:
+            self.print_tag_keys()
+            return
+        if self.list_tag_values:
+            self.print_tag_values()
+            return
         self.check_field_names()
         self.check_output_format()
         if self.show_count:
@@ -493,67 +600,34 @@ class TaskSearchApp(Application):
         else:
             self.print_output(self.build_query().all())
 
-    def build_query(self: TaskSearchApp) -> Query:
-        """Build original query interface."""
-        query = Task.query(*self.fields)
-        query = self.__build_order_by_clause(query)
-        query = self.__build_where_clause(query)
-        query = self.__build_where_clause_for_tags(query)
-        return query.limit(self.limit)
-
-    def __build_where_clause_for_tags(self: TaskSearchApp, query: Query) -> Query:
-        """Add JSON-based tag where-clauses to query if necessary."""
-        tags_name_only = []
-        tags_with_value = Tag.parse_cmdline_list(self.taglist)
-        for name in list(tags_with_value.keys()):
-            if not tags_with_value[name]:
-                tags_name_only.append(name)
-                tags_with_value.pop(name)
-        for name in tags_name_only:
-            if config.database.provider == 'sqlite':
-                # NOTE: sqlalchemy adds `json_quote(json_extract(task.tag, ?)) is not null`
-                # and cannot find a way to exclude `json_quote`, so we do it ourselves
-                query = query.filter(text('json_extract(task.tag, :tag) is not null')).params(tag=f'$."{name}"')
-            else:
-                query = query.filter(Task.tag[name].isnot(None))
-        for name, value in tags_with_value.items():
-            query = query.filter(Task.tag[name] == type_coerce(str(value), JSON))
-        return query
-
-    def __build_where_clause(self: TaskSearchApp, query: Query) -> Query:
-        """Add explicit where-clauses to query if necessary."""
-        for where_clause in self.__build_filters():
-            query = query.filter(where_clause.compile())
-        return query
-
-    def __build_order_by_clause(self: TaskSearchApp, query: Query) -> Query:
-        """Add order by clause to query if necessary."""
-        if self.order_by:
-            field = getattr(Task, self.order_by)
-            if self.order_desc:
-                field = field.desc()
-            query = query.order_by(field)
-        return query
-
-    def __build_filters(self: TaskSearchApp) -> List[WhereClause]:
-        """Create list of field selectors from command-line arguments."""
-        if self.show_failed:
-            self.where_clauses.append('exit_status != 0')
-        if self.show_succeeded:
-            self.where_clauses.append('exit_status == 0')
-        if self.show_finished:
-            self.where_clauses.append('exit_status != null')
-        if self.show_remaining:
-            self.where_clauses.append('exit_status == null')
-        if not self.where_clauses:
-            return []
+    @staticmethod
+    def print_tag_keys() -> None:
+        """Print distinct tags present in the database."""
+        if config.database.provider == 'sqlite':
+            for (key, ) in Session.execute(
+                    text('select distinct tag.key from task, json_each(tag) as tag')
+            ):
+                print(key)
         else:
-            return [WhereClause.from_cmdline(arg) for arg in self.where_clauses]
+            subquery = Session.query(func.jsonb_object_keys(Task.tag).label('tag_key')).subquery()
+            for (key, ) in Session.query(subquery.c.tag_key.distinct()):
+                print(key)
 
-    @functools.cached_property
-    def fields(self: TaskSearchApp) -> List[Column]:
-        """Field instances to query against."""
-        return [getattr(Task, name) for name in self.field_names]
+    def print_tag_values(self: TaskSearchApp) -> None:
+        """Print distinct values for given tag in the database."""
+        if len(self.field_names) != 1:
+            raise ArgumentError(f'Expected single name for --tag-values')
+        name, = self.field_names
+        if config.database.provider == 'sqlite':
+            for (value, ) in Session.execute(
+                    text("""select distinct t.value from task, json_each(tag) as t
+                            where json_extract(tag, :a) is not null and t.key = :b""")
+                    .params(a=f'$."{name}"', b=name)
+            ):
+                print(value)
+        else:
+            for (value, ) in Session.query(distinct(Task.tag[name])).filter(Task.tag[name].isnot(None)):
+                print(value)
 
     @functools.cached_property
     def print_output(self: TaskSearchApp) -> Callable[[List[Tuple]], None]:
@@ -602,12 +676,6 @@ class TaskSearchApp(Application):
             data = [value if isinstance(value, str) else json.dumps(value) for value in data]
             writer.writerow(data)
 
-    def check_field_names(self: TaskSearchApp) -> None:
-        """Check field names are valid."""
-        for name in self.field_names:
-            if name not in Task.columns:
-                raise ArgumentError(f'Invalid field name \'{name}\'')
-
     def check_output_format(self: TaskSearchApp) -> None:
         """Check given output format is valid."""
         if self.field_names == ALL_FIELDS:
@@ -633,42 +701,105 @@ class TaskSearchApp(Application):
             raise ArgumentError(f'Valid --csv output must use single-char delimiter')
 
 
-UPDATE_PROGRAM = 'hyper-shell task update'
-UPDATE_USAGE = f"""\
-Usage: 
-{UPDATE_PROGRAM} [-h] ID FIELD VALUE 
+# Special exit status indicates cancellation
+CANCEL_STATUS: Final[int] = -1
 
-Update individual task metadata.\
+
+UPDATE_PROGRAM = 'hs task update'
+UPDATE_SYNOPSIS = f'{UPDATE_PROGRAM} [-h] ARG [ARG...] [--cancel | --revert | --delete] ...'
+UPDATE_USAGE = f"""\
+Usage:
+  hs task update [-h] ARG [ARG...] [--cancel | --revert | --delete] [--remove-tag TAG [TAG ...]]
+                 [-w COND [COND ...]] [-t TAG [TAG...]] [--order-by FIELD [--desc]] [--limit NUM]
+                 [--failed | --succeeded | --completed | --remaining] [--no-confirm]
+  
+  Update task metadata.\
 """
 
 UPDATE_HELP = f"""\
 {UPDATE_USAGE}
 
+  Include any number of FIELD=VALUE or tag KEY:VALUE positional arguments.
+  The -w/--where and -t/--with-tag operate just as in the search command.
+
+  Using --cancel sets schedule_time to now and exit_status to {CANCEL_STATUS}. 
+  Using --revert reverts everything as if the task was new again.
+  Using --delete drops the row from the database entirely.
+
+  The legacy interface for updating a single task with the ID, FIELD, 
+  and VALUE as positional arguments remains valid.
+
 Arguments:
-  ID                    Unique UUID.
-  FIELD                 Task metadata field name.
-  VALUE                 New value.
+  ARGS...                    Assignment pairs for update.
 
 Options:
-  -h, --help            Show this message and exit.\
+      --cancel               Cancel specified tasks.
+      --revert               Revert specified tasks.
+      --delete               Delete specified tasks.
+      --remove-tag  TAG...   Remove specified tags by name.
+  -w, --where       COND...  Filter on conditional expression.
+  -t, --with-tag    TAG...   Filter by tag.
+  -s, --order-by    FIELD    Order matches by FIELD.
+      --desc                 Descending order (requires --order-by).
+  -l, --limit       NUM      Limit matches.
+  -F, --failed               Alias for `-w exit_status != 0`.
+  -S, --succeeded            Alias for `-w exit_status == 0`.
+  -C, --completed            Alias for `-w exit_status != null`.
+  -R, --remaining            Alias for `-w exit_status == null`.
+  -f, --no-confirm           Do not ask for confirmation.
+  -h, --help                 Show this message and exit.\
 """
 
 
-class TaskUpdateApp(Application):
-    """Update individual task attribute directly."""
+class TaskUpdateApp(Application, SearchableMixin):
+    """Update task metadata."""
 
-    interface = Interface(UPDATE_PROGRAM,
-                          colorize_usage(UPDATE_USAGE),
-                          colorize_usage(UPDATE_HELP))
+    interface = Interface(UPDATE_PROGRAM, UPDATE_USAGE, UPDATE_HELP)
 
-    uuid: str
-    interface.add_argument('uuid')
+    update_args: List[str]
+    interface.add_argument('update_args', nargs='*')
 
-    field: str
-    interface.add_argument('field', choices=list(Task.columns)[1:])  # NOTE: not ID!
+    # Used by SearchableMixin and not part of this interface
+    # Empty list results in Session.query(Task)
+    field_names: List[str] = []
 
-    value: str
-    interface.add_argument('value')
+    where_clauses: List[str] = None
+    interface.add_argument('-w', '--where', nargs='*', default=[], dest='where_clauses')
+
+    taglist: List[str] = None
+    interface.add_argument('-t', '--with-tag', nargs='*', default=[], dest='taglist')
+
+    order_by: str = None
+    order_desc: bool = False
+    interface.add_argument('-s', '--order-by', default=None, choices=list(Task.columns))
+    interface.add_argument('--desc', action='store_true', dest='order_desc')
+
+    limit: int = None
+    interface.add_argument('-l', '--limit', type=int, default=None)
+
+    show_failed: bool = False
+    show_completed: bool = False
+    show_succeeded: bool = False
+    show_remaining: bool = False
+    search_alias_interface = interface.add_mutually_exclusive_group()
+    search_alias_interface.add_argument('-F', '--failed', action='store_true', dest='show_failed')
+    search_alias_interface.add_argument('-C', '--completed', action='store_true', dest='show_completed')
+    search_alias_interface.add_argument('-S', '--succeeded', action='store_true', dest='show_succeeded')
+    search_alias_interface.add_argument('-R', '--remaining', action='store_true', dest='show_remaining')
+
+    revert_mode: bool = False
+    cancel_mode: bool = False
+    delete_mode: bool = False
+    action_interface = interface.add_mutually_exclusive_group()
+    action_interface.add_argument('--revert', action='store_true', dest='revert_mode')
+    action_interface.add_argument('--cancel', action='store_true', dest='cancel_mode')
+    action_interface.add_argument('--delete', action='store_true', dest='delete_mode')
+
+    remove_tag: List[str] = None
+    interface.add_argument('--remove-tag', nargs='*')
+
+    no_confirm: bool = False
+    interface.add_argument('-f', '--no-confirm', action='store_true')
 
     exceptions = {
         Task.NotFound: functools.partial(handle_exception, logger=log, status=exit_status.runtime_error),
@@ -676,57 +807,236 @@ class TaskUpdateApp(Application):
     }
 
     def run(self: TaskUpdateApp) -> None:
-        """Update individual task attribute directly."""
+        """Update task attributes in bulk."""
         ensuredb()
-        check_uuid(self.uuid)
+        if len(self.update_args) == 3 and UUID_PATTERN.match(self.update_args[0]):
+            self.update_legacy()
+        else:
+            self.update_tasks()
+
+    def update_legacy(self: TaskUpdateApp) -> None:
+        """Implement legacy interface to update single task."""
+        uuid, field, value = self.update_args
+        if field not in Task.columns:
+            raise ArgumentError(f'Invalid field name "{field}"')
         try:
-            if self.field == 'tag':
-                Task.update(self.uuid, tag={**Task.from_id(self.uuid).tag,
-                                            **Tag.parse_cmdline_list([self.value, ])})
+            if field == 'tag':
+                Task.update(uuid, tag={**Task.from_id(uuid).tag,
+                                       **Tag.parse_cmdline_list([value, ])})
             else:
-                if Task.columns.get(self.field) is str:
-                    # We want to coerce the value (e.g., as an int or None)
-                    # But also allow for, e.g., args==1 which expects type str.
-                    value = None if self.value.lower() in {'none', 'null'} else self.value
+                if Task.columns.get(field) is str:
+                    value = None if value.lower() in {'none', 'null'} else value
                 else:
-                    value = smart_coerce(self.value)
-                Task.update(self.uuid, **{self.field: value, })
+                    value = smart_coerce(value)
+                Task.update(uuid, **{field: value, })
         except StaleDataError as err:
             raise Task.NotFound(str(err)) from err
 
+    def update_tasks(self: TaskUpdateApp) -> None:
+        """Normal mode updates many tasks."""
 
-TASK_PROGRAM = 'hyper-shell task'
+        field_updates, tag_updates = self.process_arguments()
+
+        if config.database.provider == 'sqlite':
+            site = config.database.file
+        else:
+            site = config.database.get('host', 'localhost')
+
+        log.info(f'Searching database: {config.database.provider} ({site})')
+
+        query = self.build_query()
+        count = query.count()
+
+        if count == 0:
+            log.info(f'Update affects {count} tasks - stopping')
+            return
+
+        if not self.no_confirm:
+            response = input(f'Update affects {count} tasks, continue? yes/[no]: ').strip().lower()
+            if response in ['n', 'no', '']:
+                print('Stopping')
+                return
+            if response not in ['y', 'yes']:
+                print(f'Stopping (invalid response: "{response}")')
+                return
+
+        if self.delete_mode:
+            query.delete()
+            Session.commit()
+            log.info(f'Deleted {count} tasks')
+            return
+
+        if self.cancel_mode:
+            if self.limit:
+                prev_count = sum([1 for task in query if task.schedule_time is not None])
+            else:
+                prev_count = query.filter(Task.schedule_time.isnot(None)).count()
+            if prev_count > 0:
+                log.warning(f'{prev_count} cancelled tasks already scheduled')
+            field_updates['schedule_time'] = datetime.now().astimezone()
+            field_updates['exit_status'] = CANCEL_STATUS
+
+        if self.revert_mode:
+            field_updates['schedule_time'] = None
+            field_updates['server_host'] = None
+            field_updates['server_id'] = None
+            field_updates['client_host'] = None
+            field_updates['client_id'] = None
+            field_updates['command'] = None
+            field_updates['start_time'] = None
+            field_updates['completion_time'] = None
+            field_updates['exit_status'] = None
+            field_updates['outpath'] = None
+            field_updates['errpath'] = None
+            field_updates['waited'] = None
+            field_updates['duration'] = None
+
+        if self.limit is not None:
+            # We cannot apply an UPDATE query with a LIMIT field
+            # The alternative is to pull the data and batch the update
+            # While terribly inefficient at least it has a LIMIT
+            if field_updates:
+                tasks = query.all()
+                tasks_it = iter(tasks)
+                while batch := tuple(itertools.islice(tasks_it, 100)):
+                    Task.update_all([{'id': task.id, **field_updates} for task in batch])
+            if tag_updates:
+                tasks = query.all()
+                tasks_it = iter(tasks)
+                while batch := tuple(itertools.islice(tasks_it, 100)):
+                    Task.update_all([{'id': task.id, 'tag': {**task.tag, **tag_updates}} for task in batch])
+            if self.remove_tag:
+                tasks = query.all()
+                tasks_it = iter(tasks)
+                while batch := tuple(itertools.islice(tasks_it, 100)):
+                    Task.update_all([
+                        {'id': task.id, 'tag': self.drop_items(task.tag, *self.remove_tag)}
+                        for task in batch
+                    ])
+            log.info(f'Updated {count} tasks')
+            return
+
+        if field_updates:
+            query.update(field_updates)
+
+        if tag_updates:
+            if config.database.provider == 'sqlite':
+                tag_changes = {}
+                change_expr = 'json_set(task.tag'
+                for i, (k, v) in enumerate(tag_updates.items()):
+                    tag_changes[f'k{i}'] = f'$.{k}'
+                    tag_changes[f'v{i}'] = v
+                    change_expr += f', :k{i}, :v{i}'
+                change_expr += ')'
+                query.update({Task.tag: text(change_expr).params(tag_changes)})
+            else:
+                # We cannot stack inserts with Postgres
+                # Instead we do them with individual update queries
+                for i, (k, v) in enumerate(tag_updates.items()):
+                    change_expr = 'jsonb_set(task.tag, :key, :value)'
+                    params = {'key': '{' + k + '}', 'value': json.dumps(to_json_type(v))}
+                    query.update({Task.tag: text(change_expr).params(**params)})
+
+        if self.remove_tag:
+            if config.database.provider == 'sqlite':
+                tag_changes = {}
+                change_expr = 'json_remove(task.tag'
+                for i, name in enumerate(self.remove_tag):
+                    tag_changes[f'k{i}'] = f'$.{name}'
+                    change_expr += f', :k{i}'
+                change_expr += ')'
+                query.update({Task.tag: text(change_expr).params(tag_changes)})
+            else:
+                # We cannot stack subtractions with Postgres
+                # Instead we do them with individual update queries
+                for name in self.remove_tag:
+                    query.update({Task.tag: text('task.tag - :name').params(name=name)})
+
+        Session.commit()
+        log.info(f'Updated {count} tasks')
+
+    def process_arguments(self: TaskUpdateApp) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Process positional arguments and build dictionaries for changes."""
+        field_updates = {}
+        tag_updates = {}
+        for arg in self.update_args:
+            if WhereClause.pattern.match(arg):
+                raise ArgumentError(f'Positional argument matches conditional ({arg}), '
+                                    f'maybe you intended to use -w/--where?')
+            if '=' in arg:
+                field, value = arg.split('=', 1)
+                if field == 'id':
+                    raise ArgumentError(f'Cannot alter task "id" (given: {field}={value})')
+                if field not in Task.columns:
+                    raise ArgumentError(f'Unrecognized task field "{field}"')
+                if Task.columns.get(field) is str:
+                    # We want to coerce the value (e.g., as an int or None)
+                    # But also allow for, e.g., args==1 which expects type str.
+                    value = None if value.lower() in {'none', 'null'} else value
+                else:
+                    value = smart_coerce(value)
+                field_updates[field] = value
+            elif ':' in arg:
+                key, value = arg.split(':', 1)
+                tag_updates[key] = smart_coerce(value)
+            else:
+                raise ArgumentError(f'Argument not recognized ({arg}): missing "=" or ":"')
+
+        Task.ensure_valid_tag(tag_updates)
+
+        if self.order_desc and not self.order_by:
+            raise ArgumentError('Should not provide --desc if not using -s/--order-by')
+
+        if self.order_by and not self.limit:
+            raise ArgumentError('Using -s/--order-by without -l/--limit is meaningless')
+
+        return field_updates, tag_updates
+
+    @staticmethod
+    def drop_items(d: dict, *keys: str) -> dict:
+        """Drop items by key if they exist."""
+        for key in keys:
+            d.pop(key, None)
+        return d
+
+
+TASK_PROGRAM = 'hs task'
 TASK_USAGE = f"""\
 Usage: 
-{TASK_PROGRAM} [-h] <command> [<args>...]
-
-Search, submit, track, and manage individual tasks.\
+  {TASK_PROGRAM} [-h]
+  {SUBMIT_SYNOPSIS}
+  {INFO_SYNOPSIS}
+  {WAIT_SYNOPSIS}
+  {RUN_SYNOPSIS}
+  {SEARCH_SYNOPSIS}
+  {UPDATE_SYNOPSIS}
+  
+  Search, submit, track, and manage tasks.\
 """
 
 TASK_HELP = f"""\
 {TASK_USAGE}
 
 Commands:
-  submit                 {TaskSubmitApp.__doc__}
-  info                   {TaskInfoApp.__doc__}
-  wait                   {TaskWaitApp.__doc__}
-  run                    {TaskRunApp.__doc__}
-  search                 {TaskSearchApp.__doc__}
-  update                 {TaskUpdateApp.__doc__}
+  submit           {TaskSubmitApp.__doc__}
+  info             {TaskInfoApp.__doc__}
+  wait             {TaskWaitApp.__doc__}
+  run              {TaskRunApp.__doc__}
+  search           {TaskSearchApp.__doc__}
+  update           {TaskUpdateApp.__doc__}
 
 Options:
-  -h, --help             Show this message and exit.\
+  -h, --help       Show this message and exit.\
 """
 
 
 class TaskGroupApp(ApplicationGroup):
     """Search, submit, track, and manage individual tasks."""
 
-    interface = Interface(TASK_PROGRAM,
-                          colorize_usage(TASK_USAGE),
-                          colorize_usage(TASK_HELP))
+    interface = Interface(TASK_PROGRAM, TASK_USAGE, TASK_HELP)
 
     interface.add_argument('command')
+    interface.add_argument('--list-columns', action='version', version=' '.join(Task.columns))
 
     command = None
     commands = {
@@ -788,12 +1098,12 @@ class WhereClause:
 
 @dataclass
 class Tag:
-    """Tag specification.."""
+    """Tag specification."""
 
     name: str
-    value: str = ''
+    value: JSONValue = ''
 
-    def to_dict(self: Tag) -> Dict[str, str]:
+    def to_dict(self: Tag) -> Dict[str, JSONValue]:
         """Format tag specification as dictionary."""
         return {self.name: self.value, }
 
@@ -804,10 +1114,12 @@ class Tag:
         if len(tag_part) == 1:
             return cls(name=tag_part[0].strip())
         else:
-            return cls(name=tag_part[0].strip(), value=tag_part[1].strip())
+            name, value = tag_part[0].strip(), smart_coerce(tag_part[1].strip())
+            Task.ensure_valid_tag({name: value})
+            return cls(name, value)
 
     @classmethod
-    def parse_cmdline_list(cls: Type[Tag], args: List[str]) -> Dict[str, Optional[str]]:
+    def parse_cmdline_list(cls: Type[Tag], args: List[str]) -> Dict[str, Optional[JSONValue]]:
         """Parse command-line list of tags."""
         return {tag.name: tag.value for tag in map(cls.from_cmdline, args)}
 
@@ -817,9 +1129,10 @@ def print_normal(task: Task) -> None:
     task_data = {k: json.dumps(to_json_type(v)).strip('"') for k, v in task.to_dict().items()}
     task_data['waited'] = 'null' if not task.waited else timedelta(seconds=int(task_data['waited']))
     task_data['duration'] = 'null' if not task.duration else timedelta(seconds=int(task_data['duration']))
-    task_data['tag'] = ', '.join(f'{k}:{v}' if v else k for k, v in task.tag.items())
+    task_data['tag'] = ', '.join(format_tag(k, v) for k, v in task.tag.items())
     print(f'          id: {task_data["id"]}')
-    print(f'     command: {task_data["command"]} ({task_data["args"]})')
+    print(f'        args: {task_data["args"]}')
+    print(f'     command: {task_data["command"]}')
     print(f' exit_status: {task_data["exit_status"]}')
     print(f'   submitted: {task_data["submit_time"]}')
     print(f'   scheduled: {task_data["schedule_time"]}')
@@ -835,3 +1148,11 @@ def print_normal(task: Task) -> None:
     print(f' previous_id: {task_data["previous_id"]}')
     print(f'     next_id: {task_data["next_id"]}')
     print(f'        tags: {task_data["tag"]}')
+
+
+def format_tag(key: str, value: JSONValue) -> str:
+    """Format as `key` or `key:value` if not empty string."""
+    if isinstance(value, str) and not value:
+        return key
+    else:
+        return f'{key}:{value}'

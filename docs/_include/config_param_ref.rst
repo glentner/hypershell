@@ -2,7 +2,7 @@
     Logging configuration. See also :ref:`logging <logging>` section.
 
     ``.level``
-        One of ``DEVEL``, ``TRACE``, ``DEBUG``, ``INFO``, ``WARNING``,
+        One of ``TRACE``, ``DEBUG``, ``INFO``, ``WARNING``,
         ``ERROR``, or ``CRITICAL`` (default: ``WARNING``)
 
         ``INFO`` level messages are reserved for clients when tasks begin running.
@@ -18,9 +18,6 @@
         Some of these are expected (such as incorrect command-line arguments) but in
         the event of an uncaught exception within the application a full traceback is
         written to a file and logged.
-
-        ``DEVEL`` messages are meant for development purposes and track every single
-        state-transition in all component threads.
 
     ``.datefmt``
         Date/time format, standard codes apply (default: ``'%Y-%m-%d %H:%M:%S'```)
@@ -61,7 +58,7 @@
 
     ``.schema``
         Not applicable for all RDMS providers.
-        For PostgreSQL the default schema is ``public``.
+        For Postgres the default schema is ``public``.
         Specifying the schema may be useful for having multiple instances within the same database.
 
     ``.host``
@@ -69,7 +66,7 @@
 
     ``.port``
         Port number to connect with database server.
-        The default value depends on the provider, e.g., 5432 for PostgreSQL.
+        The default value depends on the provider, e.g., 5432 for Postgres.
 
     ``.user``
         Username for databaser server account.
@@ -110,7 +107,7 @@
         here is typically available on most platforms and is not expected by any known major software.
 
     ``.auth``
-        Cryptographic authorization key to connect with server (default: `<not secure>`).
+        Cryptographic authentication key to connect with server (default: `<not secure>`).
 
         The default *KEY* used by the server and client is not secure and only a place holder.
         It is expected that the user choose a secure *KEY*. The `cluster` automatically generates
@@ -241,6 +238,11 @@
         Executors will send a progression of SIGINT, SIGTERM, and SIGKILL.
         If the process still persists the executor itself will shutdown.
 
+    ``.signalwait``
+        Wait period in seconds between signal escalation on task cancellation (default: 10).
+
+        See also ``-S``, ``--signalwait`` command-line option.
+
 ``[ssh]``
     SSH configuration section.
 
@@ -314,7 +316,7 @@
             Maximum size of cluster (default: 2).
 
             For a *dynamic* autoscaling policy, this sets an upper limit on the number of launched
-            clients. WHen this number is reached, scaling stops regardless of task pressure.
+            clients. When this number is reached, scaling stops regardless of task pressure.
 
 ``[console]``
     Rich text display and output parameters.
@@ -322,7 +324,7 @@
     ``.theme``
         Color scheme to use by default in output (such as with ``task info`` and ``task search``).
 
-        This option is passed to the `rich` library.
+        This option is passed to the `rich <https://rich.readthedocs.io/en/latest/>`_ library.
 
 ``[export]``
     Any variable defined here is injected as an environment variable for tasks.
@@ -330,4 +332,4 @@
     Example,
 
     ``foo = 1``
-        The environment variable ``FOO=1`` would defined for all tasks.
+        The environment variable ``FOO=1`` would be defined for all tasks.

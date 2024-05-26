@@ -94,11 +94,11 @@ Options
 ``--initdb``
     Auto-initialize database.
 
-    If a database is configured for use with the workflow (e.g., PostgreSQL), auto-initialize
+    If a database is configured for use with the workflow (e.g., Postgres), auto-initialize
     tables if they don't already exist. This is a short-hand for pre-creating tables with the
-    ``hyper-shell initdb`` command. This happens by default with SQLite databases.
+    ``hs initdb`` command. This happens by default with SQLite databases.
 
-    Mutually exclusive to ``--no-db``. See ``hyper-shell initdb`` command.
+    Mutually exclusive to ``--no-db``. See ``hs initdb`` command.
 
 ``--no-confirm``
     Disable client confirmation of task bundle received.
@@ -143,6 +143,12 @@ Options
     Send environment variables. Only for ``--ssh`` mode, all ``HYPERSHELL_`` prefixed environment
     variables can be exported to the remote clients.
 
+``--remote-exe`` *PATH*
+    Path to remote executable on the client side.
+
+    By default the executable path used to launch clients is the same as that for the cluster.
+    This option is necessary for clients with a different install path on client hosts.
+
 ``-d``, ``--delay-start`` *SEC*
     Delay time in seconds for launching clients (default: 0).
 
@@ -186,17 +192,25 @@ Options
     args to *stdout* if the task had a non-zero exit status. The *cluster* will run the *server*
     for you and if ``--failures`` is enabled these task args will be sent to a local file *PATH*.
 
-``--timeout`` *SEC*
+``-T``, ``--timeout`` *SEC*
     Timeout in seconds for clients. Automatically shutdown if no tasks received (default: never).
 
     This option is only valid for an ``--autoscaling`` cluster. This feature allows for gracefully
     scaling down a cluster when task throughput subsides.
 
-``--task-timeout`` *SEC*
+``-W``, ``--task-timeout`` *SEC*
     Task-level walltime limit (default: none).
 
     Executors will send a progression of SIGINT, SIGTERM, and SIGKILL.
     If the process still persists the executor itself will shutdown.
+
+``-S``, ``--signalwait`` *SEC*
+    Task-level signal escalation wait period in seconds (default: 10).
+
+    When tasks fail to halt following an initial SIGINT, the program waits
+    this interval in seconds before escalating to the next level of interrupt.
+
+    See also ``--task-timeout``.
 
 ``-A``, ``--autoscaling`` [*MODE*]
     Enable autoscaling (default: disabled). Used with ``--launcher``.

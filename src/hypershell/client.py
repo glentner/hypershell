@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2024 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -30,7 +30,7 @@ Warning:
 
 # type annotations
 from __future__ import annotations
-from typing import List, Tuple, Optional, Callable, Dict, IO, Type
+from typing import List, Tuple, Optional, Callable, Dict, IO, Type, Final
 from types import TracebackType
 
 # standard libs
@@ -39,7 +39,6 @@ import sys
 import time
 import json
 import random
-import signal
 import functools
 from enum import Enum
 from datetime import datetime, timedelta
@@ -47,7 +46,7 @@ from queue import Queue, Empty as QueueEmpty, Full as QueueFull
 from subprocess import Popen, TimeoutExpired
 from socket import gaierror
 from dataclasses import dataclass
-from multiprocessing import AuthenticationError
+from multiprocessing import AuthenticationError, cpu_count
 
 # external libs
 from cmdkit.app import Application, exit_status
@@ -56,12 +55,12 @@ from cmdkit.config import Namespace
 
 # internal libs
 from hypershell.data.model import Task
-from hypershell.core.ansi import colorize_usage
 from hypershell.core.heartbeat import Heartbeat, ClientState
 from hypershell.core.platform import default_path
-from hypershell.core.config import default, config, load_task_env
+from hypershell.core.config import default, config, load_task_env, SSH_GROUPS
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.thread import Thread
+from hypershell.core.signal import check_signal, SIGNAL_MAP, SIGUSR1, SIGUSR2, SIGINT
 from hypershell.core.queue import QueueClient, QueueConfig
 from hypershell.core.logging import HOSTNAME, INSTANCE, Logger
 from hypershell.core.template import Template, DEFAULT_TEMPLATE
@@ -69,10 +68,27 @@ from hypershell.core.exceptions import (handle_exception, handle_disconnect,
                                         handle_address_unknown, HostAddressInfo, get_shared_exception_mapping)
 
 # public interface
-__all__ = ['run_client', 'ClientThread', 'ClientApp', 'ClientInfo', 'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY', ]
+__all__ = ['run_client', 'ClientThread', 'ClientApp', 'ClientInfo',
+           'DEFAULT_BUNDLESIZE', 'DEFAULT_BUNDLEWAIT', 'DEFAULT_TEMPLATE',
+           'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY', 'DEFAULT_SIGNALWAIT',
+           'DEFAULT_HEARTRATE', 'DEFAULT_HOST', 'DEFAULT_PORT', 'DEFAULT_AUTH',
+           'set_client_standalone']
 
 # initialize logger
 log = Logger.with_name(__name__)
+
+
+# NOTE:
+# The UNIX signal facility works on stand-alone server/client, but when running a LocalCluster with
+# a client as a local thread, the USR1/USR2 signals prevent clients from sending the proper finalization
+# messages. This flag is set by LocalCluster to prevent greedy client-side shutdown behavior.
+CLIENT_STANDALONE_MODE: bool = True
+
+
+def set_client_standalone(mode: bool) -> None:
+    """Set global flag to prevent greedy shutdown from USR1/USR2 signals."""
+    global CLIENT_STANDALONE_MODE
+    CLIENT_STANDALONE_MODE = mode
 
 
 @dataclass
@@ -178,6 +194,9 @@ class ClientScheduler(StateMachine):
 
     def get_remote(self: ClientScheduler) -> SchedulerState:
         """Get the next task bundle from the server."""
+        if check_signal() in (SIGUSR1, SIGUSR2) and CLIENT_STANDALONE_MODE:
+            log.warning(f'Signal interrupt ({SIGNAL_MAP[check_signal()]})')
+            return SchedulerState.FINAL
         try:
             self.bundle = self.queue.scheduled.get(timeout=2)
             self.queue.scheduled.task_done()
@@ -225,7 +244,7 @@ class ClientScheduler(StateMachine):
     def put_local(self: ClientScheduler) -> SchedulerState:
         """Put latest task on the local task queue."""
         try:
-            self.local.put(self.task, timeout=2)
+            self.local.put(self.task, timeout=1)
             return SchedulerState.POP_TASK
         except QueueFull:
             return SchedulerState.PUT_LOCAL
@@ -260,8 +279,11 @@ class ClientSchedulerThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
-DEFAULT_BUNDLESIZE: int = default.client.bundlesize
-DEFAULT_BUNDLEWAIT: int = default.client.bundlewait
+DEFAULT_BUNDLESIZE: Final[int] = default.client.bundlesize
+"""Default size of task bundles."""
+
+DEFAULT_BUNDLEWAIT: Final[int] = default.client.bundlewait
+"""Default waiting period before forcing task bundle push."""
 
 
 class CollectorState(State, Enum):
@@ -351,15 +373,18 @@ class ClientCollector(StateMachine):
 
     def put_remote(self: ClientCollector) -> CollectorState:
         """Push out bundle of completed tasks."""
-        if self.bundle:
-            self.queue.completed.put(self.bundle)
-            log.trace(f'Bundle returned ({len(self.bundle)} tasks)')
-            self.tasks.clear()
-            self.bundle.clear()
-            self.previous_send = datetime.now()
-        else:
-            log.trace('Bundle empty')
-        return CollectorState.GET_LOCAL
+        try:
+            if self.bundle:
+                self.queue.completed.put(self.bundle, timeout=2)
+                log.trace(f'Bundle returned ({len(self.bundle)} tasks)')
+                self.tasks.clear()
+                self.bundle.clear()
+                self.previous_send = datetime.now()
+            else:
+                log.trace('Bundle empty')
+            return CollectorState.GET_LOCAL
+        except QueueFull:
+            return CollectorState.PUT_REMOTE
 
     def finalize(self: ClientCollector) -> CollectorState:
         """Push out any remaining tasks and halt."""
@@ -388,14 +413,23 @@ class ClientCollectorThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
+DEFAULT_SIGNALWAIT: Final[int] = default.task.signalwait
+"""Default signal escalation wait period in seconds."""
+
+
 def task_env(task: Task) -> Dict[str, str]:
     """Build environment dictionary for the given `task`."""
     task_data = task.to_json()
-    task_data.pop('tag')  # do not include tags in environ
+    try:
+        # We have to flatten tag data separately, otherwise we'd have TASK_TAG='{...}'
+        tag_data = Namespace(task_data.pop('tag')).to_env().flatten(prefix='TASK_TAG')
+    except Exception:  # noqa: any exception
+        tag_data = {}
     return {
         **os.environ,
         **load_task_env(),
         **Namespace.from_dict(task_data).to_env().flatten(prefix='TASK'),
+        **tag_data,
         'TASK_CWD': config.task.cwd,
         'TASK_OUTPATH': os.path.join(default_path.lib, 'task', f'{task.id}.out'),
         'TASK_ERRPATH': os.path.join(default_path.lib, 'task', f'{task.id}.err'),
@@ -409,12 +443,14 @@ class TaskState(State, Enum):
     CREATE_TASK = 2
     START_TASK = 3
     WAIT_TASK = 4
-    STOP_TASK = 5
-    TERM_TASK = 6
-    KILL_TASK = 7
-    PUT_LOCAL = 8
-    FINAL = 9
-    HALT = 10
+    CHECK_TASK = 5
+    WAIT_SIGNAL = 6
+    STOP_TASK = 7
+    TERM_TASK = 8
+    KILL_TASK = 9
+    PUT_LOCAL = 10
+    FINAL = 11
+    HALT = 12
 
 
 class TaskExecutor(StateMachine):
@@ -428,7 +464,10 @@ class TaskExecutor(StateMachine):
     redirect_errors: IO
     capture: bool
 
+    elapsed: timedelta
     timeout: Optional[int]
+    signalwait: int
+    stop_requested: Optional[datetime]
     attempted_sigint: bool
     attempted_sigterm: bool
     attempted_sigkill: bool
@@ -447,7 +486,8 @@ class TaskExecutor(StateMachine):
                  redirect_output: IO = None,
                  redirect_errors: IO = None,
                  capture: bool = False,
-                 timeout: int = None) -> None:
+                 timeout: int = None,
+                 signalwait: int = DEFAULT_SIGNALWAIT) -> None:
         """Initialize task executor."""
         self.id = id
         self.template = Template(template)
@@ -457,6 +497,7 @@ class TaskExecutor(StateMachine):
         self.redirect_errors = redirect_errors or sys.stderr
         self.capture = capture
         self.timeout = timeout
+        self.signalwait = signalwait
 
     @functools.cached_property
     def actions(self: TaskExecutor) -> Dict[TaskState, Callable[[], TaskState]]:
@@ -466,6 +507,8 @@ class TaskExecutor(StateMachine):
             TaskState.CREATE_TASK: self.create_task,
             TaskState.START_TASK: self.start_task,
             TaskState.WAIT_TASK: self.wait_task,
+            TaskState.CHECK_TASK: self.check_task,
+            TaskState.WAIT_SIGNAL: self.wait_signal,
             TaskState.STOP_TASK: self.stop_task,
             TaskState.TERM_TASK: self.term_task,
             TaskState.KILL_TASK: self.kill_task,
@@ -503,15 +546,16 @@ class TaskExecutor(StateMachine):
 
     def start_task(self: TaskExecutor) -> TaskState:
         """Start current task locally."""
+        # NOTE: enforce tz aware submit_time (in case of sqlite backend)
+        self.task.start_time = datetime.now().astimezone()
+        self.task.waited = int((self.task.start_time - self.task.submit_time.astimezone()).total_seconds())
         env = task_env(self.task)
         if self.capture:
             self.task.outpath = env['TASK_OUTPATH']
             self.task.errpath = env['TASK_ERRPATH']
             self.redirect_output = open(self.task.outpath, mode='w')
             self.redirect_errors = open(self.task.errpath, mode='w')
-        self.task.start_time = datetime.now().astimezone()
-        # NOTE: enforce tz aware submit_time (in case of sqlite backend)
-        self.task.waited = int((self.task.start_time - self.task.submit_time.astimezone()).total_seconds())
+        self.stop_requested = None
         self.attempted_sigint = False
         self.attempted_sigterm = False
         self.attempted_sigkill = False
@@ -535,27 +579,54 @@ class TaskExecutor(StateMachine):
                 self.redirect_errors.close()
             return TaskState.PUT_LOCAL
         except TimeoutExpired:
-            # Only include time elapsed to the nearest second (we don't need fractions)
-            elapsed = timedelta(seconds=round((datetime.now().astimezone() - self.task.start_time).total_seconds()))
-            log.trace(f'Waiting on task ({self.task.id}: {elapsed})')
-            if self.timeout is None or elapsed.total_seconds() < self.timeout:
-                return TaskState.WAIT_TASK
-            elif self.attempted_sigint is False:
-                log.warning(f'Task exceeded walltime limit ({elapsed})')
-                return TaskState.STOP_TASK
-            elif self.attempted_sigterm is False:
-                log.error(f'Interrupt ignored ({self.task.id})')
-                return TaskState.TERM_TASK
+            # Only display time elapsed to the nearest second
+            self.elapsed = timedelta(seconds=round((datetime.now().astimezone() -
+                                                    self.task.start_time).total_seconds()))
+            log.trace(f'Waiting on task ({self.task.id}: {self.elapsed})')
+            if self.stop_requested:
+                return TaskState.WAIT_SIGNAL
             else:
-                log.error(f'Terminate ignored ({self.task.id})')
-                return TaskState.KILL_TASK
+                return TaskState.CHECK_TASK
+
+    def check_task(self: TaskExecutor) -> TaskState:
+        """Check for timeout or interrupts."""
+        if check_signal() == SIGUSR2:  # NOTE: regardless of CLIENT_STANDALONE_MODE
+            log.warning(f'Signal interrupt (SIGUSR2: executor-{self.id})')
+            self.stop_requested = datetime.now()
+            return TaskState.WAIT_SIGNAL
+        elif self.timeout is None or self.elapsed.total_seconds() < self.timeout:
+            return TaskState.WAIT_TASK
+        else:
+            log.warning(f'Task exceeded walltime limit ({self.elapsed})')
+            self.stop_requested = datetime.now()
+            return TaskState.WAIT_SIGNAL
+
+    def wait_signal(self: TaskExecutor) -> TaskState:
+        """Wait on interrupts."""
+        if self.attempted_sigint is False:
+            return TaskState.STOP_TASK
+        elif (datetime.now() - self.stop_requested).total_seconds() < 1 * self.signalwait:
+            return TaskState.WAIT_TASK
+        elif self.attempted_sigterm is False:
+            log.error(f'Interrupt ignored ({self.task.id})')
+            return TaskState.TERM_TASK
+        elif (datetime.now() - self.stop_requested).total_seconds() < 2 * self.signalwait:
+            return TaskState.WAIT_TASK
+        elif self.attempted_sigkill is False:
+            log.error(f'Terminate ignored ({self.task.id})')
+            return TaskState.KILL_TASK
+        elif (datetime.now() - self.stop_requested).total_seconds() < 3 * self.signalwait:
+            return TaskState.WAIT_TASK
+        else:
+            log.critical(f'Process ignored SIGKILL ({self.task.id}: {self.process.pid})')
+            log.critical(f'Shutting down executor ({self.id})')
+            return TaskState.FINAL
 
     def stop_task(self: TaskExecutor) -> TaskState:
         """Send SIGINT to task process."""
         log.debug(f'Sending SIGINT ({self.task.id}: {self.process.pid})')
-        self.process.send_signal(signal.SIGINT)
+        self.process.send_signal(SIGINT)
         self.attempted_sigint = True
-        time.sleep(2)  # additional grace period
         return TaskState.WAIT_TASK
 
     def term_task(self: TaskExecutor) -> TaskState:
@@ -563,21 +634,14 @@ class TaskExecutor(StateMachine):
         log.debug(f'Sending SIGTERM ({self.task.id}: {self.process.pid})')
         self.process.terminate()
         self.attempted_sigterm = True
-        time.sleep(2)  # additional grace period
         return TaskState.WAIT_TASK
 
     def kill_task(self: TaskExecutor) -> TaskState:
         """Send SIGKILL or halt executor if ignored."""
-        if self.attempted_sigkill is False:
-            log.debug(f'Sending SIGKILL ({self.task.id}: {self.process.pid})')
-            self.process.kill()
-            self.attempted_sigkill = True
-            time.sleep(2)  # additional grace period
-            return TaskState.WAIT_TASK
-        else:
-            log.critical(f'Process ignored SIGKILL ({self.task.id}: {self.process.pid})')
-            log.critical(f'Shutting down executor ({self.id})')
-            return TaskState.FINAL
+        log.debug(f'Sending SIGKILL ({self.task.id}: {self.process.pid})')
+        self.process.kill()
+        self.attempted_sigkill = True
+        return TaskState.WAIT_TASK
 
     def put_local(self: TaskExecutor) -> TaskState:
         """Put completed task on outbound queue."""
@@ -610,13 +674,14 @@ class TaskThread(Thread):
                  capture: bool = False,
                  redirect_output: IO = None,
                  redirect_errors: IO = None,
-                 timeout: int = None) -> None:
+                 timeout: int = None,
+                 signalwait: int = DEFAULT_SIGNALWAIT) -> None:
         """Initialize task executor."""
         self.id = id
         super().__init__(name=f'hypershell-executor-{id}')
         self.machine = TaskExecutor(id=id, inbound=inbound, outbound=outbound, template=template,
                                     redirect_output=redirect_output, redirect_errors=redirect_errors,
-                                    capture=capture, timeout=timeout)
+                                    capture=capture, timeout=timeout, signalwait=signalwait)
 
     def run_with_exceptions(self: TaskThread) -> None:
         """Run machine."""
@@ -638,7 +703,8 @@ class HeartbeatState(State, Enum):
     HALT = 4
 
 
-DEFAULT_HEARTRATE: int = default.client.heartrate
+DEFAULT_HEARTRATE: Final[int] = default.client.heartrate
+"""Period in seconds to wait between heartbeats."""
 
 
 class ClientHeartbeat(StateMachine):
@@ -733,15 +799,94 @@ class ClientHeartbeatThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
-# Only create one task executor by default
-DEFAULT_NUM_TASKS = 1
+DEFAULT_NUM_TASKS: Final[int] = 1
+"""Default number of task executors per client."""
 
 # We do not delay connecting to the server unless explicitly specified
-DEFAULT_DELAY = 0
+DEFAULT_DELAY: Final[int] = 0
+"""Default delay in seconds on client startup."""
+
+DEFAULT_HOST: Final[str] = QueueConfig.host
+"""Default host for server connection."""
+
+DEFAULT_PORT: Final[int] = QueueConfig.port
+"""Default port for server connection."""
+
+DEFAULT_AUTH: Final[str] = QueueConfig.auth
+"""Default authentication key for server (**DO NOT USE THIS**)."""
 
 
 class ClientThread(Thread):
-    """Manage asynchronous task bundle scheduling and receiving."""
+    """
+    Run client within dedicated thread.
+    Run until either disconnect requested from server or `client_timeout` reached.
+
+    Args:
+        num_tasks (int, optional):
+            Number of parallel task executor threads.
+            See :const:`DEFAULT_NUM_TASKS`.
+
+        bundlesize (int optional):
+            Size of task bundles returned to server.
+            See :const:`DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int optional):
+            Waiting period in seconds before forcing return of task bundle to server.
+            See :const:`DEFAULT_BUNDLEWAIT`.
+
+        address (tuple, optional):
+            Server host address for server with port number.
+            See :const:`DEFAULT_HOST` and :const:`DEFAULT_PORT`.
+
+        auth (str, optional):
+            Server authentication key.
+            See :const:`DEFAULT_AUTH`.
+
+        template (str, optional):
+            Template command pattern. See :const:`DEFAULT_TEMPLATE`.
+
+        redirect_output (IO, optional):
+            Optional file-like object for <stdout> redirect.
+
+        redirect_errors (IO, optional):
+            Optional file-like object for <stderr> redirect.
+
+        heartrate (int, optional):
+            Period in seconds to wait between heartbeats.
+            See :const:`DEFAULT_HEARTRATE`,
+
+        capture (bool, optional):
+            Isolate task <stdout> and <stderr> in discrete files.
+            Defaults to `False`.
+
+        delay_start (float, optional):
+            Delay in seconds before connecting to server.
+            See :const:`DEFAULT_DELAY`.
+
+        no_confirm (bool, optional):
+            Disable client confirmation of tasks received.
+
+        client_timeout (int, optional):
+            Timeout in seconds before disconnecting from server.
+            By default, the client waits for server tor request disconnect.
+
+        task_timeout (int, optional):
+            Task-level walltime limit in seconds.
+            By default, the client waits indefinitely on tasks.
+
+        task_signalwait (int, optional):
+            Signal escalation waiting period in seconds on task timeout.
+            See :const:`DEFAULT_SIGNALWAIT`.
+
+    Example:
+        >>> from hypershell.client import ClientThread
+        >>> client = ClientThread.new(num_tasks=16, address=('localhost', 54321),
+        ...                           auth='my-secret-key', capture=True)
+        >>> client.join()
+
+    See Also:
+        - :meth:`run_client`
+    """
 
     client: QueueClient
     num_tasks: int
@@ -758,8 +903,8 @@ class ClientThread(Thread):
                  num_tasks: int = DEFAULT_NUM_TASKS,
                  bundlesize: int = DEFAULT_BUNDLESIZE,
                  bundlewait: int = DEFAULT_BUNDLEWAIT,
-                 address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port),
-                 auth: str = QueueConfig.auth,
+                 address: Tuple[str, int] = (DEFAULT_HOST, DEFAULT_PORT),
+                 auth: str = DEFAULT_AUTH,
                  template: str = DEFAULT_TEMPLATE,
                  redirect_output: IO = None,
                  redirect_errors: IO = None,
@@ -768,7 +913,8 @@ class ClientThread(Thread):
                  delay_start: float = DEFAULT_DELAY,
                  no_confirm: bool = False,
                  client_timeout: int = None,
-                 task_timeout: int = None) -> None:
+                 task_timeout: int = None,
+                 task_signalwait: int = DEFAULT_SIGNALWAIT) -> None:
         """Initialize queue manager and child threads."""
         super().__init__(name='hypershell-client')
         self.num_tasks = num_tasks
@@ -785,7 +931,8 @@ class ClientThread(Thread):
         self.executors = [TaskThread(id=count+1,
                                      inbound=self.inbound, outbound=self.outbound,
                                      redirect_output=redirect_output, redirect_errors=redirect_errors,
-                                     template=template, capture=capture, timeout=task_timeout)
+                                     template=template, capture=capture, timeout=task_timeout,
+                                     signalwait=task_signalwait)
                           for count in range(num_tasks)]
 
     def run_with_exceptions(self: ClientThread) -> None:
@@ -854,18 +1001,103 @@ class ClientThread(Thread):
 
 
 def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
-               bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-               address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
-               template: str = DEFAULT_TEMPLATE, redirect_output: IO = None, redirect_errors: IO = None,
-               capture: bool = False, heartrate: int = DEFAULT_HEARTRATE,
-               delay_start: float = DEFAULT_DELAY, no_confirm: bool = False,
-               client_timeout: int = None, task_timeout: int = None) -> None:
-    """Run client until disconnect signal received."""
-    thread = ClientThread.new(num_tasks=num_tasks, bundlesize=bundlesize, bundlewait=bundlewait,
-                              address=address, auth=auth, template=template, capture=capture,
-                              redirect_output=redirect_output, redirect_errors=redirect_errors,
-                              heartrate=heartrate, delay_start=delay_start, no_confirm=no_confirm,
-                              client_timeout=client_timeout, task_timeout=task_timeout)
+               bundlesize: int = DEFAULT_BUNDLESIZE,
+               bundlewait: int = DEFAULT_BUNDLEWAIT,
+               address: Tuple[str, int] = (DEFAULT_HOST, DEFAULT_PORT),
+               auth: str = DEFAULT_AUTH,
+               template: str = DEFAULT_TEMPLATE,
+               redirect_output: IO = None,
+               redirect_errors: IO = None,
+               capture: bool = False,
+               heartrate: int = DEFAULT_HEARTRATE,
+               delay_start: float = DEFAULT_DELAY,
+               no_confirm: bool = False,
+               client_timeout: int = None,
+               task_timeout: int = None,
+               task_signalwait: int = DEFAULT_SIGNALWAIT) -> None:
+    """
+    Run client until disconnect signal received or `client_timeout` reached.
+
+    Args:
+        num_tasks (int, optional):
+            Number of parallel task executor threads.
+            See :const:`DEFAULT_NUM_TASKS`.
+
+        bundlesize (int optional):
+            Size of task bundles returned to server.
+            See :const:`DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int optional):
+            Waiting period in seconds before forcing return of task bundle to server.
+            See :const:`DEFAULT_BUNDLEWAIT`.
+
+        address (tuple, optional):
+            Server host address for server with port number.
+            See :const:`DEFAULT_HOST` and :const:`DEFAULT_PORT`.
+
+        auth (str, optional):
+            Server authentication key.
+            See :const:`DEFAULT_AUTH`.
+
+        template (str, optional):
+            Template command pattern. See :const:`DEFAULT_TEMPLATE`.
+
+        redirect_output (IO, optional):
+            Optional file-like object for <stdout> redirect.
+
+        redirect_errors (IO, optional):
+            Optional file-like object for <stderr> redirect.
+
+        heartrate (int, optional):
+            Period in seconds to wait between heartbeats.
+            See :const:`DEFAULT_HEARTRATE`,
+
+        capture (bool, optional):
+            Isolate task <stdout> and <stderr> in discrete files.
+            Defaults to `False`.
+
+        delay_start (float, optional):
+            Delay in seconds before connecting to server.
+            See :const:`DEFAULT_DELAY`.
+
+        no_confirm (bool, optional):
+            Disable client confirmation of tasks received.
+
+        client_timeout (int, optional):
+            Timeout in seconds before disconnecting from server.
+            By default, the client waits for server tor request disconnect.
+
+        task_timeout (int, optional):
+            Task-level walltime limit in seconds.
+            By default, the client waits indefinitely on tasks.
+
+        task_signalwait (int, optional):
+            Signal escalation waiting period in seconds on task timeout.
+            See :const:`DEFAULT_SIGNALWAIT`.
+
+    Example:
+        >>> from hypershell.client import run_client
+        >>> run_client(num_tasks=16, address=('localhost', 54321),
+        ...            auth='my-secret-key', capture=True)
+
+    See Also:
+        - :meth:`ClientThread`
+    """
+    thread = ClientThread.new(num_tasks=num_tasks,
+                              bundlesize=bundlesize,
+                              bundlewait=bundlewait,
+                              address=address,
+                              auth=auth,
+                              template=template,
+                              capture=capture,
+                              redirect_output=redirect_output,
+                              redirect_errors=redirect_errors,
+                              heartrate=heartrate,
+                              delay_start=delay_start,
+                              no_confirm=no_confirm,
+                              client_timeout=client_timeout,
+                              task_timeout=task_timeout,
+                              task_signalwait=task_signalwait)
     try:
         thread.join()
     except Exception:
@@ -873,23 +1105,22 @@ def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
         raise
 
 
-APP_NAME = 'hyper-shell client'
+APP_NAME = 'hs client'
 APP_USAGE = f"""\
 Usage:
-hyper-shell client [-h] [-N NUM] [-t CMD] [-b SIZE] [-w SEC] [-H ADDR] [-p PORT]
-                   [-k KEY] [--capture | [-o PATH] [-e PATH]] [--no-confirm]
-                   [--delay-start SEC] [--timeout SEC] [--task-timeout SEC]
+  hs client [-h] [-N NUM] [-t CMD] [-b SIZE] [-w SEC] [-H ADDR] [-p PORT] [-k KEY] 
+            [--capture | [-o PATH] [-e PATH]] [--no-confirm] [-d SEC] [-T SEC] [-W SEC] [-S SEC]
 
-Launch client directly, run tasks in parallel.\
+  Launch client directly, run tasks in parallel.\
 """
 
 APP_HELP = f"""\
 {APP_USAGE}
 
-Tasks are pulled off of the shared queue in bundles from the server and run
-locally within the same shell as the client. By default the bundle size is one,
-meaning that at small scales there is greater responsiveness. It is recommended
-to coordinate these parameters to be the same as the server.
+  Tasks are pulled off of the shared queue in bundles from the server and run
+  locally within the same shell as the client. By default the bundle size is one,
+  meaning that at small scales there is greater responsiveness. It is recommended
+  to coordinate these parameters to be the same as the server.
 
 Options:
   -N, --num-tasks     NUM   Number of tasks to run in parallel (default: {DEFAULT_NUM_TASKS}).
@@ -906,6 +1137,7 @@ Options:
   -c, --capture             Capture individual task <stdout> and <stderr>.
   -T, --timeout       SEC   Automatically shutdown if no tasks received (default: never).
   -W, --task-timeout  SEC   Task-level walltime limit (default: none).
+  -S, --signalwait    SEC   Task-level signal escalation wait period (default: {DEFAULT_SIGNALWAIT}).
   -h, --help                Show this message and exit.\
 """
 
@@ -914,9 +1146,7 @@ class ClientApp(Application):
     """Run individual client directly."""
 
     name = APP_NAME
-    interface = Interface(APP_NAME,
-                          colorize_usage(APP_USAGE),
-                          colorize_usage(APP_HELP))
+    interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
 
     num_tasks: int = DEFAULT_NUM_TASKS
     interface.add_argument('-N', '--num-tasks', type=int, default=num_tasks)
@@ -947,6 +1177,9 @@ class ClientApp(Application):
     interface.add_argument('-T', '--timeout', type=int, default=client_timeout, dest='client_timeout')
     interface.add_argument('-W', '--task-timeout', type=int, default=task_timeout, dest='task_timeout')
 
+    task_signalwait: int = config.task.signalwait
+    interface.add_argument('-S', '--task-signalwait', type=int, default=task_signalwait, dest='task_signalwait')
+
     no_confirm: bool = False
     interface.add_argument('--no-confirm', action='store_true')
 
@@ -957,6 +1190,10 @@ class ClientApp(Application):
 
     capture: bool = False
     interface.add_argument('-c', '--capture', action='store_true')
+
+    # Hidden options used as helpers for shell completion
+    interface.add_argument('--available-cores', action='version', version=str(cpu_count()))
+    interface.add_argument('--available-ssh-groups', action='version', version='\n'.join(SSH_GROUPS))
 
     exceptions = {
         EOFError: functools.partial(handle_disconnect, logger=log),
@@ -984,7 +1221,8 @@ class ClientApp(Application):
                        no_confirm=self.no_confirm,
                        heartrate=config.client.heartrate,
                        client_timeout=self.client_timeout,
-                       task_timeout=self.task_timeout)
+                       task_timeout=self.task_timeout,
+                       task_signalwait=self.task_signalwait)
         except gaierror:
             raise HostAddressInfo(f'Could not resolve host \'{self.host}\'')
 

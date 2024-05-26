@@ -38,7 +38,7 @@ Options
     Port number to connect with server (default: 50001).
 
 ``-k``, ``--auth`` *KEY*
-    Cryptographic authorization key to connect with server (default: <not secure>).
+    Cryptographic authentication key to connect with server (default: <not secure>).
 
     The default *KEY* used by the server and client is not secure and only a place holder.
     It is expected that the user choose a secure *KEY*. The `cluster` automatically generates
@@ -93,3 +93,11 @@ Options
 
     Executors will send a progression of SIGINT, SIGTERM, and SIGKILL.
     If the process still persists the executor itself will shutdown.
+
+``-S``, ``--signalwait`` *SEC*
+    Task-level signal escalation wait period in seconds (default: 10).
+
+    When tasks fail to halt following an initial SIGINT, the program waits
+    this interval in seconds before escalating to the next level of interrupt.
+
+    See also ``--task-timeout``.

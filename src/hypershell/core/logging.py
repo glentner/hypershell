@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2024 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """Logging configuration."""
@@ -19,9 +19,9 @@ import datetime
 # external libs
 from cmdkit.app import exit_status
 from cmdkit.config import ConfigurationError
+from cmdkit.ansi import Ansi, COLOR_STDERR
 
 # internal libs
-from hypershell.core.ansi import Ansi, COLOR_STDERR
 from hypershell.core.config import config, blame
 from hypershell.core.exceptions import write_traceback
 

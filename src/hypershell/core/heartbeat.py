@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2024 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """Heartbeat data passed between client and server."""
@@ -68,4 +68,3 @@ class Heartbeat:
         data['time'] = datetime.fromisoformat(data['time'])
         data['state'] = ClientState.from_value(data['state'])
         return cls(**data)
-

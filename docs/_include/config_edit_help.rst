@@ -6,3 +6,6 @@ Options
 
 ``--user``
     Edit user configuration (default).
+
+``--local``
+    Edit local configuration.

@@ -11,7 +11,7 @@ Options
 ^^^^^^^
 
 ``-t``, ``--tag`` *TAG*...
-    Assign one or more tags
+    Assign one or more tags.
 
     Tags allow for user-defined tracking of information related to individual tasks or large
     groups of tasks. They are defined with both a `key` and `value` (e.g., ``--tag file:a``).

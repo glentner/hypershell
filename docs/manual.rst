@@ -4,24 +4,34 @@ Manual Page
 Synopsis
 --------
 
-| hyper-shell [-h] [-v] ...
+hs [-h] [-v] [--citation] ...
+    Top-level command. Show help, version, or citation info.
 
-| hyper-shell cluster [-h] *FILE* [--ssh *HOST*... | --mpi | --launcher *ARGS*...] ...
+hs cluster [-h] *FILE* [--ssh *HOST*... | --mpi | --launcher *ARGS*...] ...
+    Run managed cluster.
 
-| hyper-shell submit [-h] *FILE* ...
+hs submit [-h] *FILE* ...
+    Submit tasks from file.
 
-| hyper-shell server [-h] *FILE* ...
+hs server [-h] *FILE* ...
+    Run stand-alone server.
 
-| hyper-shell client [-h] ...
+hs client [-h] ...
+    Run stand-alone client.
 
-| hyper-shell config [-h] {get | set | which | edit } [--user | --system] ...
+hs config [-h] {get | set | which | edit } ...
+    Configuration management.
 
-| hyper-shell task [-h] {submit | info | wait | run | search | update} ...
+hs task [-h] {submit | info | wait | run | search | update} ...
+    Task management.
+
+hs initdb [-h] [--truncate [--yes]]
+    Initialize database.
 
 Description
 -----------
 
-``hyper-shell`` is an elegant, cross-platform, high-performance computing utility for processing
+HyperShell is an elegant, cross-platform, high-throughput computing utility for processing
 shell commands over a distributed, asynchronous queue. It is a highly scalable workflow automation
 tool for many-task scenarios.
 
@@ -29,9 +39,8 @@ Typically, ad hoc usage or batch jobs will use the ``cluster`` workflow. This au
 up the ``server`` and one or more ``client`` instances on remote servers and processes the commands
 from some input *FILE* until completion.
 
-This can function as a pure in-memory queue; however, one can configure a database in-the-loop
-to manage task scheduling and persistence. Stand up the ``server`` on its own and persistent
-``clients`` on the nodes in the cluster, and ``submit`` tasks independently.
+Operate with an in-memory queue, or configure a database to manage task scheduling and persistence.
+Stand up the ``server`` on its own and scale ``clients`` as desired, and ``submit`` tasks independently.
 
 
 Cluster Usage
@@ -202,6 +211,12 @@ Parameter Reference
 .. include:: _include/config_param_ref.rst
 
 
+Database
+--------
+
+.. include:: _include/database_alt.rst
+
+
 Environment Variables
 ---------------------
 
@@ -210,6 +225,10 @@ where the name aligns to the path to some option, delimited by underscores,
 will set that option.
 
 Example, ``HYPERSHELL_CLIENT_TIMEOUT`` maps to the corresponding configuration option.
+The following environment variables must be specified as such and cannot be configurable
+within files.
+
+.. include:: _include/config_site_vars.rst
 
 .. include:: _include/config_task_env_alt.rst
 
@@ -218,6 +237,7 @@ the use of colors in all console output.
 
 ``NO_COLOR``
     If this variable is set to anything but a blank string, all colors are disabled.
+    See `no-color.org <https://no-color.org>`_ for details.
 
 ``FORCE_COLOR``
     If this variable is set to anything but a blank string, colors will be enabled

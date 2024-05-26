@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2024 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """Database interface, models, and methods."""
@@ -6,6 +6,7 @@
 
 # type annotations
 from __future__ import annotations
+from typing import Final
 
 # standard libs
 import sys
@@ -20,11 +21,9 @@ from sqlalchemy.orm import close_all_sessions
 from sqlalchemy.exc import OperationalError
 
 # internal libs
-from hypershell.core.ansi import colorize_usage
 from hypershell.core.logging import Logger
 from hypershell.core.config import config
-from hypershell.core.exceptions import (write_traceback, handle_exception, DatabaseUninitialized,
-                                        get_shared_exception_mapping)
+from hypershell.core.exceptions import handle_exception, DatabaseUninitialized, get_shared_exception_mapping
 from hypershell.data.core import engine, in_memory, schema
 from hypershell.data.model import Entity, Task
 
@@ -35,14 +34,8 @@ __all__ = ['InitDBApp', 'initdb', 'truncatedb', 'checkdb', 'ensuredb', 'DATABASE
 log = Logger.with_name(__name__)
 
 
-try:
-    if not in_memory:
-        DATABASE_ENABLED = True
-    else:
-        DATABASE_ENABLED = False
-except Exception as error:
-    write_traceback(error, module=__name__)
-    sys.exit(exit_status.bad_config)
+DATABASE_ENABLED: Final[bool] = not in_memory
+"""Set if database has been configured."""
 
 
 def initdb() -> None:
@@ -68,7 +61,11 @@ def checkdb() -> None:
 
 
 def ensuredb(auto_init: bool = False) -> None:
-    """Ensure database configuration before applying any operations."""
+    """
+    Ensure database configuration before applying any operations.
+
+    If SQLite and `auto_init` we run :meth:`initdb`, else :meth:`checkdb`.
+    """
     db = config.database.get('file', None) or config.database.get('database', None)
     if config.database.provider == 'sqlite' and db in ('', ':memory:', None):
         raise ConfigurationError('Missing database configuration')
@@ -78,13 +75,13 @@ def ensuredb(auto_init: bool = False) -> None:
         checkdb()
 
 
-INITDB_PROGRAM = 'hyper-shell initdb'
+INITDB_PROGRAM = 'hs initdb'
 INITDB_USAGE = f"""\
 Usage:
-{INITDB_PROGRAM} [-h] [--truncate [--yes]]
+  {INITDB_PROGRAM} [-h] [--truncate [--yes]]
 
-Initialize database (not needed for SQLite).
-Use --truncate to zero out the task metadata.\
+  Initialize database (not needed for SQLite).
+  Use --truncate to zero out the task metadata.\
 """
 
 INITDB_HELP = f"""\
@@ -100,9 +97,7 @@ Options:
 class InitDBApp(Application):
     """Initialize database (not needed for SQLite)."""
 
-    interface = Interface(INITDB_PROGRAM,
-                          colorize_usage(INITDB_USAGE),
-                          colorize_usage(INITDB_HELP))
+    interface = Interface(INITDB_PROGRAM, INITDB_USAGE, INITDB_HELP)
 
     ALLOW_NOARGS = True
 

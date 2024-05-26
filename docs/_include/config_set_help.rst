@@ -14,4 +14,7 @@ Options
     Apply to system configuration.
 
 ``--user``
-    Apply to user configuration (default).
+    Apply to user configuration. (default)
+
+``--local``
+    Apply to local configuration.

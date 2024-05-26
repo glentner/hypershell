@@ -1,6 +1,6 @@
 Get configuration option.
 
-If ``--user``/``--system`` not specified, the output is the merged configuration
+If source is not specified; e.g., ``--local``, the output is the merged configuration
 from all sources. Use the ``config which`` command to see where a specific
 option originates from.
 

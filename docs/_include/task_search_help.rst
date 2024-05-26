@@ -14,7 +14,7 @@ Options
     Operators include ``==``, ``!=``, ``>=``, ``<=``, ``>``, ``<``, ``~``.
     The ``~`` operator applies a regular expression.
 
-``-t``, ``--tag`` *TAG*...
+``-t``, ``--with-tag`` *TAG*...
     Filter on one or more tags. (e.g., ``-t special`` or ``-t file:a``).
 
     Leaving the `value` unspecified will return any task for which the `key` exists.
@@ -23,19 +23,21 @@ Options
 ``-s``, ``--order-by`` *FIELD* ``[--desc]``
     Order results by field. Optionally, in descending order.
 
-``--failed``
+``-F``, ``--failed``
     Alias for ``-w 'exit_status != 0'``.
 
-``--succeeded``
+``-S``, ``--succeeded``
     Alias for ``-w 'exit_status == 0'``.
 
-``--finished``
+``-C``, ``--completed``
     Alias for ``-w 'exit_status != null'``.
 
-``--remaining``
+    For backwards compatibility, ``--finished`` is also valid.
+
+``-R``, ``--remaining``
     Alias for ``-w 'exit_status == null'``.
 
-``--format`` *FORMAT*
+``-f``, ``--format`` *FORMAT*
     Specify output format (either ``normal``, ``plain``, ``table``, ``csv``, ``json``).
 
     Default is ``normal`` for whole-task output. If any *FIELD* names are given, output is

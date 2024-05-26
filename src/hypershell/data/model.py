@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2024 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """Database models."""
@@ -9,21 +9,23 @@ from __future__ import annotations
 from typing import List, Dict, Any, Type, TypeVar, Union, Optional
 
 # standard libs
+import re
 import json
 from uuid import uuid4 as gen_uuid
 from datetime import datetime
 
 # external libs
 from sqlalchemy import Column, Index, func
-from sqlalchemy.orm import Query
+from sqlalchemy.orm import Query, DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
-from sqlalchemy.ext.declarative import declarative_base, declared_attr
+from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.types import Integer, DateTime, Text, Boolean, JSON as _JSON
-from sqlalchemy.dialects.postgresql import UUID as PostgresUUID, JSONB as PostgresJSON
+from sqlalchemy.dialects.postgresql import UUID as POSTGRES_UUID, JSONB as POSTGRES_JSON
 
 # internal libs
 from hypershell.core.logging import Logger, HOSTNAME, INSTANCE
 from hypershell.core.heartbeat import Heartbeat
+from hypershell.core.types import JSONValue
 from hypershell.data.core import schema, Session
 
 # public interface
@@ -49,16 +51,17 @@ class AlreadyExists(DatabaseError):
     """Exception specific to a record with unique properties already existing."""
 
 
+# Extended value type contains datetime types
+# These are not valid JSON and must be converted
 VT = TypeVar('VT', bool, int, float, str, type(None), datetime)
-RT = TypeVar('RT', bool, int, float, str, type(None))
 
 
-def to_json_type(value: VT) -> Union[VT, RT]:
+def to_json_type(value: VT) -> Union[VT, JSONValue]:
     """Convert `value` to alternate representation for JSON."""
     return value if not isinstance(value, datetime) else value.isoformat(sep=' ')
 
 
-def from_json_type(value: RT) -> Union[RT, VT]:
+def from_json_type(value: JSONValue) -> Union[JSONValue, VT]:
     """Convert `value` to richer type if possible."""
     try:
         # NOTE: minor detail in PyPy datetime implementation
@@ -70,22 +73,22 @@ def from_json_type(value: RT) -> Union[RT, VT]:
         return value
 
 
-# Column types used by models
-UUID = Text().with_variant(PostgresUUID(as_uuid=False), 'postgresql')
+# Pre-defining types shortens declarations and makes changes easier
+UUID = Text().with_variant(POSTGRES_UUID(as_uuid=False), 'postgresql')
 TEXT = Text()
 INTEGER = Integer()
 DATETIME = DateTime(timezone=True)
 BOOLEAN = Boolean()
-JSON = _JSON().with_variant(PostgresJSON(), 'postgresql')
+JSON = _JSON().with_variant(POSTGRES_JSON(), 'postgresql')
 
 
-class EntityInterface:
+class Entity(DeclarativeBase):
     """Core mixin class for all entities."""
 
     columns: Dict[str, type] = {}
 
     @declared_attr
-    def __tablename__(cls: Type[EntityInterface]) -> str:  # noqa: cls
+    def __tablename__(cls: Type[Entity]) -> str:  # noqa: cls
         """The table name should be lower-case."""
         return cls.__name__.lower()
 
@@ -94,44 +97,44 @@ class EntityInterface:
         """Common table attributes."""
         return {'schema': schema, }
 
-    def __repr__(self: EntityInterface) -> str:
+    def __repr__(self: Entity) -> str:
         """String representation."""
         attrs = ', '.join([f'{name}={repr(getattr(self, name))}' for name in self.columns])
         return f'{self.__class__.__name__}({attrs})'
 
-    def to_tuple(self: EntityInterface) -> tuple:
+    def to_tuple(self: Entity) -> tuple:
         """Convert fields into standard tuple."""
         return tuple([getattr(self, name) for name in self.columns])
 
-    def to_dict(self: EntityInterface) -> Dict[str, Any]:
+    def to_dict(self: Entity) -> Dict[str, Any]:
         """Convert record to dictionary."""
         return dict(zip(self.columns, self.to_tuple()))
 
-    def to_json(self: EntityInterface) -> Dict[str, RT]:
+    def to_json(self: Entity) -> Dict[str, JSONValue]:
         """Convert record to JSON-serializable dictionary."""
         return {key: to_json_type(value) for key, value in self.to_dict().items()}
 
-    def pack(self: EntityInterface) -> bytes:
+    def pack(self: Entity) -> bytes:
         """Encode as raw JSON bytes."""
         return json.dumps(self.to_json()).encode()
 
     @classmethod
-    def from_dict(cls: Type[EntityInterface], data: Dict[str, VT]) -> EntityInterface:
+    def from_dict(cls: Type[Entity], data: Dict[str, VT]) -> Entity:
         """Build from existing dictionary."""
         return cls(**data)  # noqa: __init__ instrumented by declarative_base
 
     @classmethod
-    def from_json(cls: Type[EntityInterface], data: Dict[str, RT]) -> EntityInterface:
+    def from_json(cls: Type[Entity], data: Dict[str, JSONValue]) -> Entity:
         """Build from JSON `text` string."""
         return cls.from_dict({key: from_json_type(value) for key, value in data.items()})
 
     @classmethod
-    def unpack(cls: Type[EntityInterface], data: bytes) -> EntityInterface:
+    def unpack(cls: Type[Entity], data: bytes) -> Entity:
         """Unpack raw JSON byte string."""
         return cls.from_json(json.loads(data.decode()))
 
     @classmethod
-    def query(cls: Type[EntityInterface], *fields: Column, caching: bool = True) -> Query:
+    def query(cls: Type[Entity], *fields: Column, caching: bool = True) -> Query:
         """Get query interface for entity with scoped session."""
         target = fields or [cls, ]
         if not caching:
@@ -139,12 +142,12 @@ class EntityInterface:
         return Session.query(*target)
 
     @classmethod
-    def count(cls: Type[EntityInterface]) -> int:
+    def count(cls: Type[Entity]) -> int:
         """Count of total existing records in database."""
         return cls.query().count()
 
     @classmethod
-    def add_all(cls: Type[EntityInterface], items: List[EntityInterface]) -> List[EntityInterface]:
+    def add_all(cls: Type[Entity], items: List[Entity]) -> List[Entity]:
         """Add many items to the database at once."""
         # NOTE: pull id first because access after commit could trigger query
         item_ids = [item.id for item in items]  # noqa: id not defined on base
@@ -160,12 +163,12 @@ class EntityInterface:
             return items
 
     @classmethod
-    def add(cls: Type[EntityInterface], item: EntityInterface) -> None:
+    def add(cls: Type[Entity], item: Entity) -> None:
         """Add single item to database."""
         cls.add_all([item, ])
 
     @classmethod
-    def update_all(cls: Type[EntityInterface], changes: List[Dict[str, Any]]) -> None:
+    def update_all(cls: Type[Entity], changes: List[Dict[str, Any]]) -> None:
         """Bulk update."""
         if changes:
             Session.bulk_update_mappings(cls, changes)
@@ -173,60 +176,56 @@ class EntityInterface:
             log.trace(f'Updated {len(changes)} {cls.__tablename__}s')
 
     @classmethod
-    def update(cls: Type[EntityInterface], id: str, **changes) -> None:
+    def update(cls: Type[Entity], id: str, **changes) -> None:
         """Update by `id` with `changes`."""
         cls.update_all([{'id': id, **changes}, ])
 
     @classmethod
-    def from_id(cls: Type[EntityInterface], id: str) -> EntityInterface:
+    def from_id(cls: Type[Entity], id: str) -> Entity:
         """Load by unique `id`."""
         raise NotImplementedError()  # NOTE: non-strict requirement of base
 
     @classmethod
-    def new(cls: Type[EntityInterface], **attrs: Any) -> EntityInterface:
+    def new(cls: Type[Entity], **attrs: Any) -> Entity:
         """Create new instance with default values."""
         raise NotImplementedError()  # NOTE: non-strict requirement of base
 
 
-# declarative base inherits common interface
-Entity = declarative_base(cls=EntityInterface)
-
-
 class Task(Entity):
-    """Database entity for task metadata."""
+    """Task entity within database implements task methods."""
 
-    id = Column(UUID, primary_key=True, nullable=False)
-    args = Column(TEXT, nullable=False)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, nullable=False)
+    args: Mapped[str] = mapped_column(TEXT, nullable=False)
 
-    submit_id = Column(UUID, nullable=False)
-    submit_time = Column(DATETIME, nullable=False)
-    submit_host = Column(TEXT, nullable=True)
+    submit_id: Mapped[str] = mapped_column(UUID, nullable=False)
+    submit_time: Mapped[datetime] = mapped_column(DATETIME, nullable=False)
+    submit_host: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
 
-    server_id = Column(UUID, nullable=True)
-    server_host = Column(TEXT, nullable=True)
-    schedule_time = Column(DATETIME, nullable=True)
+    server_id: Mapped[Optional[str]] = mapped_column(UUID, nullable=True)
+    server_host: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
+    schedule_time: Mapped[Optional[datetime]] = mapped_column(DATETIME, nullable=True)
 
-    client_id = Column(UUID, nullable=True)
-    client_host = Column(TEXT, nullable=True)
+    client_id: Mapped[Optional[str]] = mapped_column(UUID, nullable=True)
+    client_host: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
 
-    command = Column(TEXT, nullable=True)
-    start_time = Column(DATETIME, nullable=True)
-    completion_time = Column(DATETIME, nullable=True)
-    exit_status = Column(INTEGER, nullable=True)
+    command: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
+    start_time: Mapped[Optional[datetime]] = mapped_column(DATETIME, nullable=True)
+    completion_time: Mapped[Optional[datetime]] = mapped_column(DATETIME, nullable=True)
+    exit_status: Mapped[Optional[int]] = mapped_column(INTEGER, nullable=True)
 
-    outpath = Column(TEXT, nullable=True)
-    errpath = Column(TEXT, nullable=True)
+    outpath: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
+    errpath: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
 
-    attempt = Column(INTEGER, nullable=False)
-    retried = Column(BOOLEAN, nullable=False)
+    attempt: Mapped[int] = mapped_column(INTEGER, nullable=False)
+    retried: Mapped[bool] = mapped_column(BOOLEAN, nullable=False)
 
-    waited = Column(INTEGER, nullable=True)
-    duration = Column(INTEGER, nullable=True)
+    waited: Mapped[Optional[int]] = mapped_column(INTEGER, nullable=True)
+    duration: Mapped[Optional[int]] = mapped_column(INTEGER, nullable=True)
 
-    previous_id = Column(UUID, unique=True, nullable=True)
-    next_id = Column(UUID, unique=True, nullable=True)
+    previous_id: Mapped[Optional[str]] = mapped_column(UUID, unique=True, nullable=True)
+    next_id: Mapped[Optional[str]] = mapped_column(UUID, unique=True, nullable=True)
 
-    tag = Column(JSON, nullable=False, default={})
+    tag: Mapped[dict] = mapped_column(JSON, nullable=False, default={})
 
     columns = {
         'id': str,
@@ -246,7 +245,7 @@ class Task(Entity):
         'outpath': str,
         'errpath': str,
         'attempt': int,
-        'retried': int,
+        'retried': bool,
         'waited': int,
         'duration': int,
         'previous_id': str,
@@ -275,11 +274,33 @@ class Task(Entity):
 
     @classmethod
     def new(cls: Type[Task], args: str, attempt: int = 1, retried: bool = False,
-            tag: Dict[str, str] = None, **other) -> Task:
+            tag: Dict[str, JSONValue] = None, **other) -> Task:
         """Create a new Task."""
+        cls.ensure_valid_tag(tag)
         return Task(id=str(gen_uuid()), args=str(args).strip(),
                     submit_id=INSTANCE, submit_host=HOSTNAME, submit_time=datetime.now().astimezone(),
                     attempt=attempt, retried=retried, tag=(tag or {}), **other)
+
+    @staticmethod
+    def ensure_valid_tag(tag: Dict[str, JSONValue]) -> None:
+        """Check tag dictionary and raise if invalid."""
+        if not isinstance(tag, (dict, type(None))):
+            raise TypeError('Expected dict or None for tag data')
+        if tag is None:
+            return
+        for key, value in tag.items():
+            if not isinstance(key, str):
+                raise TypeError(f'Tag key, {key} ({type(key)}) is not string')
+            if not isinstance(value, (str, int, float, bool, type(None))):
+                raise TypeError(f'Invalid type for tag value, {type(value)})')
+            if isinstance(value, str):
+                if not value.strip():
+                    return  # Empty value is a naked tag (no value).
+                if len(value) > 120:
+                    raise ValueError(f'Tag size ({len(value)}) exceeds 120 characters ({key}: {value})')
+                if not re.match(r'^[A-Za-z0-9_.+-]+$', value):
+                    raise ValueError(f'Tag must only contain alphanumerics and basic symbols [+._-]: '
+                                     f'({key}: {value})')
 
     @classmethod
     def select_new(cls: Type[Task], limit: int) -> List[Task]:
@@ -341,7 +362,10 @@ class Task(Entity):
         failed_tasks = cls.select_failed(attempts=attempts, limit=limit)
         if failed_tasks:
             log.trace(f'Selected {len(failed_tasks)} previously failed tasks')
-            new_tasks = [cls.new(args=task.args, attempt=task.attempt + 1, previous_id=task.id)
+            new_tasks = [cls.new(args=task.args,
+                                 attempt=task.attempt + 1,
+                                 previous_id=task.id,
+                                 tag=task.tag)
                          for task in failed_tasks]
             tasks.extend(new_tasks)
             cls.add_all(tasks)
@@ -411,6 +435,25 @@ class Task(Entity):
         """Revert scheduled but incomplete tasks to un-scheduled state."""
         while tasks := cls.select_interrupted(100):
             cls.revert_all([task.id for task in tasks])
+
+    @classmethod
+    def cancel_all(cls: Type[Task], ids: List[str]) -> None:
+        """Cancel all tasks identified by `ids`."""
+        cls.update_all([
+            {
+                'id': id,
+                'schedule_time': datetime.now().astimezone(),
+                'exit_status': -1,
+             }
+            for id in ids
+        ])
+        for id in ids:
+            log.trace(f'Cancelled task ({id})')
+
+    @classmethod
+    def cancel(cls: Type[Task], id: str) -> None:
+        """Cancel single task by `id`."""
+        cls.cancel_all([id, ])
 
     @classmethod
     def select_orphaned(cls: Type[Task], client_id: str, limit: int) -> List[Task]:
@@ -517,17 +560,17 @@ index_client_completed = Index('task_client_completed_index', Task.client_id, Ta
 
 
 class Client(Entity):
-    """Database entity for client metadata."""
+    """Client entity within database implements client methods."""
 
-    id = Column(UUID, primary_key=True, nullable=False)
-    host = Column(TEXT, nullable=False)
+    id: Mapped[str] = mapped_column(UUID, primary_key=True, nullable=False)
+    host: Mapped[str] = mapped_column(TEXT, nullable=False)
 
-    server_id = Column(UUID, nullable=False)
-    server_host = Column(TEXT, nullable=False)
+    server_id: Mapped[str] = mapped_column(UUID, nullable=False)
+    server_host: Mapped[str] = mapped_column(TEXT, nullable=False)
 
-    connected_at = Column(DATETIME, nullable=True)
-    disconnected_at = Column(DATETIME, nullable=True)
-    evicted = Column(BOOLEAN, nullable=False)
+    connected_at: Mapped[Optional[str]] = mapped_column(DATETIME, nullable=True)
+    disconnected_at: Mapped[Optional[datetime]] = mapped_column(DATETIME, nullable=True)
+    evicted: Mapped[bool] = mapped_column(BOOLEAN, nullable=False)
 
     columns = {
         'id': str,

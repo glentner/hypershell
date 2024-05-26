@@ -1,17 +1,19 @@
-Most of the choices that ``hyper-shell`` makes about timing, task bundling, coordination, logging,
-and such are configurable by the user. This configuration is loaded when ``hyper-shell`` starts
+Most of the choices the program makes about timing, task bundling, coordination, logging,
+and such are configurable by the user. This configuration is loaded when the program starts
 and is constructed from several sources including an ordered merger of files, environment variables,
 and command-line options.
 
 In order of precedence (lowest to highest), three files are loaded:
 
-================  =================================
-Level             Path
-================  =================================
-System            ``/etc/hypershell.toml``
-User              ``~/.hypershell/config.toml``
-Local             ``./.hypershell/config.toml``
-================  =================================
+================  =================================  ====================================================
+Level             Linux / POSIX                      macOS / Darwin
+================  =================================  ====================================================
+System            ``/etc/hypershell.toml``           ``/Library/Preferences/HyperShell/config.toml``
+User              ``~/.hypershell/config.toml``      ``~/Library/Preferences/HyperShell/config.toml``
+Local             ``./.hypershell/config.toml``      ``./.hypershell/config.toml``
+================  =================================  ====================================================
+
+|
 
 The `TOML <https://toml.io>`_ format is modern and minimal.
 
@@ -23,7 +25,7 @@ For example, set the logging level at the user level with a command:
 
 .. code-block:: shell
 
-    $ hyper-shell config set logging.level info --user
+    $ hs config set logging.level info --user
 
 The file should now look something like this:
 

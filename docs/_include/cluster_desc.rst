@@ -1,4 +1,4 @@
-Start the cluster either locally or with remote clients with *ssh* or a custom *launcher*.
+Start cluster locally or with remote clients over *ssh* or a custom *launcher*.
 This mode should be the most common entry-point for general usage. It fully encompasses all of the
 different agents in the system in a concise workflow.
 

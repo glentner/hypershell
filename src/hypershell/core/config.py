@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2024 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """Runtime configuration for HyperShell."""
@@ -6,14 +6,16 @@
 
 # type annotations
 from __future__ import annotations
-from typing import TypeVar, Union, List, Optional, Protocol
+from typing import TypeVar, Union, List, Optional, Protocol, Final, Iterator
 
 # standard libs
 import os
+import re
 import sys
 import shutil
 import tomlkit
 import logging
+import socket
 import functools
 from datetime import datetime
 
@@ -27,8 +29,9 @@ from hypershell.core.exceptions import write_traceback
 
 # public interface
 __all__ = ['config', 'update', 'default', 'ConfigurationError', 'Namespace', 'blame',
-           'load', 'reload', 'load_file', 'reload_file', 'load_env', 'reload_env', 'load_task_env',
-           'DEFAULT_LOGGING_STYLE', 'LOGGING_STYLES', ]
+           'load', 'reload', 'reload_local', 'load_file', 'reload_file', 'load_env', 'reload_env', 'load_task_env',
+           'DEFAULT_LOGGING_STYLE', 'LOGGING_STYLES', 'ACTIVE_CONFIG_VARS', 'SSH_GROUPS',
+           'find_available_ports']
 
 # partial logging (not yet configured - initialized afterward)
 log = logging.getLogger(__name__)
@@ -59,9 +62,11 @@ LOGGING_STYLES = {
 # environment variables and configuration files are automatically
 # depth-first merged with defaults
 default = Namespace({
+
     'database': {
         'provider': 'sqlite',
     },
+
     'logging': {
         'color': True,
         'level': 'warning',
@@ -69,52 +74,61 @@ default = Namespace({
         'style': DEFAULT_LOGGING_STYLE,
         **LOGGING_STYLES.get(DEFAULT_LOGGING_STYLE),
     },
+
     'task': {
         'cwd': os.getcwd(),
-        'timeout': None,  # Seconds, period to wait before killing tasks
+        'timeout': None,    # seconds, period to wait before killing tasks
+        'signalwait': 10,   # seconds to wait between signal escalation (INT, TERM, KILL)
     },
+
     'submit': {
-        'bundlesize': 1,
-        'bundlewait': 5  # seconds
+        'bundlesize': 1,    # size of task bundle to accumulate before committing
+        'bundlewait': 5     # seconds to wait before committing regardless of size
     },
+
     'server': {
         'bind': 'localhost',
         'port': 50_001,
         'auth': '__HYPERSHELL__BAD__AUTHKEY__',
-        'queuesize': 1,  # only allow a single bundle (scheduler must wait)
+        'queuesize': 1,     # only allow a single bundle (scheduler must wait)
         'bundlesize': 1,
-        'bundlewait': 5,   # seconds
+        'bundlewait': 5,    # seconds
         'attempts': 1,
-        'eager': False,  # prefer failed tasks to new tasks
-        'wait': 5,  # seconds to wait between database queries
-        'evict': 600,  # assume client is gone if no heartbeat after this many seconds
+        'eager': False,     # prefer failed tasks to new tasks
+        'wait': 5,          # seconds to wait between database queries
+        'evict': 600,       # assume client is gone if no heartbeat after this many seconds
     },
+
     'client': {
-        'bundlesize': 1,
-        'bundlewait': 5,  # Seconds
-        'heartrate': 10,  # Seconds, period to wait between heartbeats
-        'timeout': None,  # seconds, period to wait on tasks before shutting down
+        'bundlesize': 1,    # size of task bundle to accumulate before returning
+        'bundlewait': 5,    # seconds to wait before returning regardless of size
+        'heartrate': 10,    # seconds to wait between heartbeats
+        'timeout': None,    # seconds to wait for bundle from server before shutting down
     },
+
     'ssh': {
         'config': os.path.join(home, '.ssh', 'config'),
+        'nodelist': {}  # Populated by user configuration
     },
+
     'autoscale': {
         'policy': 'fixed',  # Either 'fixed' or 'dynamic'
         'factor': 1,
         'period': 60,  # seconds to wait between checks
-        'launcher': '',  # empty means just 'hyper-shell client'
+        'launcher': '',  # empty means just 'hs client'
         'size': {
             'init': 1,
             'min': 0,
             'max': 2,
         },
     },
+
     'console': {
         'theme': 'monokai',
     },
-    'export': {
-        # NOTE: defining HYPERSHELL_EXPORT_XXX defines XXX within task env
-    }
+
+    # NOTE: defining HYPERSHELL_EXPORT_XXX defines XXX within task env
+    'export': {}
 })
 
 
@@ -145,24 +159,30 @@ def load_env() -> Environ:
     return reload_env()
 
 
-def partial_load(**preload: Namespace) -> Configuration:
+def partial_load(system: Optional[str] = path.system.config,
+                 user: Optional[str] = path.user.config,
+                 local: Optional[str] = path.local.config,
+                 **preload: Namespace) -> Configuration:
     """Load configuration from files and merge environment variables."""
     return Configuration(**{
         'default': default, **preload,
-        'system': load_file(path.system.config),
-        'user': load_file(path.user.config),
-        'local': load_file(path.local.config),
+        'system': {} if not system else load_file(system),
+        'user': {} if not user else load_file(user),
+        'local': {} if not user else load_file(local),
         'env': load_env(),
     })
 
 
-def partial_reload(**preload: Namespace) -> Configuration:
+def partial_reload(system: Optional[str] = path.system.config,
+                   user: Optional[str] = path.user.config,
+                   local: Optional[str] = path.local.config,
+                   **preload: Namespace) -> Configuration:
     """Force reload configuration from files and merge environment variables."""
     return Configuration(**{
         'default': default, **preload,
-        'system': reload_file(path.system.config),
-        'user': reload_file(path.user.config),
-        'local': reload_file(path.local.config),
+        'system': {} if not system else reload_file(system),
+        'user': {} if not user else reload_file(user),
+        'local': {} if not local else reload_file(local),
         'env': reload_env(),
     })
 
@@ -200,7 +220,11 @@ def build_preloads(base: Configuration) -> Namespace:
 
 class LoaderImpl(Protocol):
     """Loader interface for building configuration."""
-    def __call__(self: LoaderImpl, **preloads: Namespace) -> Configuration: ...
+    def __call__(self: LoaderImpl,
+                 system: Optional[str] = path.system.config,
+                 user: Optional[str] = path.user.config,
+                 local: Optional[str] = path.local.config,
+                 **preload: Namespace) -> Configuration: ...
 
 
 def build_configuration(loader: LoaderImpl) -> Configuration:
@@ -218,11 +242,50 @@ def reload() -> Configuration:
     return build_configuration(loader=partial_reload)
 
 
+def reload_local(filepath: Optional[str] = None) -> Configuration:
+    """Load configuration but only include one file."""
+    loader = functools.partial(partial_reload, system=None, user=None, local=filepath)
+    return build_configuration(loader=loader)
+
+
 try:
-    config = load()
+    if (local_config := os.getenv('HYPERSHELL_CONFIG_FILE', None)) is not None:
+        path.local.config = local_config  # Modified as to not lie to the user
+        config = reload_local(local_config)
+    else:
+        config = load()
 except Exception as error:
     write_traceback(error, module=__name__)
     sys.exit(exit_status.bad_config)
+
+
+ACTIVE_CONFIG_VARS: Final[List[str]] = [
+    re.sub(r'_(?!(env|eval))', r'.', name.lower())
+    for name in Namespace(config).to_env().flatten()
+]
+
+
+SSH_GROUPS = []
+try:
+    if isinstance(config.ssh.nodelist, dict):
+        SSH_GROUPS = list(config.ssh.nodelist)
+except KeyError:
+    pass
+
+
+def find_available_ports(start: int = default.server.port,
+                         end: int = default.server.port + 1_000) -> Iterator[int]:
+    """Yield available ports by testing each in turn."""
+    for port in range(start, end + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1)
+            try:
+                sock.bind(("0.0.0.0", port))
+                yield port
+            except socket.error:
+                pass
+    else:
+        raise RuntimeError(f'Could not find available port in range {start}-{end}')
 
 
 DEFAULT_CONFIG_HEADERS = f"""\

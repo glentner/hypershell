@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2024 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """Core exception handling useful for import-time issues."""
@@ -20,9 +20,9 @@ from datetime import datetime
 from cmdkit.app import exit_status
 from cmdkit.config import Namespace
 from cmdkit.config import ConfigurationError
+from cmdkit.ansi import faint, bold, magenta, yellow, red, COLOR_STDERR
 
 # internal libs
-from hypershell.core.ansi import faint, bold, magenta, yellow, red, COLOR_STDERR
 from hypershell.core.platform import default_path
 
 # public interface

@@ -1,2 +1,2 @@
-``hyper-shell`` ``config`` ``edit`` ``[-h]``
-    ``[--system | --user]``
+``hs`` ``config`` ``edit`` ``[-h]``
+    ``[--system | --user | --local]``

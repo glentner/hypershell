@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Geoffrey Lentner
+# SPDX-FileCopyrightText: 2024 Geoffrey Lentner
 # SPDX-License-Identifier: Apache-2.0
 
 """Manage configuration."""
@@ -10,12 +10,15 @@ from typing import Any
 
 # standard libs
 import os
+import io
 import sys
 import json
+import contextlib
 import subprocess
 
 # external libs
 import toml
+from pygments.styles import STYLE_MAP as CONSOLE_THEMES
 from cmdkit.app import Application, ApplicationGroup
 from cmdkit.cli import Interface, ArgumentError
 from cmdkit.config import ConfigurationError
@@ -23,12 +26,12 @@ from rich.console import Console
 from rich.syntax import Syntax
 
 # internal libs
-from hypershell.core.ansi import colorize_usage
 from hypershell.core.platform import path
 from hypershell.core.types import smart_coerce
-from hypershell.core.config import load_file, update, config as full_config
 from hypershell.core.logging import Logger
 from hypershell.core.exceptions import get_shared_exception_mapping
+from hypershell.core.config import (load_file, update, ACTIVE_CONFIG_VARS,
+                                    default as default_config, config as full_config)
 
 # public interface
 __all__ = ['ConfigApp', ]
@@ -37,13 +40,14 @@ __all__ = ['ConfigApp', ]
 log = Logger.with_name(__name__)
 
 
-EDIT_PROGRAM = 'hyper-shell config edit'
+EDIT_PROGRAM = 'hs config edit'
+EDIT_SYNOPSIS = f'{EDIT_PROGRAM} [-h] [--system | --user | --local]'
 EDIT_USAGE = f"""\
 Usage:
-{EDIT_PROGRAM} [-h] [--system | --user]
+  {EDIT_SYNOPSIS}
 
-Edit configuration with default editor.
-The EDITOR/VISUAL environment variable must be set.\
+  Edit configuration with default editor.
+  The EDITOR/VISUAL environment variable must be set.\
 """
 
 EDIT_HELP = f"""\
@@ -51,7 +55,8 @@ EDIT_HELP = f"""\
 
 Options:
       --system         Edit system configuration.
-      --user           Edit user configuration (default).
+      --user           Edit user configuration. (default)
+      --local          Edit local configuration.
   -h, --help           Show this message and exit.\
 """
 
@@ -59,14 +64,13 @@ Options:
 class ConfigEditApp(Application):
     """Edit configuration with default editor."""
 
-    interface = Interface(EDIT_PROGRAM,
-                          colorize_usage(EDIT_USAGE),
-                          colorize_usage(EDIT_HELP))
+    interface = Interface(EDIT_PROGRAM, EDIT_USAGE, EDIT_HELP)
 
     site_name: str = 'user'
     site_interface = interface.add_mutually_exclusive_group()
-    site_interface.add_argument('--user', action='store_const', const='user')
-    site_interface.add_argument('--system', action='store_const', const='system')
+    site_interface.add_argument('--system', action='store_const', const='system', dest='site_name')
+    site_interface.add_argument('--user', action='store_const', const='user', dest='site_name')
+    site_interface.add_argument('--local', action='store_const', const='local', dest='site_name')
 
     exceptions = {
         **get_shared_exception_mapping(__name__)
@@ -75,30 +79,34 @@ class ConfigEditApp(Application):
     def run(self: ConfigEditApp) -> None:
         """Business logic for `config edit`."""
 
-        config_path = path[self.site_name].config
         editor = os.getenv('EDITOR', os.getenv('VISUAL', None))
         if not editor:
             raise RuntimeError('EDITOR or VISUAL environment variable not defined')
+
+        config_path = path[self.site_name].config
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
 
         log.debug(f'Opening {config_path}')
         log.debug(f'Editor: {editor}')
         subprocess.run([editor, config_path])
 
 
-GET_PROGRAM = 'hyper-shell config get'
+GET_PROGRAM = 'hs config get'
+GET_SYNOPSIS = f'{GET_PROGRAM} [-h] SECTION[...].VAR [-x] [-r] [--system | --user | --local | --default]'
 GET_USAGE = f"""\
 Usage:
-{GET_PROGRAM} [-h] [-x] SECTION[...].VAR [--system | --user]
-
-Get configuration option.\
+  {GET_SYNOPSIS}
+  Get configuration option.\
 """
 
 GET_HELP = f"""\
 {GET_USAGE}
 
-If --user/--system not specified, the output is the merged configuration
-from all sources. Use `hyper-shell config which` to see where a specific
-option originates from.
+  If source is not specified, the output is the merged configuration
+  from all sources. Use `hs config which` to see where a specific
+  option originates from.
+  
+  If a single value is requested, use -r/--raw to strip formatting. 
 
 Arguments:
   SECTION[...].VAR          Path to variable (default: '.').
@@ -106,7 +114,10 @@ Arguments:
 Options:
       --system              Load from system configuration.
       --user                Load from user configuration.
+      --local               Load from local configuration.
+      --default             Load from default configuration.
   -x, --expand              Expand variable.
+  -r, --raw                 Disable formatting on single value output.
   -h, --help                Show this message and exit.\
 """
 
@@ -114,20 +125,31 @@ Options:
 class ConfigGetApp(Application):
     """Get configuration option."""
 
-    interface = Interface(GET_PROGRAM,
-                          colorize_usage(GET_USAGE),
-                          colorize_usage(GET_HELP))
+    interface = Interface(GET_PROGRAM, GET_USAGE, GET_HELP)
 
     varpath: str = None
     interface.add_argument('varpath', nargs='?', default='.')
 
     site_name: str = None
     site_interface = interface.add_mutually_exclusive_group()
-    site_interface.add_argument('--user', action='store_const', const='user', dest='site_name')
     site_interface.add_argument('--system', action='store_const', const='system', dest='site_name')
+    site_interface.add_argument('--user', action='store_const', const='user', dest='site_name')
+    site_interface.add_argument('--local', action='store_const', const='local', dest='site_name')
+    site_interface.add_argument('--default', action='store_const', const='default', dest='site_name')
 
     expand: bool = False
     interface.add_argument('-x', '--expand', action='store_true')
+
+    raw_mode: bool = False
+    interface.add_argument('-r', '--raw', action='store_true', dest='raw_mode')
+
+    # Hidden options used as helpers for completion script
+    list_available: bool = False
+    list_console_themes: bool = False
+    completion_interface = interface.add_mutually_exclusive_group()
+    completion_interface.add_argument('--list-available', action='version', version=' '.join(ACTIVE_CONFIG_VARS))
+    completion_interface.add_argument('--list-console-themes', action='version',
+                                      version=' '.join(list(CONSOLE_THEMES)))
 
     exceptions = {
         **get_shared_exception_mapping(__name__)
@@ -139,6 +161,9 @@ class ConfigGetApp(Application):
         if self.site_name is None:
             config_path = 'configuration'  # Note: not meaningful for merged configuration
             config = full_config
+        elif self.site_name == 'default':
+            config_path = 'default'
+            config = default_config
         else:
             config_path = path[self.site_name].config
             if os.path.exists(config_path):
@@ -194,7 +219,7 @@ class ConfigGetApp(Application):
     def print_output(self: ConfigGetApp, value: Any) -> None:
         """Format and print final `value`."""
         value = self.format_output(value)
-        if sys.stdout.isatty():
+        if sys.stdout.isatty() and not self.raw_mode:
             output = Syntax(value, 'toml', word_wrap=True,
                             theme = full_config.console.theme,
                             background_color = 'default')
@@ -229,12 +254,12 @@ class ConfigGetApp(Application):
         return value
 
 
-SET_PROGRAM = 'hyper-shell config set'
+SET_PROGRAM = 'hs config set'
+SET_SYNOPSIS = f'{SET_PROGRAM} [-h] SECTION[...].VAR VALUE [--system | --user | --local]'
 SET_USAGE = f"""\
 Usage: 
-{SET_PROGRAM} [-h] SECTION[...].VAR VALUE [--system | --user]
-
-Set configuration option.\
+  {SET_SYNOPSIS}
+  Set configuration option.\
 """
 
 SET_HELP = f"""\
@@ -246,7 +271,8 @@ Arguments:
 
 Options:
       --system            Apply to system configuration.
-      --user              Apply to user configuration (default).
+      --user              Apply to user configuration. (default)
+      --local             Apply to local configuration.
   -h, --help              Show this message and exit.\
 """
 
@@ -254,9 +280,7 @@ Options:
 class ConfigSetApp(Application):
     """Set configuration option."""
 
-    interface = Interface(SET_PROGRAM,
-                          colorize_usage(SET_USAGE),
-                          colorize_usage(SET_HELP))
+    interface = Interface(SET_PROGRAM, SET_USAGE, SET_HELP)
 
     varpath: str = None
     interface.add_argument('varpath', metavar='VAR')
@@ -268,6 +292,7 @@ class ConfigSetApp(Application):
     site_interface = interface.add_mutually_exclusive_group()
     site_interface.add_argument('--user', action='store_const', const='user', dest='site_name', default=site_name)
     site_interface.add_argument('--system', action='store_const', const='system', dest='site_name')
+    site_interface.add_argument('--local', action='store_const', const='local', dest='site_name')
 
     exceptions = {
         **get_shared_exception_mapping(__name__)
@@ -292,12 +317,12 @@ class ConfigSetApp(Application):
         update(self.site_name, config)
 
 
-WHICH_PROGRAM = 'hyper-shell config which'
+WHICH_PROGRAM = 'hs config which'
+WHICH_SYNOPSIS = f'{WHICH_PROGRAM} [-h] SECTION[...].VAR [--site]'
 WHICH_USAGE = f"""\
 Usage: 
-{WHICH_PROGRAM} [-h] SECTION[...].VAR
-
-Show origin of configuration option.\
+  {WHICH_SYNOPSIS}
+  Show origin of configuration option.\
 """
 
 WHICH_HELP = f"""\
@@ -307,6 +332,7 @@ Arguments:
   SECTION[...].VAR        Path to variable.
 
 Options:
+      --site              Output originating site name only.
   -h, --help              Show this message and exit.\
 """
 
@@ -314,12 +340,13 @@ Options:
 class ConfigWhichApp(Application):
     """Show origin of configuration option."""
 
-    interface = Interface(WHICH_PROGRAM,
-                          colorize_usage(WHICH_USAGE),
-                          colorize_usage(WHICH_HELP))
+    interface = Interface(WHICH_PROGRAM, WHICH_USAGE, WHICH_HELP)
 
     varpath: str = None
     interface.add_argument('varpath', metavar='VAR')
+
+    site_only: bool = False
+    interface.add_argument('--site', action='store_true', dest='site_only')
 
     exceptions = {
         **get_shared_exception_mapping(__name__)
@@ -332,52 +359,89 @@ class ConfigWhichApp(Application):
         except KeyError:
             log.critical(f'"{self.varpath}" not found')
             return
-        if site in ('default', 'env', 'logging', ):
+        if self.site_only:
             print(site)
+            return
+        try:
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                with ConfigGetApp.from_cmdline([self.varpath, '--raw']) as app:
+                    app.run()
+        except ConfigurationError:
+            value = 'null'
         else:
-            print(f'{site}: {path[site].config}')
+            value = stdout.getvalue().strip()
+        try:
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                with ConfigGetApp.from_cmdline([self.varpath, '--raw', '--default']) as app:
+                    app.run()
+        except ConfigurationError:
+            default_value = 'null'
+        else:
+            default_value = stdout.getvalue().strip()
+        if '[' in value:
+            value = '[...]'
+        if '[' in default_value:
+            default_value = '[...]'
+        if site in ('default', 'logging', ):
+            print(f'{value} ({site})')
+        elif site == 'env':
+            env_varname = 'HYPERSHELL_' + self.varpath.upper().replace('.', '_')
+            if value == '[...]':
+                for name in full_config.namespaces.env.to_env().flatten(prefix='HYPERSHELL'):
+                    if name.startswith(env_varname):
+                        env_varname = name
+            print(f'{value} (env: {env_varname} | default: {default_value})')
+        else:
+            print(f'{value} ({site}: {path[site].config} | default: {default_value})')
 
 
 if os.name == 'nt':
-    SYSTEM_CONFIG_PATH = '%ProgramData%\\HyperShell\\Config.toml'
-    USER_CONFIG_PATH = '%AppData%\\HyperShell\\Config.toml'
+    CONFIG_PATH_INFO = f"""\
+  --system         %ProgramData%\\HyperShell\\Config.toml
+  --user           %AppData%\\HyperShell\\Config.toml
+  --local          {path.local.config}
+"""
 else:
-    SYSTEM_CONFIG_PATH = '/etc/hypershell.toml'
-    USER_CONFIG_PATH = '~/.hypershell/config.toml'
+    CONFIG_PATH_INFO = f"""\
+  --system         /etc/hypershell.toml
+  --user           ~/.hypershell/config.toml
+  --local          {path.local.config}
+"""
 
 
-PROGRAM = 'hyper-shell config'
+PROGRAM = 'hs config'
 USAGE = f"""\
-Usage: 
-{PROGRAM} [-h] <command> [<args>...]
+Usage:
+  {PROGRAM} [-h]
+  {GET_SYNOPSIS}
+  {SET_SYNOPSIS}
+  {EDIT_SYNOPSIS}
+  {WHICH_SYNOPSIS}
 
-{__doc__}\
+  {__doc__}\
 """
 
 HELP = f"""\
 {USAGE}
 
 Commands:
-  get                   {ConfigGetApp.__doc__}
-  set                   {ConfigSetApp.__doc__}
-  edit                  {ConfigEditApp.__doc__}
-  which                 {ConfigWhichApp.__doc__}
+  get              {ConfigGetApp.__doc__}
+  set              {ConfigSetApp.__doc__}
+  edit             {ConfigEditApp.__doc__}
+  which            {ConfigWhichApp.__doc__}
 
 Options:
-  -h, --help            Show this message and exit.
+  -h, --help       Show this message and exit.
 
 Files:
-  (system)  {SYSTEM_CONFIG_PATH}
-    (user)  {USER_CONFIG_PATH}
+{CONFIG_PATH_INFO}\
 """
 
 
 class ConfigApp(ApplicationGroup):
     """Manage configuration."""
 
-    interface = Interface(PROGRAM,
-                          colorize_usage(USAGE),
-                          colorize_usage(HELP))
+    interface = Interface(PROGRAM, USAGE, HELP)
 
     interface.add_argument('command')
 
