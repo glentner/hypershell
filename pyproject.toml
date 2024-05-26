@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "hyper-shell"
 version = "2.5.1"
-description = "A command-line utility toolkit for Python."
+description = "A cross-platform, high-throughput computing utility for processing shell commands over a distributed, asynchronous queue."
 readme = "README.rst"
 license = "Apache-2.0"
 homepage = "https://hyper-shell.readthedocs.io"
