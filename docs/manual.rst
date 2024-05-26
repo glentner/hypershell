@@ -31,7 +31,7 @@ hs initdb [-h] [--truncate [--yes]]
 Description
 -----------
 
-``hs`` is an elegant, cross-platform, high-throughput computing utility for processing
+HyperShell is an elegant, cross-platform, high-throughput computing utility for processing
 shell commands over a distributed, asynchronous queue. It is a highly scalable workflow automation
 tool for many-task scenarios.
 
@@ -39,9 +39,8 @@ Typically, ad hoc usage or batch jobs will use the ``cluster`` workflow. This au
 up the ``server`` and one or more ``client`` instances on remote servers and processes the commands
 from some input *FILE* until completion.
 
-This can function as a pure in-memory queue; however, one can configure a database in-the-loop
-to manage task scheduling and persistence. Stand up the ``server`` on its own and persistent
-``clients`` on the nodes in the cluster, and ``submit`` tasks independently.
+Operate with an in-memory queue, or configure a database to manage task scheduling and persistence.
+Stand up the ``server`` on its own and scale ``clients`` as desired, and ``submit`` tasks independently.
 
 
 Cluster Usage
@@ -212,6 +211,12 @@ Parameter Reference
 .. include:: _include/config_param_ref.rst
 
 
+Database
+--------
+
+.. include:: _include/database_alt.rst
+
+
 Environment Variables
 ---------------------
 
@@ -232,6 +237,7 @@ the use of colors in all console output.
 
 ``NO_COLOR``
     If this variable is set to anything but a blank string, all colors are disabled.
+    See `no-color.org <https://no-color.org>`_ for details.
 
 ``FORCE_COLOR``
     If this variable is set to anything but a blank string, colors will be enabled

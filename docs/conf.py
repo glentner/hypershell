@@ -16,7 +16,7 @@ import hypershell
 # -- Project information -----------------------------------------------------
 
 year = datetime.datetime.now().year
-project = 'hyper-shell'
+project = 'hypershell'
 copyright = f'2019-{year} Geoffrey Lentner'  # noqa: shadows builtin name?
 author = 'Geoffrey Lentner <glentner@purdue.edu>'
 
@@ -101,13 +101,21 @@ rst_epilog = f"""
 
 
 # manual pages options
-man_pages = [(
-    'manual',
-    'hyper-shell',
-    'Process shell commands over a distributed, asynchronous queue',
-    'Geoffrey Lentner <glentner@purdue.edu>.',
-    '1'
-),
+man_pages = [
+    (
+        'manual',
+        'hyper-shell',
+        'Process shell commands over a distributed, asynchronous queue',
+        'Geoffrey Lentner <glentner@purdue.edu>.',
+        '1'
+    ),
+    (
+        'manual',
+        'hs',
+        'Process shell commands over a distributed, asynchronous queue',
+        'Geoffrey Lentner <glentner@purdue.edu>.',
+        '1'
+    ),
 ]
 
 
