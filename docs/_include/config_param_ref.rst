@@ -107,7 +107,7 @@
         here is typically available on most platforms and is not expected by any known major software.
 
     ``.auth``
-        Cryptographic authorization key to connect with server (default: `<not secure>`).
+        Cryptographic authentication key to connect with server (default: `<not secure>`).
 
         The default *KEY* used by the server and client is not secure and only a place holder.
         It is expected that the user choose a secure *KEY*. The `cluster` automatically generates
