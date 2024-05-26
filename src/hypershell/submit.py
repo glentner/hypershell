@@ -594,6 +594,44 @@ def submit_from(source: Iterable[str],
     """
     Submit all task arguments from `source`, return count of submitted tasks.
 
+    If `queue_config` is provided, the :class:`LiveSubmitThread` is used to submit
+    task bundles directly to the shared queue hosted by the server. Otherwise,
+    the :class:`SubmitThread` submits tasks to the database.
+
+    Args:
+        source (Iterable[str]):
+            Any iterable of command-line tasks.
+
+        queue_config (:class:`~hypershell.core.queue.QueueConfig`):
+            QueueConfig instance with `host`, `port`, and `auth`.
+
+        bundlesize (int, optional):
+            Size of task bundles.
+            See :const:`DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int, optional):
+            Waiting period before forcing task bundle push.
+            See :const:`DEFAULT_BUNDLEWAIT`.
+
+        template (str, optional):
+            Task command-line template pattern.
+            See :const:`DEFAULT_TEMPLATE`.
+
+        tags (Dict[str, JSONValue], optional):
+            Tag dictionary for all submitted tasks.
+
+    Example:
+        >>> from hypershell.submit import submit_from
+        >>> submit_from(['AAA', 'BBB', 'CCC'],
+        ...             template='my-script {}'
+        ...             tags={'site': 'zzz', 'group': 37})
+        3
+
+    See Also:
+        - :meth:`submit_file`
+        - :class:`SubmitThread`
+        - :class:`LiveSubmitThread`
+
     Returns:
         task_count (int): Count of submitted tasks.
     """
@@ -628,6 +666,46 @@ def submit_file(path: str,
                 **file_options) -> int:
     """
     Submit all task arguments by reading them from file `path`.
+
+    Arguments are forwarded to :func:`submit_from` with the opened file stream
+    from `path` as the task `source`.
+
+    Args:
+        path (str):
+            Path to file containing command-line tasks.
+
+        queue_config (:class:`~hypershell.core.queue.QueueConfig`):
+            QueueConfig instance with `host`, `port`, and `auth`.
+
+        bundlesize (int, optional):
+            Size of task bundles.
+            See :const:`DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int, optional):
+            Waiting period before forcing task bundle push.
+            See :const:`DEFAULT_BUNDLEWAIT`.
+
+        template (str, optional):
+            Task command-line template pattern.
+            See :const:`DEFAULT_TEMPLATE`.
+
+        tags (Dict[str, JSONValue], optional):
+            Tag dictionary for all submitted tasks.
+
+    Example:
+        >>> from hypershell.submit import submit_from
+        >>> from hypershell.core.queue import QueueConfig
+        >>> queue_config = QueueConfig(host='my.server.univ.edu', port=54321, auth='my-secret-key')
+        >>> submit_file('/tmp/tasks.in',
+        ...             queue_config=queue_config,
+        ...             template='my-script {}'
+        ...             tags={'site': 'zzz', 'group': 37})
+        3
+
+    See Also:
+        - :meth:`submit_from`
+        - :class:`SubmitThread`
+        - :class:`LiveSubmitThread`
 
     Returns:
         task_count (int): Count of submitted tasks.
