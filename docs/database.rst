@@ -3,4 +3,6 @@
 Database
 ========
 
-`Under construction` ...
+.. include:: _include/database.rst
+
+|

@@ -5,13 +5,15 @@ and command-line options.
 
 In order of precedence (lowest to highest), three files are loaded:
 
-================  =================================
-Level             Path
-================  =================================
-System            ``/etc/hypershell.toml``
-User              ``~/.hypershell/config.toml``
-Local             ``./.hypershell/config.toml``
-================  =================================
+================  =================================  ====================================================
+Level             Linux / POSIX                      macOS / Darwin
+================  =================================  ====================================================
+System            ``/etc/hypershell.toml``           ``/Library/Preferences/HyperShell/config.toml``
+User              ``~/.hypershell/config.toml``      ``~/Library/Preferences/HyperShell/config.toml``
+Local             ``./.hypershell/config.toml``      ``./.hypershell/config.toml``
+================  =================================  ====================================================
+
+|
 
 The `TOML <https://toml.io>`_ format is modern and minimal.
 

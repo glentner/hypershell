@@ -71,20 +71,11 @@ Options
     The user must confirm the update interactively unless provided with
     ``--no-confirm``.
 
--------------------
-
-|
-
 Legacy Mode
------------
+^^^^^^^^^^^
 
 In previous releases of the software the update command had the following signature.
 Executing the command with these three positional arguments is still valid.
-
-|
-
-Arguments
-^^^^^^^^^
 
 ID
     Unique UUID.

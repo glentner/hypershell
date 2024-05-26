@@ -13,10 +13,12 @@ argument to all clients.
 In some situations it may be useful to expand a template with the ``submit`` command.
 These are expanded `prior` to scheduling as the actual `args` for the task.
 
-|
+-------------------
 
 Filepath Operations
 ^^^^^^^^^^^^^^^^^^^
+
+|
 
 Shell commands often operate on filepaths. In such cases, it may be useful to manipulate
 these paths. Instead of using a shell interpolation (see below), use one of the available
@@ -51,10 +53,12 @@ shorthand notations listed here.
     The file type extension for the given file without the leading dot.
     E.g., ``/some/path/to/file.h5`` translates to ``h5``.
 
-|
+-------------------
 
 Argument Slicing
 ^^^^^^^^^^^^^^^^
+
+|
 
 Command-line inputs are understood as individual arguments delimited by whitespace.
 Slice into the argument vector using the ``{[]}`` notation. Arguments follow zero-based
@@ -100,10 +104,12 @@ Leaving out the `start` and `step` value implies starting from the first element
     This notation with a `start`, `stop`, and `step` value is identical to
     Python-style slicing syntax.
 
-|
+-------------------
 
 Shell Expansion
 ^^^^^^^^^^^^^^^
+
+|
 
 General purpose shell commands can be expanded with the ``{% %}`` notation.
 The incoming command-line args can be substituted with an ``@``.
@@ -114,10 +120,12 @@ The incoming command-line args can be substituted with an ``@``.
 ``{% mktemp -d %}``
     Create temporary directory and insert its path.
 
-|
+-------------------
 
 Lambda Expressions
 ^^^^^^^^^^^^^^^^^^
+
+|
 
 Arbitrary Python expressions can be expanded with the ``{= =}`` notation.
 The input argument can be used within the expression with the variable ``x``.

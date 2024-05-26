@@ -15,14 +15,6 @@ Release v\ |release| (:ref:`Getting Started <getting_started>`)
     :target: https://pypi.org/project/hyper-shell
     :alt: Python Versions
 
-.. image:: https://readthedocs.org/projects/hyper-shell/badge/?version=latest&style=flat
-    :target: https://hyper-shell.readthedocs.io
-    :alt: Documentation
-
-.. image:: https://pepy.tech/badge/hyper-shell
-    :target: https://pepy.tech/badge/hyper-shell
-    :alt: Downloads
-
 |
 
 .. include:: _include/desc.rst
