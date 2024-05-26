@@ -23,9 +23,9 @@ HyperShell v2: Distributed Task Execution for HPC
 
 |
 
-.. warning::
+    ⚠️⚠️⚠️**Warning** ⚠️⚠️⚠️
 
-    ⚠️⚠️⚠️**The `hyper-shell` PyPI package is deprecated use `hypershell` instead.** ⚠️⚠️⚠️
+    **The ``hyper-shell`` PyPI package is deprecated use ``hypershell`` instead.**
 
     For backwards compatibility the ``hyper-shell`` PyPI package will remain
     inplace; however, new releases will not be published there.
