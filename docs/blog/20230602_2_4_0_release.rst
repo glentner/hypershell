@@ -42,15 +42,15 @@ For example, we can submit two sets of tasks with tags ``x`` and ``y``.
 
     .. code-block:: shell
 
-        seq 2 | hyper-shell submit -t 'echo {}' --tag x:0
+        seq 2 | hs submit -t 'echo {}' --tag x:0
 
 .. admonition:: Submit individual tasks with alternate tag
     :class: note
 
     .. code-block:: shell
 
-        hyper-shell task submit -t y:0 -- echo foo
-        hyper-shell task submit -t y:1 -- echo bar
+        hs task submit -t y:0 -- echo foo
+        hs task submit -t y:1 -- echo bar
 
 Now we can search for tasks based on these tags.
 
@@ -59,7 +59,7 @@ Now we can search for tasks based on these tags.
 
     .. code-block:: shell
 
-        hyper-shell task search --count
+        hs task search --count
 
     .. details:: Output
 
@@ -69,7 +69,7 @@ Now we can search for tasks based on these tags.
 
     .. code-block:: shell
 
-        hyper-shell task search --count --tag x
+        hs task search --count --tag x
 
     .. details:: Output
 
@@ -79,7 +79,7 @@ Now we can search for tasks based on these tags.
 
     .. code-block:: shell
 
-        hyper-shell task search --count --tag x:1
+        hs task search --count --tag x:1
 
     .. details:: Output
 
@@ -89,7 +89,7 @@ Now we can search for tasks based on these tags.
 
     .. code-block:: shell
 
-        hyper-shell task search -t y:0
+        hs task search -t y:0
 
     .. details:: Output
 
@@ -123,11 +123,11 @@ Specifying a new tag does not remove previous tags.
 
     .. code-block:: shell
 
-        hyper-shell task update befbb239-8d91-42dc-b1bc-2170b61a7a50 tag mark:false
+        hs task update befbb239-8d91-42dc-b1bc-2170b61a7a50 tag mark:false
 
     .. code-block:: shell
 
-        hyper-shell task search -t y:0
+        hs task search -t y:0
 
     .. details:: Output
 
@@ -158,7 +158,7 @@ Task timeout
 ^^^^^^^^^^^^
 
 Previously, unless the program being executed has a built-in timeout feature,
-there was no way to preempt a task. Once a task began execution, ``hyper-shell``
+there was no way to preempt a task. Once a task began execution, we
 would wait indefinitely for it to complete.
 
 The new task-level timeout feature now provides this functionality. If not
@@ -194,7 +194,7 @@ after the specified period in seconds has elapsed without any new task bundles a
 Autoscaling
 ^^^^^^^^^^^
 
-We have added another `mode` to the ``hyper-shell cluster`` enabled with the
+We have added another `mode` to the ``hs cluster`` enabled with the
 ``--autoscaling`` option.
 
 This mode combines some behavioral ideas of all three of the previous modes. The use of
@@ -233,7 +233,7 @@ To enable this new style, just set it in your configuration.
 
     .. code-block:: shell
 
-        hyper-shell config set logging.style detailed-compact --user
+        hs config set logging.style detailed-compact --user
 
 |
 
@@ -251,7 +251,7 @@ Fixes
 
 |
 
-Issue `#18 <https://github.com/glentner/hyper-shell/issues/18>`_
+Issue `#18 <https://github.com/glentner/hypershell/issues/18>`_
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Incorrect type inferred for task search filters.
@@ -269,7 +269,7 @@ to have values that could be coerced to integers. As a minimal example:
 
     .. code-block:: shell
 
-        seq -w 100 | hyper-shell cluster -N2 -t 'echo {}'
+        seq -w 100 | hs cluster -N2 -t 'echo {}'
 
 The task ``args`` are ``001``, ``002``, etc. But now you cannot issue a command
 like the following and achieve expected results,
@@ -279,4 +279,4 @@ like the following and achieve expected results,
 
     .. code-block:: shell
 
-        hyper-shell task search -w args==001
+        hs task search -w args==001

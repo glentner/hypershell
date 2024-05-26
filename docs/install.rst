@@ -27,7 +27,7 @@ or administrative privileges, we recommend the following.
 
     .. code-block:: shell
 
-        pipx install hyper-shell
+        pipx install hypershell
 
 
 For `macOS` users we can accomplish the same thing with `Homebrew <https://brew.sh>`_.
@@ -40,7 +40,7 @@ This formula essentially does the same thing as Pipx but managed by ``brew`` ins
     .. code-block:: shell
 
         brew tap glentner/tap
-        brew install hyper-shell
+        brew install hypershell
 
 -------------------
 
@@ -67,7 +67,7 @@ manual page. Some desired runtime, ``python3.12``, is already loaded.
         cd /apps/x86_64-any/hypershell/2.5.1
 
         mkdir -p bin share
-        git clone --depth 1 --branch 2.5.1 https://github.com/glentner/hyper-shell ./src
+        git clone --depth 1 --branch 2.5.1 https://github.com/glentner/hypershell ./src
 
         python3.12 -m venv libexec
         libexec/bin/pip install ./src
@@ -120,7 +120,7 @@ Development
 
 As a library dependency, `HyperShell` can easily be added to your project using whatever package
 tooling you like. For development of `HyperShell` itself, contributors should create their own fork
-of the repository on `GitHub <https://github.com/glentner/hyper-shell>`_ and clone the fork locally.
+of the repository on `GitHub <https://github.com/glentner/hypershell>`_ and clone the fork locally.
 We use `Poetry <https://python-poetry.org>`_ for managing the development environment. The
 ``poetry.lock`` file is include in the repository, simply run the following command to initialize
 your virtual environment.
