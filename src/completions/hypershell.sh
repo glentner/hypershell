@@ -89,12 +89,14 @@ function _hs_config ()
 function _hs_config_get ()
 {
 	local current="${COMP_WORDS[COMP_CWORD]}"
+	local all_opts="-h --help -x --expand -r --raw --user --system --local --default"
+
 	case "${COMP_CWORD}" in
 		3)
-			COMPREPLY=($(compgen -W ". `hs config get --list-available` -h --help" -- "${current}"))
+			COMPREPLY=($(compgen -W ". `hs config get --list-available` ${all_opts}" -- "${current}"))
 			;;
 		*)
-			COMPREPLY=($(compgen -W "-h --help -x --expand -r --raw --user --system --local --default" -- "${current}"))
+			COMPREPLY=($(compgen -W "${all_opts}" -- "${current}"))
 			;;
 	esac
 }
@@ -224,7 +226,7 @@ function _hs_task_submit ()
 
 	local i=1 opt= active_collector=none
 
-	while [[ ${i} -le ${COMP_CWORD} ]]; do
+	while [[ ${i} -lt ${COMP_CWORD} ]]; do
 		opt="${COMP_WORDS[i]}"
 		case "${opt}" in
 			--)            active_collector=--   ; break;;
@@ -319,7 +321,7 @@ function _hs_task_run ()
 
 	local i=1 opt= active_collector=none
 
-	while [[ ${i} -le ${COMP_CWORD} ]]; do
+	while [[ ${i} -lt ${COMP_CWORD} ]]; do
 		opt="${COMP_WORDS[i]}"
 		case "${opt}" in
 			--)            active_collector=--   ; break;;
@@ -519,7 +521,7 @@ function _hs_submit ()
 
 	local i=1 opt= active_collector=none
 
-	while [[ ${i} -le ${COMP_CWORD} ]]; do
+	while [[ ${i} -lt ${COMP_CWORD} ]]; do
 		opt="${COMP_WORDS[i]}"
 		case "${opt}" in
 			--)       active_collector=--   ; break;;
@@ -718,7 +720,7 @@ function _hs_cluster ()
 
 	local i=1 opt= active_collector=none
 
-	while [[ ${i} -le ${COMP_CWORD} ]]; do
+	while [[ ${i} -lt ${COMP_CWORD} ]]; do
 		opt="${COMP_WORDS[i]}"
 		case "${opt}" in
 			--)       active_collector=--   ; break;;
