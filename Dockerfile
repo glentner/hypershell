@@ -1,5 +1,7 @@
 FROM python:3.12-slim
-LABEL authors="geoffrey"
+
+LABEL version="2.5.1"
+LABEL authors="glentner@purdue.edu"
 
 
 RUN apt-get update && \
@@ -11,7 +13,7 @@ RUN addgroup --gid 1001 --system app && \
 
 WORKDIR /app
 COPY . .
-RUN pip install poetry psycopg2-binary && \
+RUN pip install poetry psycopg2 && \
     poetry config virtualenvs.create false && \
     poetry install --no-dev
 
@@ -19,5 +21,5 @@ ENV HYPERSHELL_LOGGING_LEVEL=DEBUG \
     HYPERSHELL_LOGGING_STYLE=SYSTEM
 
 USER app
-ENTRYPOINT ["hyper-shell", "server"]
+ENTRYPOINT ["hs", "server"]
 CMD ["--forever"]
