@@ -34,6 +34,23 @@ multiple institutions and we'll hopefully publish the recording here on the webs
 
 -------------------
 
+Testing and Benchmarks
+----------------------
+
+**End of 2024**
+
+|
+
+We've done extensive realworld testing and performance analysis on numerous systems including
+multiple Top500 supercomputers, such as `Anvil <https://www.rcac.purdue.edu/anvil>`_ at Purdue and
+`Summit <https://www.olcf.ornl.gov/olcf-resources/compute-systems/summit/>`_ at Oak Ridge National Lab.
+
+We plan to add an automated, end-to-end test suite to the project to establish reproducible statistics
+for comparison against platforms, architectures, versions of Python, etc. We already have a private
+repository with scale-out tests but we hope to clean this up and abstract it to go more places.
+
+-------------------
+
 Website
 -------
 
