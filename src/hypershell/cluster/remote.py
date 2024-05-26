@@ -6,7 +6,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import Tuple, List, Dict, IO, Iterable, Callable, Type
+from typing import Tuple, List, Dict, IO, Iterable, Callable, Type, Final
 
 # standard libs
 import os
@@ -22,17 +22,17 @@ from subprocess import Popen
 # internal libs
 from hypershell.core.fsm import State, StateMachine
 from hypershell.core.config import default, load_task_env
-from hypershell.core.queue import QueueConfig
 from hypershell.core.thread import Thread
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.template import DEFAULT_TEMPLATE
 from hypershell.data.model import Task, Client
 from hypershell.client import DEFAULT_DELAY, DEFAULT_SIGNALWAIT
 from hypershell.submit import DEFAULT_BUNDLEWAIT
-from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
+from hypershell.server import ServerThread, DEFAULT_PORT, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 
 # public interface
 __all__ = ['run_cluster', 'RemoteCluster', 'AutoScalingCluster',
+           'DEFAULT_REMOTE_EXE', 'DEFAULT_LAUNCHER',
            'DEFAULT_AUTOSCALE_POLICY', 'DEFAULT_AUTOSCALE_PERIOD', 'DEFAULT_AUTOSCALE_FACTOR',
            'DEFAULT_AUTOSCALE_INIT_SIZE', 'DEFAULT_AUTOSCALE_MIN_SIZE', 'DEFAULT_AUTOSCALE_MAX_SIZE',
            'DEFAULT_AUTOSCALE_LAUNCHER', ]
@@ -41,8 +41,37 @@ __all__ = ['run_cluster', 'RemoteCluster', 'AutoScalingCluster',
 log = Logger.with_name('hypershell.cluster')
 
 
+# NOTE: retain old name for remote executable (for now)
+DEFAULT_REMOTE_EXE: Final[str] = 'hyper-shell'
+"""Default remote executable name."""
+
+DEFAULT_LAUNCHER: Final[str] = 'mpirun'
+"""Default launcher program."""
+
+
 def run_cluster(autoscaling: bool = False, **options) -> None:
-    """Run remote cluster until completion."""
+    """
+    Run cluster with remote clients until completion.
+
+    All function arguments are forwarded directly into either the
+    :class:`~hypershell.cluster.remote.RemoteCluster` or
+    :class:`~hypershell.cluster.remote.AutoScalingCluster` thread.
+
+    If `autoscaling` is enabled then we use the
+    :class:`~hypershell.cluster.remote.AutoScalingCluster` instead
+    of the :class:`~hypershell.cluster.remote.RemoteCluster`.
+
+    Example:
+        >>> from hypershell.cluster import run_cluster
+        >>> run_cluster(
+        ...     restart_mode=True, launcher='srun', max_retries=2, eager=True,
+        ...     client_timeout=600, task_timeout=300, capture=True
+        ... )
+
+    See Also:
+        - :class:`~hypershell.cluster.remote.RemoteCluster`
+        - :class:`~hypershell.cluster.remote.AutoScalingCluster`
+    """
     if autoscaling:
         thread = AutoScalingCluster.new(**options)
     else:
@@ -55,7 +84,105 @@ def run_cluster(autoscaling: bool = False, **options) -> None:
 
 
 class RemoteCluster(Thread):
-    """Run server with remote clients via external launcher (e.g., MPI)."""
+    """
+    Run server with remote clients via external launcher (e.g., `mpirun`).
+
+    Args:
+        source (Iterable[str], optional):
+            Any iterable of command-line tasks.
+            A new `source` results in a :class:`~hypershell.submit.SubmitThread` populating
+            either the database or the queue directly depending on `in_memory`.
+
+        num_tasks (int, optional):
+            Number of parallel task executor threads.
+            See :const:`~hypershell.client.DEFAULT_NUM_TASKS`.
+
+        template (str, optional):
+            Template command pattern.
+            See :const:`~hypershell.client.DEFAULT_TEMPLATE`.
+
+        bundlesize (int optional):
+            Size of task bundles returned to server.
+            See :const:`~hypershell.server.DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int optional):
+            Waiting period in seconds before forcing return of task bundle to server.
+            See :const:`~hypershell.submit.DEFAULT_BUNDLEWAIT`.
+
+        bind (tuple, optional):
+            Bind address for server with port number (default: 0.0.0.0).
+            See :const:`~hypershell.server.DEFAULT_PORT`.
+
+        launcher (str, optional):
+            Launcher program used to bring up clients on other hosts.
+            See :const:`~hypershell.cluster.remote.DEFAULT_LAUNCHER`.
+
+        launcher_args (List[str], optional):
+            Additional command-line arguments for launcher program.
+
+        remote_exe (str, optional):
+            Program name or path for remote executable.
+            See :const:`~hypershell.cluster.remote.DEFAULT_REMOTE_EXE`.
+
+        in_memory (bool, optional):
+            If True, revert to basic in-memory queue.
+
+        no_confirm (bool, optional):
+            Disable client confirmation of tasks received.
+
+        forever_mode (bool, optional):
+            Regardless of `source`, if enabled schedule forever.
+            Conflicts with `restart_mode` and `in_memory`. Default is `False`.
+
+        restart_mode (bool, optional):
+            If `source` is empty, this option allows for the server to continue
+            with scheduling from the database until complete.
+            Conflicts with `in_memory`. Default is `False`.
+
+        max_retries (int, optional):
+            Number of allowed task retries.
+            See :const:`~hypershell.server.DEFAULT_ATTEMPTS`.
+
+        eager (bool, optional):
+            When enabled tasks are retried immediately ahead scheduling new tasks.
+            See :const:`~hypershell.server.DEFAULT_EAGER_MODE`.
+
+        redirect_failures (IO, optional):
+            Open file-like object to write failed tasks.
+
+        delay_start (float, optional):
+            Delay in seconds before connecting to server.
+            See :const:`~hypershell.client.DEFAULT_DELAY`.
+
+        capture (bool, optional):
+            Isolate task <stdout> and <stderr> in discrete files.
+            Defaults to `False`.
+
+        client_timeout (int, optional):
+            Timeout in seconds before disconnecting from server.
+            By default, the client waits for server tor request disconnect.
+
+        task_timeout (int, optional):
+            Task-level walltime limit in seconds.
+            By default, the client waits indefinitely on tasks.
+
+        task_signalwait (int, optional):
+            Signal escalation waiting period in seconds on task timeout.
+            See :const:`~hypershell.client.DEFAULT_SIGNALWAIT`.
+
+    Example:
+        >>> from hypershell.cluster import RemoteCluster
+        >>> cluster = RemoteCluster.new(
+        ...     restart_mode=True, launcher='srun', max_retries=2, eager=True,
+        ...     client_timeout=600, task_timeout=300, capture=True
+        ... )
+        >>> cluster.join()
+
+    See Also:
+        - :class:`~hypershell.server.ServerThread`
+        - :class:`~hypershell.client.ClientThread`
+        - :meth:`~hypershell.cluster.remote.run_cluster`
+    """
 
     server: ServerThread
     clients: Popen
@@ -67,27 +194,35 @@ class RemoteCluster(Thread):
                  template: str = DEFAULT_TEMPLATE,
                  bundlesize: int = DEFAULT_BUNDLESIZE,
                  bundlewait: int = DEFAULT_BUNDLEWAIT,
+                 bind: Tuple[str, int] = ('0.0.0.0', DEFAULT_PORT),
+                 launcher: str = DEFAULT_LAUNCHER,
+                 launcher_args: List[str] = None,
+                 remote_exe: str = DEFAULT_REMOTE_EXE,
+                 in_memory: bool = False,
+                 no_confirm: bool = False,
                  forever_mode: bool = False,
                  restart_mode: bool = False,
-                 bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port),
-                 delay_start: float = DEFAULT_DELAY,
-                 launcher: str = 'mpirun',
-                 launcher_args: List[str] = None,
-                 remote_exe: str = 'hyper-shell',
                  max_retries: int = DEFAULT_ATTEMPTS,
                  eager: bool = False,
                  redirect_failures: IO = None,
-                 in_memory: bool = False,
-                 no_confirm: bool = False,
+                 delay_start: float = DEFAULT_DELAY,
                  capture: bool = False,
                  client_timeout: int = None,
                  task_timeout: int = None,
                  task_signalwait: int = DEFAULT_SIGNALWAIT) -> None:
         """Initialize server and client threads with external launcher."""
         auth = secrets.token_hex(64)
-        self.server = ServerThread(source=source, auth=auth, bundlesize=bundlesize, bundlewait=bundlewait,
-                                   in_memory=in_memory, no_confirm=no_confirm, max_retries=max_retries, eager=eager,
-                                   address=bind, forever_mode=forever_mode, restart_mode=restart_mode,
+        self.server = ServerThread(source=source,
+                                   bundlesize=bundlesize,
+                                   bundlewait=bundlewait,
+                                   in_memory=in_memory,
+                                   no_confirm=no_confirm,
+                                   address=bind,
+                                   auth=auth,
+                                   max_retries=max_retries,
+                                   eager=eager,
+                                   forever_mode=forever_mode,
+                                   restart_mode=restart_mode,
                                    redirect_failures=redirect_failures)
         launcher = shlex.split(launcher)
         if launcher_args is None:
@@ -128,14 +263,26 @@ class RemoteCluster(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
-# Autoscaling configuration constants
-DEFAULT_AUTOSCALE_POLICY: str = default.autoscale.policy
-DEFAULT_AUTOSCALE_FACTOR: float = default.autoscale.factor
-DEFAULT_AUTOSCALE_PERIOD: int = default.autoscale.period
-DEFAULT_AUTOSCALE_INIT_SIZE: int = default.autoscale.size.init
-DEFAULT_AUTOSCALE_MIN_SIZE: int = default.autoscale.size.min
-DEFAULT_AUTOSCALE_MAX_SIZE: int = default.autoscale.size.max
-DEFAULT_AUTOSCALE_LAUNCHER: str = default.autoscale.launcher
+DEFAULT_AUTOSCALE_POLICY: Final[str] = default.autoscale.policy
+"""Default autoscaling policy."""
+
+DEFAULT_AUTOSCALE_FACTOR: Final[float] = default.autoscale.factor
+"""Default scaling factor."""
+
+DEFAULT_AUTOSCALE_PERIOD: Final[int] = default.autoscale.period
+"""Default period in seconds between autoscaling events."""
+
+DEFAULT_AUTOSCALE_INIT_SIZE: Final[int] = default.autoscale.size.init
+"""Default initial size of cluster (number of clients)."""
+
+DEFAULT_AUTOSCALE_MIN_SIZE: Final[int] = default.autoscale.size.min
+"""Default minimum size of cluster (number of clients)."""
+
+DEFAULT_AUTOSCALE_MAX_SIZE: Final[int] = default.autoscale.size.max
+"""Default maximum size of cluster (number of clients)."""
+
+DEFAULT_AUTOSCALE_LAUNCHER: Final[str] = default.autoscale.launcher
+"""Default launcher program for scaling clients."""
 
 
 class AutoScalerState(State, Enum):
@@ -375,7 +522,129 @@ class AutoScalerThread(Thread):
 
 
 class AutoScalingCluster(Thread):
-    """Run server with autoscaling remote clients via external launcher."""
+    """
+    Run cluster with autoscaling remote clients via external launcher.
+
+    Args:
+        source (Iterable[str], optional):
+            Any iterable of command-line tasks.
+            A new `source` results in a :class:`~hypershell.submit.SubmitThread` populating
+            either the database or the queue directly depending on `in_memory`.
+
+        num_tasks (int, optional):
+            Number of parallel task executor threads.
+            See :const:`~hypershell.client.DEFAULT_NUM_TASKS`.
+
+        template (str, optional):
+            Template command pattern.
+            See :const:`~hypershell.client.DEFAULT_TEMPLATE`.
+
+        bundlesize (int optional):
+            Size of task bundles returned to server.
+            See :const:`~hypershell.server.DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int optional):
+            Waiting period in seconds before forcing return of task bundle to server.
+            See :const:`~hypershell.submit.DEFAULT_BUNDLEWAIT`.
+
+        bind (tuple, optional):
+            Bind address for server with port number (default: 0.0.0.0).
+            See :const:`~hypershell.server.DEFAULT_PORT`.
+
+        launcher (str, optional):
+            Launcher program used to bring up clients on other hosts.
+            See :const:`~hypershell.cluster.remote.DEFAULT_AUTOSCALE_LAUNCHER`.
+
+        launcher_args (List[str], optional):
+            Additional command-line arguments for launcher program.
+
+        remote_exe (str, optional):
+            Program name or path for remote executable.
+            See :const:`~hypershell.cluster.remote.DEFAULT_REMOTE_EXE`.
+
+        in_memory (bool, optional):
+            If True, revert to basic in-memory queue.
+
+        no_confirm (bool, optional):
+            Disable client confirmation of tasks received.
+
+        forever_mode (bool, optional):
+            Regardless of `source`, if enabled schedule forever.
+            Conflicts with `restart_mode` and `in_memory`. Default is `False`.
+
+        restart_mode (bool, optional):
+            If `source` is empty, this option allows for the server to continue
+            with scheduling from the database until complete.
+            Conflicts with `in_memory`. Default is `False`.
+
+        max_retries (int, optional):
+            Number of allowed task retries.
+            See :const:`~hypershell.server.DEFAULT_ATTEMPTS`.
+
+        eager (bool, optional):
+            When enabled tasks are retried immediately ahead scheduling new tasks.
+            See :const:`~hypershell.server.DEFAULT_EAGER_MODE`.
+
+        redirect_failures (IO, optional):
+            Open file-like object to write failed tasks.
+
+        delay_start (float, optional):
+            Delay in seconds before connecting to server.
+            See :const:`~hypershell.client.DEFAULT_DELAY`.
+
+        capture (bool, optional):
+            Isolate task <stdout> and <stderr> in discrete files.
+            Defaults to `False`.
+
+        client_timeout (int, optional):
+            Timeout in seconds before disconnecting from server.
+            By default, the client waits for server tor request disconnect.
+
+        task_timeout (int, optional):
+            Task-level walltime limit in seconds.
+            By default, the client waits indefinitely on tasks.
+
+        task_signalwait (int, optional):
+            Signal escalation waiting period in seconds on task timeout.
+            See :const:`~hypershell.client.DEFAULT_SIGNALWAIT`.
+
+        policy (str, optional):
+            Autoscaling policy (either 'fixed' or 'dynamic').
+            See :const:`~hypershell.cluster.remote.DEFAULT_AUTOSCALE_POLICY`
+        
+        period (int, optional):
+            Period in seconds between autoscaling events.    
+            See :const:`~hypershell.cluster.remote.DEFAULT_AUTOSCALE_PERIOD`
+        
+        factor (float, optional):
+            Autoscaling factor.
+            See :const:`~hypershell.cluster.remote.DEFAULT_AUTOSCALE_FACTOR`
+        
+        init_size (int, optional):
+            Initial size of cluster (number of clients).
+            See :const:`~hypershell.cluster.remote.DEFAULT_AUTOSCALE_INIT_SIZE`
+
+        min_size (int, optional):
+            Minimum size of cluster (number of clients).
+            See :const:`~hypershell.cluster.remote.DEFAULT_AUTOSCALE_MIN_SIZE`
+
+        max_size (int, optional):
+            Maximum size of cluster (number of clients).
+            See :const:`~hypershell.cluster.remote.DEFAULT_AUTOSCALE_MAX_SIZE`
+
+    Example:
+        >>> from hypershell.cluster import AutoScalingCluster
+        >>> cluster = AutoScalingCluster.new(
+        ...     restart_mode=True, max_retries=2, eager=True,
+        ...     client_timeout=600, task_timeout=300, capture=True,
+        ...     launcher='srun -Q -A standby -t 01:00:00 --exclusive --signal=USR1@600'
+        ... )
+        >>> cluster.join()
+
+    See Also:
+        - :class:`~hypershell.server.ServerThread`
+        - :meth:`~hypershell.cluster.remote.run_cluster`
+    """
 
     server: ServerThread
     clients: Dict[str, Popen]
@@ -387,28 +656,28 @@ class AutoScalingCluster(Thread):
                  template: str = DEFAULT_TEMPLATE,
                  bundlesize: int = DEFAULT_BUNDLESIZE,
                  bundlewait: int = DEFAULT_BUNDLEWAIT,
-                 bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port),
-                 delay_start: float = DEFAULT_DELAY,
+                 bind: Tuple[str, int] = ('0.0.0.0', DEFAULT_PORT),
                  launcher: str = DEFAULT_AUTOSCALE_LAUNCHER,
                  launcher_args: List[str] = None,
-                 remote_exe: str = 'hyper-shell',
+                 remote_exe: str = DEFAULT_REMOTE_EXE,
+                 in_memory: bool = False,  # noqa: ignored (passed by ClusterApp)
+                 no_confirm: bool = False,  # noqa: ignored (passed by ClusterApp)
+                 forever_mode: bool = False,  # noqa: ignored (passed by ClusterApp)
+                 restart_mode: bool = False,  # noqa: ignored (passed by ClusterApp)
                  max_retries: int = DEFAULT_ATTEMPTS,
                  eager: bool = False,
                  redirect_failures: IO = None,
+                 delay_start: float = DEFAULT_DELAY,
                  capture: bool = False,
+                 client_timeout: int = None,
+                 task_timeout: int = None,
+                 task_signalwait: int = DEFAULT_SIGNALWAIT,
                  policy: str = DEFAULT_AUTOSCALE_POLICY,
                  period: int = DEFAULT_AUTOSCALE_PERIOD,
                  factor: float = DEFAULT_AUTOSCALE_FACTOR,
                  init_size: int = DEFAULT_AUTOSCALE_INIT_SIZE,
                  min_size: int = DEFAULT_AUTOSCALE_MIN_SIZE,
                  max_size: int = DEFAULT_AUTOSCALE_MAX_SIZE,
-                 forever_mode: bool = False,  # noqa: ignored (passed by ClusterApp)
-                 restart_mode: bool = False,  # noqa: ignored (passed by ClusterApp)
-                 in_memory: bool = False,  # noqa: ignored (passed by ClusterApp)
-                 no_confirm: bool = False,  # noqa: ignored (passed by ClusterApp)
-                 client_timeout: int = None,
-                 task_timeout: int = None,
-                 task_signalwait: int = DEFAULT_SIGNALWAIT,
                  ) -> None:
         """Initialize server and autoscaler."""
         auth = secrets.token_hex(64)

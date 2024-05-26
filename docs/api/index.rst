@@ -108,4 +108,5 @@ API Reference
     submit
     server
     client
+    cluster
     data

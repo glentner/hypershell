@@ -28,7 +28,7 @@ from hypershell.data import initdb, checkdb
 from hypershell.client import DEFAULT_NUM_TASKS, DEFAULT_DELAY, DEFAULT_SIGNALWAIT
 from hypershell.server import DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 from hypershell.submit import DEFAULT_BUNDLEWAIT
-from hypershell.cluster.ssh import run_ssh, SSHCluster, NodeList
+from hypershell.cluster.ssh import run_ssh, SSHCluster, NodeList, DEFAULT_REMOTE_EXE
 from hypershell.cluster.local import run_local, LocalCluster
 from hypershell.cluster.remote import (run_cluster, RemoteCluster, AutoScalingCluster,
                                        DEFAULT_AUTOSCALE_FACTOR, DEFAULT_AUTOSCALE_PERIOD,
@@ -38,6 +38,8 @@ from hypershell.cluster.remote import (run_cluster, RemoteCluster, AutoScalingCl
 # public interface
 __all__ = ['run_local', 'run_cluster', 'run_ssh',
            'LocalCluster', 'RemoteCluster', 'AutoScalingCluster', 'SSHCluster',
+           'DEFAULT_REMOTE_EXE', 'DEFAULT_AUTOSCALE_FACTOR', 'DEFAULT_AUTOSCALE_PERIOD',
+           'DEFAULT_AUTOSCALE_MIN_SIZE', 'DEFAULT_AUTOSCALE_MAX_SIZE', 'DEFAULT_AUTOSCALE_INIT_SIZE',
            'ClusterApp', ]
 
 # initialize logger
