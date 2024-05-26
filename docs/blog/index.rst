@@ -7,12 +7,12 @@ A place for announcements, release notes, thoughts and ideas for the project.
 
 -----
 
-:ref:`Release Notes (v2.5.0) <20240518_2_5_0_release>`
+:ref:`Release Notes (v2.5.1) <20240518_2_5_0_release>`
 ------------------------------------------------------
 
 `May 18, 2024`
 
-The v2.5.0 release includes major new features along with numerous fixes and improvements.
+The v2.5.1 release includes major new features along with numerous fixes and improvements.
 
 - New command-line program name.
 - Task update command capabilities.
