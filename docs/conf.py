@@ -59,6 +59,10 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 pygments_style = 'material'  # default: sphinx
 pygments_dark_style = "monokai"   # specific to furo theme
 
+# If true, the current module name will be prepended to all description
+# unit titles (such as .. function::).
+add_module_names = False
+
 # -- Options for HTML output -------------------------------------------------
 
 html_title = 'HyperShell v2'
