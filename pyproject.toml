@@ -1,12 +1,12 @@
 [tool.poetry]
-name = "hyper-shell"
-version = "2.5.0"
-description = "A command-line utility toolkit for Python."
+name = "hypershell"
+version = "2.5.1"
+description = "A cross-platform, high-throughput computing utility for processing shell commands over a distributed, asynchronous queue."
 readme = "README.rst"
 license = "Apache-2.0"
 homepage = "https://hyper-shell.readthedocs.io"
 documentation = "https://hyper-shell.readthedocs.io"
-repository = "https://github.com/glentner/hyper-shell"
+repository = "https://github.com/glentner/hypershell"
 authors = [
     "Geoffrey Lentner <glentner@purdue.edu>"
 ]
@@ -31,7 +31,7 @@ classifiers = [
 packages = [{include = "hypershell", from = "src"}]
 
 [tool.poetry.scripts]
-hyper-shell = "hypershell:main"
+hyper-shell = "hypershell:main"  # NOTE: do not remove this
 hs = "hypershell:main"
 
 [tool.poetry.dependencies]

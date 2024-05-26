@@ -75,7 +75,8 @@ from hypershell.client import ClientInfo
 # public interface
 __all__ = ['serve_from', 'serve_file', 'serve_forever', 'ServerThread', 'ServerApp',
            'DEFAULT_BUNDLESIZE', 'DEFAULT_BUNDLEWAIT', 'DEFAULT_ATTEMPTS',
-           'DEFAULT_EVICT', 'DEFAULT_EAGER_MODE', 'DEFAULT_QUERY_PAUSE']
+           'DEFAULT_EVICT', 'DEFAULT_EAGER_MODE', 'DEFAULT_QUERY_PAUSE',
+           'DEFAULT_BIND', 'DEFAULT_PORT', 'DEFAULT_AUTH']
 
 # initialize logger
 log = Logger.with_name(__name__)
@@ -663,7 +664,7 @@ class ServerThread(Thread):
             When enabled tasks are retried immediately ahead scheduling new tasks.
             See :const:`DEFAULT_EAGER_MODE`.
 
-        redirect_failures (bool, optional):
+        redirect_failures (IO, optional):
             Open file descriptor to write failed tasks.
 
         evict_after (int, optional):

@@ -6,7 +6,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import Type, List, Iterable, Tuple, IO
+from typing import Type, List, Iterable, Tuple, IO, Final
 
 # standard libs
 import re
@@ -23,21 +23,41 @@ from cmdkit.config import ConfigurationError, Namespace
 from hypershell.core.config import config, blame
 from hypershell.core.thread import Thread
 from hypershell.core.logging import Logger, HOSTNAME
-from hypershell.core.queue import QueueConfig
 from hypershell.core.template import DEFAULT_TEMPLATE
 from hypershell.client import DEFAULT_DELAY, DEFAULT_SIGNALWAIT
 from hypershell.submit import DEFAULT_BUNDLEWAIT
-from hypershell.server import ServerThread, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
+from hypershell.server import ServerThread, DEFAULT_PORT, DEFAULT_BUNDLESIZE, DEFAULT_ATTEMPTS
 
 # public interface
-__all__ = ['run_ssh', 'SSHCluster', 'NodeList']
+__all__ = ['run_ssh', 'SSHCluster', 'NodeList', 'DEFAULT_REMOTE_EXE']
 
 # initialize logger
 log = Logger.with_name('hypershell.cluster')
 
 
+# NOTE: retain old name for remote executable (for now)
+DEFAULT_REMOTE_EXE: Final[str] = 'hyper-shell'
+"""Default remote executable name."""
+
+
 def run_ssh(**options) -> None:
-    """Run remote ssh cluster until completion."""
+    """
+    Run cluster with remote clients via SSH until completion.
+
+    All function arguments are forwarded directly into the
+    :class:`~hypershell.cluster.ssh.SSHCluster` thread.
+
+    Example:
+        >>> from hypershell.cluster import run_ssh
+        >>> run_ssh(
+        ...     nodelist=['a00.cluster', 'a01.cluster', 'a02.cluster'],
+        ...     restart_mode=True, max_retries=2, eager=True,
+        ...     client_timeout=600, task_timeout=300, capture=True
+        ... )
+
+    See Also:
+        - :class:`~hypershell.cluster.remote.SSHCluster`
+    """
     thread = SSHCluster.new(**options)
     try:
         thread.join()
@@ -47,7 +67,113 @@ def run_ssh(**options) -> None:
 
 
 class SSHCluster(Thread):
-    """Run server with individual external ssh clients."""
+    """
+    Run server with individual external ssh clients.
+
+    Args:
+        source (Iterable[str], optional):
+            Any iterable of command-line tasks.
+            A new `source` results in a :class:`~hypershell.submit.SubmitThread` populating
+            either the database or the queue directly depending on `in_memory`.
+
+        nodelist (List[str], required):
+            List of hostnames for launching clients.
+            See also: :class:`~hypershell.cluster.ssh.NodeList`.
+
+        num_tasks (int, optional):
+            Number of parallel task executor threads.
+            See :const:`~hypershell.client.DEFAULT_NUM_TASKS`.
+
+        template (str, optional):
+            Template command pattern.
+            See :const:`~hypershell.client.DEFAULT_TEMPLATE`.
+
+        bundlesize (int optional):
+            Size of task bundles returned to server.
+            See :const:`~hypershell.server.DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int optional):
+            Waiting period in seconds before forcing return of task bundle to server.
+            See :const:`~hypershell.submit.DEFAULT_BUNDLEWAIT`.
+
+        bind (tuple, optional):
+            Bind address for server with port number (default: 0.0.0.0).
+            See :const:`~hypershell.server.DEFAULT_PORT`.
+
+        launcher (str, optional):
+            Launcher program used to bring up clients on other hosts.
+            Defaults to 'ssh'. Use `launcher_args` to provide command options.
+
+        launcher_args (List[str], optional):
+            Additional command-line arguments for launcher program.
+
+        remote_exe (str, optional):
+            Program name or path for remote executable.
+            See :const:`~hypershell.cluster.ssh.DEFAULT_REMOTE_EXE`.
+
+        export_env (bool, optional):
+            If enabled, embed local configuration as environment variables
+            and forward with client launch command to remote hosts.
+
+        in_memory (bool, optional):
+            If True, revert to basic in-memory queue.
+
+        no_confirm (bool, optional):
+            Disable client confirmation of tasks received.
+
+        forever_mode (bool, optional):
+            Regardless of `source`, if enabled schedule forever.
+            Conflicts with `restart_mode` and `in_memory`. Default is `False`.
+
+        restart_mode (bool, optional):
+            If `source` is empty, this option allows for the server to continue
+            with scheduling from the database until complete.
+            Conflicts with `in_memory`. Default is `False`.
+
+        max_retries (int, optional):
+            Number of allowed task retries.
+            See :const:`~hypershell.server.DEFAULT_ATTEMPTS`.
+
+        eager (bool, optional):
+            When enabled tasks are retried immediately ahead scheduling new tasks.
+            See :const:`~hypershell.server.DEFAULT_EAGER_MODE`.
+
+        redirect_failures (IO, optional):
+            Open file-like object to write failed tasks.
+
+        delay_start (float, optional):
+            Delay in seconds before connecting to server.
+            See :const:`~hypershell.client.DEFAULT_DELAY`.
+
+        capture (bool, optional):
+            Isolate task <stdout> and <stderr> in discrete files.
+            Defaults to `False`.
+
+        client_timeout (int, optional):
+            Timeout in seconds before disconnecting from server.
+            By default, the client waits for server tor request disconnect.
+
+        task_timeout (int, optional):
+            Task-level walltime limit in seconds.
+            By default, the client waits indefinitely on tasks.
+
+        task_signalwait (int, optional):
+            Signal escalation waiting period in seconds on task timeout.
+            See :const:`~hypershell.client.DEFAULT_SIGNALWAIT`.
+
+    Example:
+        >>> from hypershell.cluster import SSHCluster
+        >>> cluster = SSHCluster.new(
+        ...     nodelist=['a00.cluster', 'a01.cluster', 'a02.cluster'],
+        ...     restart_mode=True, max_retries=2, eager=True,
+        ...     client_timeout=600, task_timeout=300, capture=True
+        ... )
+        >>> cluster.join()
+
+    See Also:
+        - :class:`~hypershell.server.ServerThread`
+        - :meth:`~hypershell.cluster.ssh.run_ssh`
+    """
 
     server: ServerThread
     clients: List[Popen]
@@ -55,23 +181,23 @@ class SSHCluster(Thread):
 
     def __init__(self: SSHCluster,
                  source: Iterable[str] = None,
+                 nodelist: List[str] = None,
                  num_tasks: int = 1,
                  template: str = DEFAULT_TEMPLATE,
-                 forever_mode: bool = False,
-                 restart_mode: bool = False,
-                 bind: Tuple[str, int] = ('0.0.0.0', QueueConfig.port),
-                 remote_exe: str = 'hyper-shell',
-                 launcher: str = 'ssh',
-                 launcher_args: List[str] = None,
-                 nodelist: List[str] = None,
                  bundlesize: int = DEFAULT_BUNDLESIZE,
                  bundlewait: int = DEFAULT_BUNDLEWAIT,
-                 max_retries: int = DEFAULT_ATTEMPTS,
-                 eager: bool = False,
+                 bind: Tuple[str, int] = ('0.0.0.0', DEFAULT_PORT),
+                 launcher: str = 'ssh',
+                 launcher_args: List[str] = None,
+                 remote_exe: str = DEFAULT_REMOTE_EXE,
+                 export_env: bool = False,
                  in_memory: bool = False,
                  no_confirm: bool = False,
+                 forever_mode: bool = False,
+                 restart_mode: bool = False,
+                 max_retries: int = DEFAULT_ATTEMPTS,
+                 eager: bool = False,
                  redirect_failures: IO = None,
-                 export_env: bool = False,
                  delay_start: float = DEFAULT_DELAY,
                  capture: bool = False,
                  client_timeout: int = None,
@@ -81,10 +207,17 @@ class SSHCluster(Thread):
         if nodelist is None:
             raise AttributeError('Expected nodelist')
         auth = secrets.token_hex(64)
-        self.server = ServerThread(source=source, auth=auth, bundlesize=bundlesize, bundlewait=bundlewait,
-                                   max_retries=max_retries, eager=eager, address=bind,
-                                   forever_mode=forever_mode, restart_mode=restart_mode,
-                                   in_memory=in_memory, no_confirm=no_confirm,
+        self.server = ServerThread(source=source,
+                                   bundlesize=bundlesize,
+                                   bundlewait=bundlewait,
+                                   in_memory=in_memory,
+                                   no_confirm=no_confirm,
+                                   address=bind,
+                                   auth=auth,
+                                   max_retries=max_retries,
+                                   eager=eager,
+                                   forever_mode=forever_mode,
+                                   restart_mode=restart_mode,
                                    redirect_failures=redirect_failures)
         launcher = shlex.split(launcher)
         launcher_env = shlex.split('' if not export_env else compile_env())

@@ -5,12 +5,12 @@ HyperShell v2: Distributed Task Execution for HPC
     :target: https://www.apache.org/licenses/LICENSE-2.0
     :alt: License
 
-.. image:: https://img.shields.io/pypi/v/hyper-shell.svg?style=flat&color=blue
-    :target: https://pypi.org/project/hyper-shell
+.. image:: https://img.shields.io/pypi/v/hypershell.svg?style=flat&color=blue
+    :target: https://pypi.org/project/hypershell
     :alt: PyPI Version
 
-.. image:: https://img.shields.io/pypi/pyversions/hyper-shell.svg?logo=python&logoColor=white&style=flat
-    :target: https://pypi.org/project/hyper-shell
+.. image:: https://img.shields.io/pypi/pyversions/hypershell.svg?logo=python&logoColor=white&style=flat
+    :target: https://pypi.org/project/hypershell
     :alt: Python Versions
 
 .. image:: https://readthedocs.org/projects/hyper-shell/badge/?version=latest&style=flat
@@ -47,9 +47,9 @@ Documentation
 -------------
 
 Documentation is available at `hyper-shell.readthedocs.io <https://hyper-shell.readthedocs.io>`_.
-For basic usage information on the command line use: ``hyper-shell --help``. For a more 
+For basic usage information on the command line use: ``hs --help``. For a more
 comprehensive usage guide on the command line you can view the manual page with 
-``man hyper-shell``.
+``man hs``.
 
 
 Contributions

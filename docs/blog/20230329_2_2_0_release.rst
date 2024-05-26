@@ -42,7 +42,7 @@ Update tasks after submission
 
 For long-running persistent-style deployments it might be desirable to modify a
 task `after` it has already been submitted. We've added a new subcommand for this.
-See ``hyper-shell task update --help``.
+See ``hs task update --help``.
 
 |
 
@@ -63,7 +63,7 @@ Fixes
 
 |
 
-Issue `#12 <https://github.com/glentner/hyper-shell/issues/12>`_
+Issue `#12 <https://github.com/glentner/hypershell/issues/12>`_
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The ``--ssh`` mode for the `cluster` workflow allows for you to specify
@@ -77,7 +77,7 @@ For example, ``some-[00-04,08].local,other-[02,05].local`` will expand correctly
 
 |
 
-Issue `#15 <https://github.com/glentner/hyper-shell/issues/15>`_
+Issue `#15 <https://github.com/glentner/hypershell/issues/15>`_
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 A breaking
