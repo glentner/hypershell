@@ -31,7 +31,7 @@ classifiers = [
 packages = [{include = "hypershell", from = "src"}]
 
 [tool.poetry.scripts]
-hyper-shell = "hypershell:main"
+hyper-shell = "hypershell:main"  # NOTE: do not remove this
 hs = "hypershell:main"
 
 [tool.poetry.dependencies]

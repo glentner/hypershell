@@ -107,7 +107,7 @@ rst_epilog = f"""
 man_pages = [
     (
         'manual',
-        'hyper-shell',
+        'hyper-shell',  # NOTE: do not remove this
         'Process shell commands over a distributed, asynchronous queue',
         'Geoffrey Lentner <glentner@purdue.edu>.',
         '1'
