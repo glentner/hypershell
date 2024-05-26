@@ -69,7 +69,9 @@ from hypershell.core.exceptions import (handle_exception, handle_disconnect,
 
 # public interface
 __all__ = ['run_client', 'ClientThread', 'ClientApp', 'ClientInfo',
+           'DEFAULT_BUNDLESIZE', 'DEFAULT_BUNDLEWAIT', 'DEFAULT_TEMPLATE',
            'DEFAULT_NUM_TASKS', 'DEFAULT_DELAY', 'DEFAULT_SIGNALWAIT',
+           'DEFAULT_HEARTRATE', 'DEFAULT_HOST', 'DEFAULT_PORT', 'DEFAULT_AUTH',
            'set_client_standalone']
 
 # initialize logger
@@ -77,9 +79,9 @@ log = Logger.with_name(__name__)
 
 
 # NOTE:
-#   The UNIX signal facility works on stand-alone server/client, but when running a LocalCluster with
-#   a client as a local thread, the USR1/USR2 signals prevent clients from sending the proper finalization
-#   messages. This flag is set by LocalCluster to prevent greedy client-side shutdown behavior.
+# The UNIX signal facility works on stand-alone server/client, but when running a LocalCluster with
+# a client as a local thread, the USR1/USR2 signals prevent clients from sending the proper finalization
+# messages. This flag is set by LocalCluster to prevent greedy client-side shutdown behavior.
 CLIENT_STANDALONE_MODE: bool = True
 
 
@@ -277,8 +279,11 @@ class ClientSchedulerThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
-DEFAULT_BUNDLESIZE: int = default.client.bundlesize
-DEFAULT_BUNDLEWAIT: int = default.client.bundlewait
+DEFAULT_BUNDLESIZE: Final[int] = default.client.bundlesize
+"""Default size of task bundles."""
+
+DEFAULT_BUNDLEWAIT: Final[int] = default.client.bundlewait
+"""Default waiting period before forcing task bundle push."""
 
 
 class CollectorState(State, Enum):
@@ -408,8 +413,8 @@ class ClientCollectorThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
-# Default seconds to wait between signal escalation (INT, TERM, KILL)
 DEFAULT_SIGNALWAIT: Final[int] = default.task.signalwait
+"""Default signal escalation wait period in seconds."""
 
 
 def task_env(task: Task) -> Dict[str, str]:
@@ -698,7 +703,8 @@ class HeartbeatState(State, Enum):
     HALT = 4
 
 
-DEFAULT_HEARTRATE: int = default.client.heartrate
+DEFAULT_HEARTRATE: Final[int] = default.client.heartrate
+"""Period in seconds to wait between heartbeats."""
 
 
 class ClientHeartbeat(StateMachine):
@@ -793,15 +799,94 @@ class ClientHeartbeatThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
-# Only create one task executor by default
-DEFAULT_NUM_TASKS = 1
+DEFAULT_NUM_TASKS: Final[int] = 1
+"""Default number of task executors per client."""
 
 # We do not delay connecting to the server unless explicitly specified
-DEFAULT_DELAY = 0
+DEFAULT_DELAY: Final[int] = 0
+"""Default delay in seconds on client startup."""
+
+DEFAULT_HOST: Final[str] = QueueConfig.host
+"""Default host for server connection."""
+
+DEFAULT_PORT: Final[int] = QueueConfig.port
+"""Default port for server connection."""
+
+DEFAULT_AUTH: Final[str] = QueueConfig.auth
+"""Default authentication key for server (**DO NOT USE THIS**)."""
 
 
 class ClientThread(Thread):
-    """Manage asynchronous task bundle scheduling and receiving."""
+    """
+    Run client within dedicated thread.
+    Run until either disconnect requested from server or `client_timeout` reached.
+
+    Args:
+        num_tasks (int, optional):
+            Number of parallel task executor threads.
+            See :const:`DEFAULT_NUM_TASKS`.
+
+        bundlesize (int optional):
+            Size of task bundles returned to server.
+            See :const:`DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int optional):
+            Waiting period in seconds before forcing return of task bundle to server.
+            See :const:`DEFAULT_BUNDLEWAIT`.
+
+        address (tuple, optional):
+            Server host address for server with port number.
+            See :const:`DEFAULT_HOST` and :const:`DEFAULT_PORT`.
+
+        auth (str, optional):
+            Server authentication key.
+            See :const:`DEFAULT_AUTH`.
+
+        template (str, optional):
+            Template command pattern. See :const:`DEFAULT_TEMPLATE`.
+
+        redirect_output (IO, optional):
+            Optional file-like object for <stdout> redirect.
+
+        redirect_errors (IO, optional):
+            Optional file-like object for <stderr> redirect.
+
+        heartrate (int, optional):
+            Period in seconds to wait between heartbeats.
+            See :const:`DEFAULT_HEARTRATE`,
+
+        capture (bool, optional):
+            Isolate task <stdout> and <stderr> in discrete files.
+            Defaults to `False`.
+
+        delay_start (float, optional):
+            Delay in seconds before connecting to server.
+            See :const:`DEFAULT_DELAY`.
+
+        no_confirm (bool, optional):
+            Disable client confirmation of tasks received.
+
+        client_timeout (int, optional):
+            Timeout in seconds before disconnecting from server.
+            By default, the client waits for server tor request disconnect.
+
+        task_timeout (int, optional):
+            Task-level walltime limit in seconds.
+            By default, the client waits indefinitely on tasks.
+
+        task_signalwait (int, optional):
+            Signal escalation waiting period in seconds on task timeout.
+            See :const:`DEFAULT_SIGNALWAIT`.
+
+    Example:
+        >>> from hypershell.client import ClientThread
+        >>> client = ClientThread.new(num_tasks=16, address=('localhost', 54321),
+        ...                           auth='my-secret-key', capture=True)
+        >>> client.join()
+
+    See Also:
+        - :meth:`run_client`
+    """
 
     client: QueueClient
     num_tasks: int
@@ -818,8 +903,8 @@ class ClientThread(Thread):
                  num_tasks: int = DEFAULT_NUM_TASKS,
                  bundlesize: int = DEFAULT_BUNDLESIZE,
                  bundlewait: int = DEFAULT_BUNDLEWAIT,
-                 address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port),
-                 auth: str = QueueConfig.auth,
+                 address: Tuple[str, int] = (DEFAULT_HOST, DEFAULT_PORT),
+                 auth: str = DEFAULT_AUTH,
                  template: str = DEFAULT_TEMPLATE,
                  redirect_output: IO = None,
                  redirect_errors: IO = None,
@@ -918,8 +1003,8 @@ class ClientThread(Thread):
 def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
                bundlesize: int = DEFAULT_BUNDLESIZE,
                bundlewait: int = DEFAULT_BUNDLEWAIT,
-               address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port),
-               auth: str = QueueConfig.auth,
+               address: Tuple[str, int] = (DEFAULT_HOST, DEFAULT_PORT),
+               auth: str = DEFAULT_AUTH,
                template: str = DEFAULT_TEMPLATE,
                redirect_output: IO = None,
                redirect_errors: IO = None,
@@ -930,12 +1015,88 @@ def run_client(num_tasks: int = DEFAULT_NUM_TASKS,
                client_timeout: int = None,
                task_timeout: int = None,
                task_signalwait: int = DEFAULT_SIGNALWAIT) -> None:
-    """Run client until disconnect signal received."""
-    thread = ClientThread.new(num_tasks=num_tasks, bundlesize=bundlesize, bundlewait=bundlewait,
-                              address=address, auth=auth, template=template, capture=capture,
-                              redirect_output=redirect_output, redirect_errors=redirect_errors,
-                              heartrate=heartrate, delay_start=delay_start, no_confirm=no_confirm,
-                              client_timeout=client_timeout, task_timeout=task_timeout,
+    """
+    Run client until disconnect signal received or `client_timeout` reached.
+
+    Args:
+        num_tasks (int, optional):
+            Number of parallel task executor threads.
+            See :const:`DEFAULT_NUM_TASKS`.
+
+        bundlesize (int optional):
+            Size of task bundles returned to server.
+            See :const:`DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int optional):
+            Waiting period in seconds before forcing return of task bundle to server.
+            See :const:`DEFAULT_BUNDLEWAIT`.
+
+        address (tuple, optional):
+            Server host address for server with port number.
+            See :const:`DEFAULT_HOST` and :const:`DEFAULT_PORT`.
+
+        auth (str, optional):
+            Server authentication key.
+            See :const:`DEFAULT_AUTH`.
+
+        template (str, optional):
+            Template command pattern. See :const:`DEFAULT_TEMPLATE`.
+
+        redirect_output (IO, optional):
+            Optional file-like object for <stdout> redirect.
+
+        redirect_errors (IO, optional):
+            Optional file-like object for <stderr> redirect.
+
+        heartrate (int, optional):
+            Period in seconds to wait between heartbeats.
+            See :const:`DEFAULT_HEARTRATE`,
+
+        capture (bool, optional):
+            Isolate task <stdout> and <stderr> in discrete files.
+            Defaults to `False`.
+
+        delay_start (float, optional):
+            Delay in seconds before connecting to server.
+            See :const:`DEFAULT_DELAY`.
+
+        no_confirm (bool, optional):
+            Disable client confirmation of tasks received.
+
+        client_timeout (int, optional):
+            Timeout in seconds before disconnecting from server.
+            By default, the client waits for server tor request disconnect.
+
+        task_timeout (int, optional):
+            Task-level walltime limit in seconds.
+            By default, the client waits indefinitely on tasks.
+
+        task_signalwait (int, optional):
+            Signal escalation waiting period in seconds on task timeout.
+            See :const:`DEFAULT_SIGNALWAIT`.
+
+    Example:
+        >>> from hypershell.client import run_client
+        >>> run_client(num_tasks=16, address=('localhost', 54321),
+        ...            auth='my-secret-key', capture=True)
+
+    See Also:
+        - :meth:`ClientThread`
+    """
+    thread = ClientThread.new(num_tasks=num_tasks,
+                              bundlesize=bundlesize,
+                              bundlewait=bundlewait,
+                              address=address,
+                              auth=auth,
+                              template=template,
+                              capture=capture,
+                              redirect_output=redirect_output,
+                              redirect_errors=redirect_errors,
+                              heartrate=heartrate,
+                              delay_start=delay_start,
+                              no_confirm=no_confirm,
+                              client_timeout=client_timeout,
+                              task_timeout=task_timeout,
                               task_signalwait=task_signalwait)
     try:
         thread.join()

@@ -39,7 +39,7 @@ Warning:
 
 # type annotations
 from __future__ import annotations
-from typing import List, Iterable, Iterator, IO, Optional, Dict, Callable, Type
+from typing import List, Iterable, Iterator, IO, Optional, Dict, Callable, Type, Final
 from types import TracebackType
 
 # standard libs
@@ -70,7 +70,7 @@ from hypershell.task import Tag
 
 # public interface
 __all__ = ['submit_from', 'submit_file', 'SubmitThread', 'LiveSubmitThread',
-           'SubmitApp', 'DEFAULT_BUNDLESIZE', 'DEFAULT_BUNDLEWAIT']
+           'SubmitApp', 'DEFAULT_BUNDLESIZE', 'DEFAULT_BUNDLEWAIT', 'DEFAULT_TEMPLATE']
 
 # initialize logger
 log = Logger.with_name(__name__)
@@ -182,8 +182,11 @@ class DatabaseCommitterState(State, Enum):
     HALT = 4
 
 
-DEFAULT_BUNDLESIZE: int = default.submit.bundlesize
-DEFAULT_BUNDLEWAIT: int = default.submit.bundlewait
+DEFAULT_BUNDLESIZE: Final[int] = default.submit.bundlesize
+"""Default size of task bundles."""
+
+DEFAULT_BUNDLEWAIT: Final[int] = default.submit.bundlewait
+"""Default waiting period before forcing task bundle push."""
 
 
 class DatabaseCommitter(StateMachine):
@@ -278,16 +281,51 @@ class DatabaseCommitterThread(Thread):
 
 
 class SubmitThread(Thread):
-    """Manage asynchronous task queueing and submission workload."""
+    """
+    Submit tasks to database within dedicated thread.
+
+    Args:
+        source (Iterable[str]):
+            Any iterable of command-line tasks.
+
+        bundlesize (int, optional):
+            Size of task bundles.
+            See :const:`DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int, optional):
+            Waiting period before forcing task bundle push.
+            See :const:`DEFAULT_BUNDLEWAIT`.
+
+        template (str, optional):
+            Task command-line template pattern.
+            See :const:`DEFAULT_TEMPLATE`.
+
+        tags (Dict[str, JSONValue], optional):
+            Tag dictionary for all submitted tasks.
+
+    Example:
+        >>> from hypershell.submit import SubmitThread
+        >>> submitter = SubmitThread.new(['AAA', 'BBB', 'CCC'],
+        ...                              template='my-script {}'
+        ...                              tags={'site': 'zzz', 'group': 37})
+        >>> submitter.join()
+
+    See Also:
+        - :meth:`submit_from`
+        - :meth:`submit_file`
+    """
 
     source: Iterable[str]
     queue: Queue[Optional[Task]]
     loader: LoaderThread
     committer: DatabaseCommitterThread
 
-    def __init__(self: SubmitThread, source: Iterable[str], bundlesize: int = DEFAULT_BUNDLESIZE,
-                 bundlewait: int = DEFAULT_BUNDLEWAIT, template: str = DEFAULT_TEMPLATE,
-                 tags: Dict[str, str] = None) -> None:
+    def __init__(self: SubmitThread,
+                 source: Iterable[str],
+                 bundlesize: int = DEFAULT_BUNDLESIZE,
+                 bundlewait: int = DEFAULT_BUNDLEWAIT,
+                 template: str = DEFAULT_TEMPLATE,
+                 tags: Dict[str, JSONValue] = None) -> None:
         """Initialize queue and child threads."""
         self.source = source
         self.queue = Queue(maxsize=bundlesize)
@@ -448,7 +486,45 @@ class QueueCommitterThread(Thread):
 
 
 class LiveSubmitThread(Thread):
-    """Manage asynchronous task queueing and submission workload."""
+    """
+    Submit tasks directly to queue within dedicated thread.
+
+    Args:
+        source (Iterable[str]):
+            Any iterable of command-line tasks.
+
+        queue_config (:class:`~hypershell.core.queue.QueueConfig`):
+            QueueConfig instance with `host`, `port`, and `auth`.
+
+        bundlesize (int, optional):
+            Size of task bundles.
+            See :const:`DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int, optional):
+            Waiting period before forcing task bundle push.
+            See :const:`DEFAULT_BUNDLEWAIT`.
+
+        template (str, optional):
+            Task command-line template pattern.
+            See :const:`DEFAULT_TEMPLATE`.
+
+        tags (Dict[str, JSONValue], optional):
+            Tag dictionary for all submitted tasks.
+
+    Example:
+        >>> from hypershell.submit import LiveSubmitThread
+        >>> from hypershell.core.queue import QueueConfig
+        >>> queue_config = QueueConfig(host='localhost', port=54321, auth='my-secret-key')
+        >>> submitter = LiveSubmitThread.new(['AAA', 'BBB', 'CCC'],
+        ...                                  queue_config=queue_config,
+        ...                                  template='my-script {}'
+        ...                                  tags={'site': 'zzz', 'group': 37})
+        >>> submitter.join()
+
+    See Also:
+        - :meth:`submit_from`
+        - :meth:`submit_file`
+    """
 
     source: Iterable[str]
     local: Queue[Optional[Task]]
@@ -509,16 +585,31 @@ class LiveSubmitThread(Thread):
         return self.loader.machine.count
 
 
-def submit_from(source: Iterable[str], queue_config: QueueConfig = None,
-                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-                template: str = DEFAULT_TEMPLATE, tags: Dict[str, JSONValue] = None) -> int:
-    """Submit all task arguments from `source`, return count of submitted tasks."""
+def submit_from(source: Iterable[str],
+                queue_config: QueueConfig = None,
+                bundlesize: int = DEFAULT_BUNDLESIZE,
+                bundlewait: int = DEFAULT_BUNDLEWAIT,
+                template: str = DEFAULT_TEMPLATE,
+                tags: Dict[str, JSONValue] = None) -> int:
+    """
+    Submit all task arguments from `source`, return count of submitted tasks.
+
+    Returns:
+        task_count (int): Count of submitted tasks.
+    """
     if not queue_config:
-        thread = SubmitThread.new(source=source, bundlesize=bundlesize, bundlewait=bundlewait,
-                                  template=template, tags=tags)
+        thread = SubmitThread.new(source=source,
+                                  bundlesize=bundlesize,
+                                  bundlewait=bundlewait,
+                                  template=template,
+                                  tags=tags)
     else:
-        thread = LiveSubmitThread.new(source=source, queue_config=queue_config, template=template,
-                                      bundlesize=bundlesize, bundlewait=bundlewait, tags=tags)
+        thread = LiveSubmitThread.new(source=source,
+                                      queue_config=queue_config,
+                                      template=template,
+                                      bundlesize=bundlesize,
+                                      bundlewait=bundlewait,
+                                      tags=tags)
     try:
         thread.join()
     except Exception:
@@ -528,11 +619,20 @@ def submit_from(source: Iterable[str], queue_config: QueueConfig = None,
         return thread.task_count
 
 
-def submit_file(path: str, queue_config: QueueConfig = None,
-                bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-                template: str = DEFAULT_TEMPLATE, tags: Dict[str, JSONValue] = None, **options) -> int:
-    """Submit tasks by reading argument lines from local file `path`."""
-    with open(path, mode='r', **options) as stream:
+def submit_file(path: str,
+                queue_config: QueueConfig = None,
+                bundlesize: int = DEFAULT_BUNDLESIZE,
+                bundlewait: int = DEFAULT_BUNDLEWAIT,
+                template: str = DEFAULT_TEMPLATE,
+                tags: Dict[str, JSONValue] = None,
+                **file_options) -> int:
+    """
+    Submit all task arguments by reading them from file `path`.
+
+    Returns:
+        task_count (int): Count of submitted tasks.
+    """
+    with open(path, mode='r', **file_options) as stream:
         return submit_from(stream, queue_config=queue_config, bundlesize=bundlesize,
                            bundlewait=bundlewait, template=template, tags=tags)
 

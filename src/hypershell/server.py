@@ -42,7 +42,7 @@ Warning:
 
 # type annotations
 from __future__ import annotations
-from typing import List, Dict, Tuple, Iterable, IO, Optional, Callable, Type
+from typing import List, Dict, Tuple, Iterable, IO, Optional, Callable, Type, Final
 from types import TracebackType
 
 # standard libs
@@ -74,7 +74,8 @@ from hypershell.client import ClientInfo
 
 # public interface
 __all__ = ['serve_from', 'serve_file', 'serve_forever', 'ServerThread', 'ServerApp',
-           'DEFAULT_BUNDLESIZE', 'DEFAULT_ATTEMPTS', ]
+           'DEFAULT_BUNDLESIZE', 'DEFAULT_BUNDLEWAIT', 'DEFAULT_ATTEMPTS',
+           'DEFAULT_EVICT', 'DEFAULT_EAGER_MODE', 'DEFAULT_QUERY_PAUSE']
 
 # initialize logger
 log = Logger.with_name(__name__)
@@ -90,12 +91,20 @@ class SchedulerState(State, Enum):
     HALT = 5
 
 
-# Note: unless specified otherwise for larger problems, a bundle of size one allows
-# for greater concurrency on smaller workloads.
-DEFAULT_BUNDLESIZE: int = default.server.bundlesize
-DEFAULT_ATTEMPTS: int = default.server.attempts
-DEFAULT_EAGER_MODE: bool = default.server.eager
-DEFAULT_QUERY_PAUSE: int = default.server.wait
+# Note:
+#   Unless specified otherwise for larger problems, a bundle of size one allows
+#   for greater concurrency on smaller workloads.
+DEFAULT_BUNDLESIZE: Final[int] = default.server.bundlesize
+"""Default size for task bundles."""
+
+DEFAULT_ATTEMPTS: Final[int] = default.server.attempts
+"""Default number of attempts for task retries."""
+
+DEFAULT_EAGER_MODE: Final[bool] = default.server.eager
+"""When enabled tasks are retried immediately ahead scheduling new tasks."""
+
+DEFAULT_QUERY_PAUSE: Final[int] = default.server.wait
+"""Default polling interval between database queries if no tasks are available."""
 
 
 class Scheduler(StateMachine):
@@ -426,7 +435,8 @@ class HeartbeatState(State, Enum):
     HALT = 7
 
 
-DEFAULT_EVICT: int = default.server.evict
+DEFAULT_EVICT: Final[int] = default.server.evict
+"""Default client eviction period in seconds."""
 
 
 class HeartMonitor(StateMachine):
@@ -597,8 +607,79 @@ class HeartMonitorThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
+DEFAULT_BIND: Final[str] = QueueConfig.host
+"""Default bind address for server."""
+
+DEFAULT_PORT: Final[int] = QueueConfig.port
+"""Default port number for server."""
+
+DEFAULT_AUTH: Final[str] = QueueConfig.auth
+"""Default authentication key for server (**DO NOT USE THIS**)."""
+
+
 class ServerThread(Thread):
-    """Manage asynchronous task bundle scheduling and receiving."""
+    """
+    Run server within dedicated thread.
+
+    Args:
+        source (Iterable[str], optional):
+            Any iterable of command-line tasks.
+            A new `source` results in a :class:`~hypershell.submit.SubmitThread` populating
+            either the database or the queue directly depending on `in_memory`.
+
+        restart_mode (bool, optional):
+            If `source` is empty, this option allows for the server to continue
+            with scheduling from the database until complete.
+            Conflicts with `in_memory`. Default is `False`.
+
+        forever_mode (bool, optional):
+            Regardless of `source`, if enabled schedule forever.
+            Conflicts with `restart_mode` and `in_memory`. Default is `False`.
+
+        bundlesize (int, optional):
+            Size of task bundles. See :const:`DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int, optional):
+            Waiting period before forcing task bundle push.
+            See :const:`~hypershell.submit.DEFAULT_BUNDLEWAIT`.
+
+        in_memory (bool, optional):
+            If True, revert to basic in-memory queue.
+
+        no_confirm (bool, optional):
+            If True, do not check for client confirmation messages.
+
+        address (tuple, optional):
+            Bind address for server with port number.
+            See :const:`DEFAULT_BIND` and :const:`DEFAULT_PORT`.
+
+        auth (str, optional):
+            Server authentication key. See :const:`DEFAULT_AUTH`.
+
+        max_retries (int, optional):
+            Number of allowed task retries. See :const:`DEFAULT_ATTEMPTS`.
+
+        eager (bool, optional):
+            When enabled tasks are retried immediately ahead scheduling new tasks.
+            See :const:`DEFAULT_EAGER_MODE`.
+
+        redirect_failures (bool, optional):
+            Open file descriptor to write failed tasks.
+
+        evict_after (int, optional):
+            Period in seconds to wait before evicting clients that miss heartbeats.
+            See :const:`DEFAULT_EVICT`.
+
+    Example:
+        >>> from hypershell.server import ServerThread
+        >>> server = ServerThread.new(restart_mode=True, auth='my-secret-key')
+        >>> server.join()
+
+    See Also:
+        - :meth:`serve_from`
+        - :meth:`serve_file`
+        - :meth:`serve_forever`
+    """
 
     queue: QueueServer
     submitter: Optional[SubmitThread]
@@ -611,12 +692,18 @@ class ServerThread(Thread):
 
     def __init__(self: ServerThread,
                  source: Iterable[str] = None,
-                 in_memory: bool = False, no_confirm: bool = False,
-                 forever_mode: bool = False, restart_mode: bool = False,
-                 bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-                 address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
-                 max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = False,
-                 redirect_failures: IO = None, evict_after: int = DEFAULT_EVICT) -> None:
+                 bundlesize: int = DEFAULT_BUNDLESIZE,
+                 bundlewait: int = DEFAULT_BUNDLEWAIT,
+                 in_memory: bool = False,
+                 no_confirm: bool = False,
+                 forever_mode: bool = False,
+                 restart_mode: bool = False,
+                 address: Tuple[str, int] = (DEFAULT_BIND, DEFAULT_PORT),
+                 auth: str = DEFAULT_AUTH,
+                 max_retries: int = DEFAULT_ATTEMPTS - 1,
+                 eager: bool = False,
+                 redirect_failures: IO = None,
+                 evict_after: int = DEFAULT_EVICT) -> None:
         """Initialize queue manager and child threads."""
         self.in_memory = in_memory
         self.no_confirm = no_confirm
@@ -715,16 +802,83 @@ class ServerThread(Thread):
         super().stop(wait=wait, timeout=timeout)
 
 
-def serve_from(source: Iterable[str], in_memory: bool = False, no_confirm: bool = False,
-               bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-               address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
-               max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE,
-               redirect_failures: IO = None, restart_mode: bool = False, evict_after: int = DEFAULT_EVICT) -> None:
-    """Run server with the given task `source`, run until complete."""
-    thread = ServerThread.new(source=source, in_memory=in_memory, no_confirm=no_confirm,
-                              bundlesize=bundlesize, bundlewait=bundlewait, address=address, auth=auth,
-                              max_retries=max_retries, eager=eager, restart_mode=restart_mode,
-                              redirect_failures=redirect_failures, evict_after=evict_after)
+def serve_from(source: Iterable[str],
+               restart_mode: bool = False,
+               bundlesize: int = DEFAULT_BUNDLESIZE,
+               bundlewait: int = DEFAULT_BUNDLEWAIT,
+               in_memory: bool = False,
+               no_confirm: bool = False,
+               address: Tuple[str, int] = (DEFAULT_BIND, DEFAULT_PORT),
+               auth: str = DEFAULT_AUTH,
+               max_retries: int = DEFAULT_ATTEMPTS - 1,
+               eager: bool = DEFAULT_EAGER_MODE,
+               redirect_failures: IO = None,
+               evict_after: int = DEFAULT_EVICT) -> None:
+    """
+    Start server with given task `source`, run until complete.
+
+    Args:
+        source (Iterable[str]):
+            Any iterable of command-line tasks.
+
+        restart_mode (bool, optional):
+            If `source` is empty, this option allows for the server to continue
+            with scheduling from the database until complete.
+            Conflicts with `in_memory`. Default is `False`.
+
+        bundlesize (int, optional):
+            Size of task bundles. See :const:`DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int, optional):
+            Waiting period before forcing task bundle push.
+            See :const:`~hypershell.submit.DEFAULT_BUNDLEWAIT`.
+
+        in_memory (bool, optional):
+            If True, revert to basic in-memory queue.
+
+        no_confirm (bool, optional):
+            If True, do not check for client confirmation messages.
+
+        address (tuple, optional):
+            Bind address for server with port number.
+            See :const:`DEFAULT_BIND` and :const:`DEFAULT_PORT`.
+
+        auth (str, optional):
+            Server authentication key. See :const:`DEFAULT_AUTH`.
+
+        max_retries (int, optional):
+            Number of allowed task retries. See :const:`DEFAULT_ATTEMPTS`.
+
+        eager (bool, optional):
+            When enabled tasks are retried immediately ahead scheduling new tasks.
+            See :const:`DEFAULT_EAGER_MODE`.
+
+        redirect_failures (bool, optional):
+            Open file descriptor to write failed tasks.
+
+        evict_after (int, optional):
+            Period in seconds to wait before evicting clients that miss heartbeats.
+            See :const:`DEFAULT_EVICT`.
+
+    Example:
+        >>> from hypershell.server import serve_from
+        >>> serve_from(['echo AA', 'echo BB', 'echo CC'], auth='my-secret-key')
+
+    See Also:
+        - :meth:`serve_file`
+        - :meth:`serve_forever`
+    """
+    thread = ServerThread.new(source=source,
+                              restart_mode=restart_mode,
+                              bundlesize=bundlesize,
+                              bundlewait=bundlewait,
+                              in_memory=in_memory,
+                              no_confirm=no_confirm,
+                              address=address, auth=auth,
+                              max_retries=max_retries,
+                              eager=eager,
+                              redirect_failures=redirect_failures,
+                              evict_after=evict_after)
     try:
         thread.join()
     except Exception:
@@ -732,26 +886,148 @@ def serve_from(source: Iterable[str], in_memory: bool = False, no_confirm: bool 
         raise
 
 
-def serve_file(path: str, in_memory: bool = False, no_confirm: bool = False, redirect_failures: IO = None,
-               bundlesize: int = DEFAULT_BUNDLESIZE, bundlewait: int = DEFAULT_BUNDLEWAIT,
-               address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
-               max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE,
-               evict_after: int = DEFAULT_EVICT, **file_options) -> None:
-    """Run server with tasks from a local file `path`, run until complete."""
+def serve_file(path: str,
+               bundlesize: int = DEFAULT_BUNDLESIZE,
+               bundlewait: int = DEFAULT_BUNDLEWAIT,
+               in_memory: bool = False,
+               no_confirm: bool = False,
+               address: Tuple[str, int] = (DEFAULT_BIND, DEFAULT_PORT),
+               auth: str = DEFAULT_AUTH,
+               max_retries: int = DEFAULT_ATTEMPTS - 1,
+               eager: bool = DEFAULT_EAGER_MODE,
+               redirect_failures: IO = None,
+               evict_after: int = DEFAULT_EVICT,
+               **file_options) -> None:
+    """
+    Run server with tasks from a local file `path`, run until complete.
+
+    Args:
+        path (str):
+            Path to file containing command-line tasks.
+
+        bundlesize (int, optional):
+            Size of task bundles. See :const:`DEFAULT_BUNDLESIZE`.
+
+        bundlewait (int, optional):
+            Waiting period before forcing task bundle push.
+            See :const:`~hypershell.submit.DEFAULT_BUNDLEWAIT`.
+
+        in_memory (bool, optional):
+            If True, revert to basic in-memory queue.
+
+        no_confirm (bool, optional):
+            If True, do not check for client confirmation messages.
+
+        address (tuple, optional):
+            Bind address for server with port number.
+            See :const:`DEFAULT_BIND` and :const:`DEFAULT_PORT`.
+
+        auth (str, optional):
+            Server authentication key. See :const:`DEFAULT_AUTH`.
+
+        max_retries (int, optional):
+            Number of allowed task retries. See :const:`DEFAULT_ATTEMPTS`.
+
+        eager (bool, optional):
+            When enabled tasks are retried immediately ahead scheduling new tasks.
+            See :const:`DEFAULT_EAGER_MODE`.
+
+        redirect_failures (bool, optional):
+            Open file descriptor to write failed tasks.
+
+        evict_after (int, optional):
+            Period in seconds to wait before evicting clients that miss heartbeats.
+            See :const:`DEFAULT_EVICT`.
+
+    Keyword Args:
+        file_options (Any, optional):
+            Forwarded to :meth:`open` function.
+
+    Example:
+        >>> from hypershell.server import serve_file
+        >>> serve_from('/tmp/tasks.in', auth='my-secret-key', bundlesize=10)
+
+    See Also:
+        - :meth:`serve_from`
+        - :meth:`serve_forever`
+    """
     with open(path, mode='r', **file_options) as stream:
-        serve_from(stream, in_memory=in_memory, no_confirm=no_confirm, redirect_failures=redirect_failures,
-                   bundlesize=bundlesize, bundlewait=bundlewait, address=address, auth=auth,
-                   max_retries=max_retries, eager=eager, evict_after=evict_after)
+        serve_from(stream,
+                   bundlesize=bundlesize,
+                   bundlewait=bundlewait,
+                   in_memory=in_memory,
+                   no_confirm=no_confirm,
+                   address=address,
+                   auth=auth,
+                   max_retries=max_retries,
+                   eager=eager,
+                   redirect_failures=redirect_failures,
+                   evict_after=evict_after)
 
 
-def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE, in_memory: bool = False, no_confirm: bool = False,
-                  address: Tuple[str, int] = (QueueConfig.host, QueueConfig.port), auth: str = QueueConfig.auth,
-                  max_retries: int = DEFAULT_ATTEMPTS - 1, eager: bool = DEFAULT_EAGER_MODE,
-                  redirect_failures: IO = None, evict_after: int = DEFAULT_EVICT) -> None:
-    """Run server forever."""
-    thread = ServerThread.new(source=None, in_memory=in_memory, no_confirm=no_confirm,
-                              bundlesize=bundlesize, address=address, auth=auth, redirect_failures=redirect_failures,
-                              forever_mode=True, max_retries=max_retries, eager=eager, evict_after=evict_after)
+def serve_forever(bundlesize: int = DEFAULT_BUNDLESIZE,
+                  in_memory: bool = False,
+                  no_confirm: bool = False,
+                  address: Tuple[str, int] = (DEFAULT_BIND, DEFAULT_PORT),
+                  auth: str = DEFAULT_AUTH,
+                  max_retries: int = DEFAULT_ATTEMPTS - 1,
+                  eager: bool = DEFAULT_EAGER_MODE,
+                  redirect_failures: IO = None,
+                  evict_after: int = DEFAULT_EVICT) -> None:
+    """
+    Run server forever.
+
+    Args:
+        bundlesize (int, optional):
+            Size of task bundles. See :const:`DEFAULT_BUNDLESIZE`.
+
+        in_memory (bool, optional):
+            If True, revert to basic in-memory queue.
+
+        no_confirm (bool, optional):
+            If True, do not check for client confirmation messages.
+
+        address (tuple, optional):
+            Bind address for server with port number.
+            See :const:`DEFAULT_BIND` and :const:`DEFAULT_PORT`.
+
+        auth (str, optional):
+            Server authentication key. See :const:`DEFAULT_AUTH`.
+
+        max_retries (int, optional):
+            Number of allowed task retries. See :const:`DEFAULT_ATTEMPTS`.
+
+        eager (bool, optional):
+            When enabled tasks are retried immediately ahead scheduling new tasks.
+            See :const:`DEFAULT_EAGER_MODE`.
+
+        redirect_failures (bool, optional):
+            Open file descriptor to write failed tasks.
+
+        evict_after (int, optional):
+            Period in seconds to wait before evicting clients that miss heartbeats.
+            See :const:`DEFAULT_EVICT`.
+
+    Example:
+        >>> from hypershell.server import serve_forever
+        >>> serve_forever(address=('0.0.0.0', 54321), auth='my-secret-key',
+        ...               max_retries=2, eager=True, evict_after=600)
+
+    See Also:
+        - :meth:`serve_from`
+        - :meth:`serve_file`
+    """
+    thread = ServerThread.new(source=None,
+                              bundlesize=bundlesize,
+                              in_memory=in_memory,
+                              no_confirm=no_confirm,
+                              address=address,
+                              auth=auth,
+                              redirect_failures=redirect_failures,
+                              forever_mode=True,
+                              max_retries=max_retries,
+                              eager=eager,
+                              evict_after=evict_after)
     try:
         thread.join()
     except Exception:
@@ -787,8 +1063,8 @@ Arguments:
   FILE                        Path to input task file (default: <stdin>).
 
 Options:
-  -H, --bind            ADDR  Bind address (default: {QueueConfig.host}).
-  -p, --port            NUM   Port number (default: {QueueConfig.port}).
+  -H, --bind            ADDR  Bind address (default: {DEFAULT_BIND}).
+  -p, --port            NUM   Port number (default: {DEFAULT_PORT}).
   -k, --auth            KEY   Cryptographic key to secure server.
       --forever               Schedule forever.
       --restart               Start scheduling from last completed task.
@@ -866,15 +1142,28 @@ class ServerApp(Application):
     def run(self: ServerApp) -> None:
         """Run server."""
         if self.forever_mode:
-            serve_forever(bundlesize=self.bundlesize, address=(self.host, self.port), auth=self.auth,
-                          in_memory=self.in_memory, no_confirm=self.no_confirm,
-                          max_retries=self.max_retries, eager=self.eager_mode,
-                          redirect_failures=self.failure_stream, evict_after=config.server.evict)
+            serve_forever(bundlesize=self.bundlesize,
+                          address=(self.host, self.port),
+                          auth=self.auth,
+                          in_memory=self.in_memory,
+                          no_confirm=self.no_confirm,
+                          max_retries=self.max_retries,
+                          eager=self.eager_mode,
+                          redirect_failures=self.failure_stream,
+                          evict_after=config.server.evict)
         else:
-            serve_from(source=self.input_stream, bundlesize=self.bundlesize, bundlewait=self.bundlewait,
-                       address=(self.host, self.port), auth=self.auth, max_retries=self.max_retries,
-                       in_memory=self.in_memory, no_confirm=self.no_confirm, evict_after=config.server.evict,
-                       redirect_failures=self.failure_stream, restart_mode=self.restart_mode, eager=self.eager_mode)
+            serve_from(source=self.input_stream,
+                       bundlesize=self.bundlesize,
+                       bundlewait=self.bundlewait,
+                       address=(self.host, self.port),
+                       auth=self.auth,
+                       in_memory=self.in_memory,
+                       no_confirm=self.no_confirm,
+                       restart_mode=self.restart_mode,
+                       max_retries=self.max_retries,
+                       eager=self.eager_mode,
+                       redirect_failures=self.failure_stream,
+                       evict_after=config.server.evict)
 
     def check_args(self: ServerApp):
         """Fail particular argument combinations."""
