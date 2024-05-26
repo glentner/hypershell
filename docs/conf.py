@@ -56,15 +56,14 @@ master_doc = 'index'
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'material'  # default: sphinx
-pygments_dark_style = "monokai"   # specific to furo theme
+pygments_style = 'paraiso-dark'
+pygments_dark_style = 'dracula'   # NOTE: specific to Furo theme
 
 # If true, the current module name will be prepended to all description
 # unit titles (such as .. function::).
 add_module_names = False
 
 # -- Options for HTML output -------------------------------------------------
-
 html_title = 'HyperShell v2'
 html_baseurl = 'https://hyper-shell.readthedocs.io'
 html_theme = 'furo'
