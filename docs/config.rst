@@ -79,9 +79,9 @@ have enumerated all variations with `Library`, `Logs`, and `Config` in each case
         - ``$HOME/.hypershell/log``
         - ``$HOME/.hypershell/config.toml``
     **Local**
-        - ``$HYPERSHELL_SITE\lib``
-        - ``$HYPERSHELL_SITE\log``
-        - ``$HYPERSHELL_SITE\config.toml``
+        - ``$HYPERSHELL_SITE/lib``
+        - ``$HYPERSHELL_SITE/log``
+        - ``$HYPERSHELL_SITE/config.toml``
 
 |
 
