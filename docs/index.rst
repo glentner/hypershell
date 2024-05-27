@@ -7,13 +7,21 @@ Release v\ |release| (:ref:`Getting Started <getting_started>`)
     :target: https://www.apache.org/licenses/LICENSE-2.0
     :alt: License
 
-.. image:: https://img.shields.io/pypi/v/hypershell.svg?style=flat&color=blue
+.. image:: https://img.shields.io/pypi/v/hyper-shell.svg?style=flat&color=blue
     :target: https://pypi.org/project/hypershell
     :alt: PyPI Version
 
-.. image:: https://img.shields.io/pypi/pyversions/hypershell.svg?logo=python&logoColor=white&style=flat
+.. image:: https://img.shields.io/pypi/pyversions/hyper-shell.svg?logo=python&logoColor=white&style=flat
     :target: https://pypi.org/project/hypershell
     :alt: Python Versions
+
+.. image:: https://readthedocs.org/projects/hypershell/badge/?version=latest
+    :target: https://hypershell.readthedocs.io/en/latest/?badge=latest
+    :alt: Documentation Status
+
+.. image:: https://static.pepy.tech/badge/hyper-shell
+    :target: https://pepy.tech/project/hyper-shell
+    :alt: Downloads
 
 |
 
