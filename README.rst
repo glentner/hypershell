@@ -6,7 +6,7 @@ HyperShell v2: Distributed Task Execution for HPC
     :alt: License
 
 .. image:: https://img.shields.io/pypi/v/hyper-shell.svg?style=flat&color=blue
-    :target: https://pypi.org/project/hypershell
+    :target: https://pypi.org/project/hyper-shell
     :alt: PyPI Version
 
 .. image:: https://img.shields.io/pypi/pyversions/hyper-shell.svg?logo=python&logoColor=white&style=flat
