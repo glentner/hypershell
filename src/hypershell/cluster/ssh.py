@@ -56,7 +56,7 @@ def run_ssh(**options) -> None:
         ... )
 
     See Also:
-        - :class:`~hypershell.cluster.remote.SSHCluster`
+        - :class:`~hypershell.cluster.ssh.SSHCluster`
     """
     thread = SSHCluster.new(**options)
     try:

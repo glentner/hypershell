@@ -180,7 +180,6 @@ class RemoteCluster(Thread):
 
     See Also:
         - :class:`~hypershell.server.ServerThread`
-        - :class:`~hypershell.client.ClientThread`
         - :meth:`~hypershell.cluster.remote.run_cluster`
     """
 
