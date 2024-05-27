@@ -27,7 +27,7 @@ or administrative privileges, we recommend the following.
 
     .. code-block:: shell
 
-        pipx install hypershell
+        pipx install hyper-shell
 
 
 For `macOS` users we can accomplish the same thing with `Homebrew <https://brew.sh>`_.

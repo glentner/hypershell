@@ -65,7 +65,7 @@ add_module_names = False
 
 # -- Options for HTML output -------------------------------------------------
 html_title = 'HyperShell v2'
-html_baseurl = 'https://hyper-shell.readthedocs.io'
+html_baseurl = 'https://hypershell.readthedocs.io'
 html_theme = 'furo'
 
 html_theme_options = {

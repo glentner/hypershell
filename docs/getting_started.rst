@@ -16,14 +16,14 @@ and additional notes and recommendations.
 
     .. code-block:: shell
 
-        pipx install hypershell
+        pipx install hyper-shell
 
 .. tab:: homebrew
 
     .. code-block:: shell
 
         brew tap glentner/tap
-        brew install hypershell
+        brew install hyper-shell
 
 |
 

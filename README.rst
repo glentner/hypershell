@@ -5,17 +5,17 @@ HyperShell v2: Distributed Task Execution for HPC
     :target: https://www.apache.org/licenses/LICENSE-2.0
     :alt: License
 
-.. image:: https://img.shields.io/pypi/v/hypershell.svg?style=flat&color=blue
+.. image:: https://img.shields.io/pypi/v/hyper-shell.svg?style=flat&color=blue
     :target: https://pypi.org/project/hypershell
     :alt: PyPI Version
 
-.. image:: https://img.shields.io/pypi/pyversions/hypershell.svg?logo=python&logoColor=white&style=flat
+.. image:: https://img.shields.io/pypi/pyversions/hyper-shell.svg?logo=python&logoColor=white&style=flat
     :target: https://pypi.org/project/hypershell
     :alt: Python Versions
 
-.. image:: https://readthedocs.org/projects/hyper-shell/badge/?version=latest&style=flat
-    :target: https://hyper-shell.readthedocs.io
-    :alt: Documentation
+.. image:: https://readthedocs.org/projects/hypershell/badge/?version=latest
+    :target: https://hypershell.readthedocs.io/en/latest/?badge=latest
+    :alt: Documentation Status
 
 .. image:: https://static.pepy.tech/badge/hyper-shell
     :target: https://pepy.tech/project/hyper-shell
@@ -46,7 +46,7 @@ the user ergonomics we provide. Novel design elements include but are not limite
 Documentation
 -------------
 
-Documentation is available at `hyper-shell.readthedocs.io <https://hyper-shell.readthedocs.io>`_.
+Documentation is available at `hypershell.readthedocs.io <https://hypershell.readthedocs.io>`_.
 For basic usage information on the command line use: ``hs --help``. For a more
 comprehensive usage guide on the command line you can view the manual page with 
 ``man hs``.
