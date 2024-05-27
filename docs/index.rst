@@ -8,11 +8,11 @@ Release v\ |release| (:ref:`Getting Started <getting_started>`)
     :alt: License
 
 .. image:: https://img.shields.io/pypi/v/hyper-shell.svg?style=flat&color=blue
-    :target: https://pypi.org/project/hypershell
+    :target: https://pypi.org/project/hyper-shell
     :alt: PyPI Version
 
 .. image:: https://img.shields.io/pypi/pyversions/hyper-shell.svg?logo=python&logoColor=white&style=flat
-    :target: https://pypi.org/project/hypershell
+    :target: https://pypi.org/project/hyper-shell
     :alt: Python Versions
 
 .. image:: https://readthedocs.org/projects/hypershell/badge/?version=latest
