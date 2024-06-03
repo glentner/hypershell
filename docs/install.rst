@@ -27,7 +27,15 @@ or administrative privileges, we recommend the following.
 
     .. code-block:: shell
 
-        pipx install hyper-shell
+        pipx install https://github.com/glentner/hypershell/archive/refs/tags/2.5.1.tar.gz
+
+.. warning::
+
+        The `HyperShell` project has transitioned away from using the hyphen in any
+        context (command-line, filesystem, variables, online documentation, etc).
+        But because of a temporary naming issue with the Python Package Index (pypi.org, pip)
+        we have not secured the unhyphenated ``hypershell`` name on the index. So
+        until then, we must install the old package name or from GitHub directly.
 
 
 For `macOS` users we can accomplish the same thing with `Homebrew <https://brew.sh>`_.
@@ -122,7 +130,7 @@ As a library dependency, `HyperShell` can easily be added to your project using 
 tooling you like. For development of `HyperShell` itself, contributors should create their own fork
 of the repository on `GitHub <https://github.com/glentner/hypershell>`_ and clone the fork locally.
 We use `Poetry <https://python-poetry.org>`_ for managing the development environment. The
-``poetry.lock`` file is include in the repository, simply run the following command to initialize
+``poetry.lock`` file is included in the repository, simply run the following command to initialize
 your virtual environment.
 
 .. admonition:: Install development dependencies inside local forked repository
