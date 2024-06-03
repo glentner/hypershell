@@ -247,7 +247,8 @@ class RemoteCluster(Thread):
     def run_with_exceptions(self: RemoteCluster) -> None:
         """Start child threads, wait."""
         self.server.start()
-        time.sleep(2)  # NOTE: give the server a chance to start
+        while not self.server.queue.ready:
+            time.sleep(0.1)
         log.debug(f'Launching clients: {self.client_argv}')
         self.clients = Popen(self.client_argv,
                              stdout=sys.stdout, stderr=sys.stderr,
@@ -707,7 +708,8 @@ class AutoScalingCluster(Thread):
     def run_with_exceptions(self: AutoScalingCluster) -> None:
         """Start child threads, wait."""
         self.server.start()
-        time.sleep(2)  # NOTE: give the server a chance to start
+        while not self.server.queue.ready:
+            time.sleep(0.1)
         self.autoscaler.start()
         self.autoscaler.join()
         self.server.join()

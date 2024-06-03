@@ -55,6 +55,7 @@ class QueueInterface(BaseManager, ABC):
     completed: JoinableQueue[Optional[List[bytes]]]
     heartbeat: JoinableQueue[Optional[bytes]]
     confirmed: JoinableQueue[Optional[bytes]]
+    ready: bool = False
 
     def __init__(self: QueueInterface, config: QueueConfig) -> None:
         """Initialize queue interface."""
@@ -94,6 +95,7 @@ class QueueServer(QueueInterface):
         self.register('_get_heartbeat', callable=self._get_heartbeat)
         self.register('_get_confirmed', callable=self._get_confirmed)
         super().start()
+        self.ready = True
 
     def _get_scheduled(self: QueueServer) -> JoinableQueue[Optional[List[bytes]]]:
         return self.scheduled
@@ -139,6 +141,7 @@ class QueueClient(QueueInterface):
         self.completed = self._get_completed()
         self.heartbeat = self._get_heartbeat()
         self.confirmed = self._get_confirmed()
+        self.ready = True
 
     def __enter__(self: QueueClient) -> QueueClient:
         """Connect to server."""
