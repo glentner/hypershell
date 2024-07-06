@@ -244,6 +244,8 @@ This release adds proper support of the `NO_COLOR <https://no-color.org>`_ conve
 We previously looked for ``HYPERSHELL_NO_COLOR``, however it is better that this option
 not actually be specific to this software and respect the more general configuration.
 
+|
+
 -----
 
 Fixes

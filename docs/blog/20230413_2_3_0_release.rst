@@ -55,6 +55,8 @@ release to allow for the same level of detail in less horizontal space.
 - ``elapsed_ms`` is the elapsed milliseconds (integer).
 - ``elapsed_hms`` is the elapsed time in ``dd-hh:mm:ss.sss`` format.
 
+|
+
 -----
 
 Fixes

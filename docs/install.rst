@@ -27,7 +27,15 @@ or administrative privileges, we recommend the following.
 
     .. code-block:: shell
 
-        pipx install hyper-shell
+        pipx install https://github.com/glentner/hypershell/archive/refs/tags/2.5.2.tar.gz
+
+.. warning::
+
+        The `HyperShell` project has transitioned away from using the hyphen in any
+        context (command-line, filesystem, variables, online documentation, etc).
+        But because of a temporary naming issue with the Python Package Index (pypi.org, pip)
+        we have not secured the unhyphenated ``hypershell`` name on the index. So
+        until then, we must install the old package name or from GitHub directly.
 
 
 For `macOS` users we can accomplish the same thing with `Homebrew <https://brew.sh>`_.
@@ -63,11 +71,11 @@ manual page. Some desired runtime, ``python3.12``, is already loaded.
 
     .. code-block:: shell
 
-        mkdir -p /apps/x86_64-any/hypershell/2.5.1
-        cd /apps/x86_64-any/hypershell/2.5.1
+        mkdir -p /apps/x86_64-any/hypershell/2.5.2
+        cd /apps/x86_64-any/hypershell/2.5.2
 
         mkdir -p bin share
-        git clone --depth 1 --branch 2.5.1 https://github.com/glentner/hypershell ./src
+        git clone --depth 1 --branch 2.5.2 https://github.com/glentner/hypershell ./src
 
         python3.12 -m venv libexec
         libexec/bin/pip install ./src
@@ -80,13 +88,13 @@ manual page. Some desired runtime, ``python3.12``, is already loaded.
 Based on this installation, a simple `LMOD <https://lmod.readthedocs.io/en/latest/>`_
 configuration file might then be:
 
-.. admonition:: Module file definition (e.g., /etc/module/x86_64-any/hypershell/2.5.1.lua)
+.. admonition:: Module file definition (e.g., /etc/module/x86_64-any/hypershell/2.5.2.lua)
     :class: note
 
     .. code-block:: lua
 
         local appname = "hypershell"
-        local version = "2.5.1"
+        local version = "2.5.2"
         local appsdir = "/apps/x86_64-any"
         local modroot = pathJoin(appsdir, appname, version)
 
@@ -122,7 +130,7 @@ As a library dependency, `HyperShell` can easily be added to your project using 
 tooling you like. For development of `HyperShell` itself, contributors should create their own fork
 of the repository on `GitHub <https://github.com/glentner/hypershell>`_ and clone the fork locally.
 We use `Poetry <https://python-poetry.org>`_ for managing the development environment. The
-``poetry.lock`` file is include in the repository, simply run the following command to initialize
+``poetry.lock`` file is included in the repository, simply run the following command to initialize
 your virtual environment.
 
 .. admonition:: Install development dependencies inside local forked repository

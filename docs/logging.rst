@@ -32,14 +32,14 @@ All severity levels are shown and described below in order of highest to lowest 
     system or because the program was sent an *interrupt* signal.
 
 **ERROR**
-    These messages are emitted when a fault of some kind has occurred by the program does not
-    need to halt. For example, when attempting to terminate a task that has exceeded the specified walltime
-    limit which fails to actually halt.
+    These messages are emitted when a fault has occurred but the program does not
+    need to halt. For example, when the program attempts to terminate a running task that has exceeded
+    the configured walltime limit and that task fails to actually halt.
 
 **WARNING**
     These messages are emitted in many circumstances where a notice to the user is warranted
-    but not necessarily because of a failure in the program. For example, a non-zero exit status from one of
-    the tasks is anticipated behavior and worth of notifying the user but not a fault in *HyperShell*.
+    but not because of a failure in the program. For example, a non-zero exit status from one of
+    the tasks is expected behavior but warrants notifying the user.
 
 **INFO**
     These messages are only emitted by clients at the start of a task. The idea is that under
@@ -48,7 +48,7 @@ All severity levels are shown and described below in order of highest to lowest 
 **DEBUG**
     These messages are emitted for any number of events within the operations of the system.
     Anytime an action occurs, a *DEBUG* message is emitted. For example, server-side and client-side
-    task bundle operations, thread start and stop, and program state transitions.
+    task bundle operations, thread start and stop, and program transitions.
 
 **TRACE**
     These messages are emitted for higher frequency activity not included in *DEBUG*. These
