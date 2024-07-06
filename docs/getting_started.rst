@@ -20,7 +20,7 @@ and additional notes and recommendations.
 
     .. code-block:: shell
 
-        pipx install https://github.com/glentner/hypershell/archive/refs/tags/2.5.1.tar.gz
+        pipx install https://github.com/glentner/hypershell/archive/refs/tags/2.5.2.tar.gz
 
 .. tab:: homebrew
 

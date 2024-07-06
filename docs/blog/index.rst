@@ -5,14 +5,27 @@ Blog
 
 A place for announcements, release notes, thoughts and ideas for the project.
 
+
 -----
 
-:ref:`Release Notes (v2.5.1) <20240518_2_5_0_release>`
+:ref:`Release Notes (v2.5.2) <20240706_2_5_2_release>`
+------------------------------------------------------
+
+`July 7, 2024`
+
+The v2.5.2 release includes important bug fixes and minor improvements.
+
+- Fix signal handling regression on Windows
+- Improve start-time performance
+
+-----
+
+:ref:`Release Notes (v2.5.0) <20240518_2_5_0_release>`
 ------------------------------------------------------
 
 `May 18, 2024`
 
-The v2.5.1 release includes major new features along with numerous fixes and improvements.
+The v2.5.0 release includes major new features along with numerous fixes and improvements.
 
 - New command-line program name.
 - Task update command capabilities.
@@ -65,6 +78,7 @@ a few quality of life improvements, and a fix for SSH-mode.
     :hidden:
     :maxdepth: 1
 
+    20240706_2_5_2_release
     20240518_2_5_0_release
     20230602_2_4_0_release
     20230413_2_3_0_release
