@@ -27,7 +27,7 @@ or administrative privileges, we recommend the following.
 
     .. code-block:: shell
 
-        pipx install https://github.com/glentner/hypershell/archive/refs/tags/2.5.1.tar.gz
+        pipx install https://github.com/glentner/hypershell/archive/refs/tags/2.5.2.tar.gz
 
 .. warning::
 
@@ -71,11 +71,11 @@ manual page. Some desired runtime, ``python3.12``, is already loaded.
 
     .. code-block:: shell
 
-        mkdir -p /apps/x86_64-any/hypershell/2.5.1
-        cd /apps/x86_64-any/hypershell/2.5.1
+        mkdir -p /apps/x86_64-any/hypershell/2.5.2
+        cd /apps/x86_64-any/hypershell/2.5.2
 
         mkdir -p bin share
-        git clone --depth 1 --branch 2.5.1 https://github.com/glentner/hypershell ./src
+        git clone --depth 1 --branch 2.5.2 https://github.com/glentner/hypershell ./src
 
         python3.12 -m venv libexec
         libexec/bin/pip install ./src
@@ -88,13 +88,13 @@ manual page. Some desired runtime, ``python3.12``, is already loaded.
 Based on this installation, a simple `LMOD <https://lmod.readthedocs.io/en/latest/>`_
 configuration file might then be:
 
-.. admonition:: Module file definition (e.g., /etc/module/x86_64-any/hypershell/2.5.1.lua)
+.. admonition:: Module file definition (e.g., /etc/module/x86_64-any/hypershell/2.5.2.lua)
     :class: note
 
     .. code-block:: lua
 
         local appname = "hypershell"
-        local version = "2.5.1"
+        local version = "2.5.2"
         local appsdir = "/apps/x86_64-any"
         local modroot = pathJoin(appsdir, appname, version)
 
