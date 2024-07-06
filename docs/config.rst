@@ -47,9 +47,9 @@ have enumerated all variations with `Library`, `Logs`, and `Config` in each case
         - ``%APPDATA%\HyperShell\Logs``
         - ``%APPDATA%\HyperShell\Config.toml``
     **Local**
-        - ``%MYAPP_SITE%\Library``
-        - ``%MYAPP_SITE%\Logs``
-        - ``%MYAPP_SITE%\Config.toml``
+        - ``%HYPERSHELL_SITE%\Library``
+        - ``%HYPERSHELL_SITE%\Logs``
+        - ``%HYPERSHELL_SITE%\Config.toml``
 
 |
 
