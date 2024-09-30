@@ -557,7 +557,6 @@ class Task(Entity):
 # Indices for efficient queries
 index_scheduled = Index('task_scheduled_index', Task.schedule_time)
 index_retried = Index('task_retries_index', Task.exit_status, Task.retried)
-index_client_completed = Index('task_client_completed_index', Task.client_id, Task.completion_time)
 
 
 class Client(Entity):
