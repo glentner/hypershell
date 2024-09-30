@@ -77,6 +77,7 @@ def from_json_type(value: JSONValue) -> Union[JSONValue, VT]:
 UUID = Text().with_variant(POSTGRES_UUID(as_uuid=False), 'postgresql')
 TEXT = Text()
 INTEGER = Integer()
+SMALL_INTEGER = Integer().with_variant(SMALLINT, 'postgresql')
 DATETIME = DateTime(timezone=True)
 BOOLEAN = Boolean()
 JSON = _JSON().with_variant(POSTGRES_JSON(), 'postgresql')
@@ -211,12 +212,12 @@ class Task(Entity):
     command: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
     start_time: Mapped[Optional[datetime]] = mapped_column(DATETIME, nullable=True)
     completion_time: Mapped[Optional[datetime]] = mapped_column(DATETIME, nullable=True)
-    exit_status: Mapped[Optional[int]] = mapped_column(INTEGER, nullable=True)
+    exit_status: Mapped[Optional[int]] = mapped_column(SMALL_INTEGER, nullable=True)
 
     outpath: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
     errpath: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
 
-    attempt: Mapped[int] = mapped_column(INTEGER, nullable=False)
+    attempt: Mapped[int] = mapped_column(SMALL_INTEGER, nullable=False)
     retried: Mapped[bool] = mapped_column(BOOLEAN, nullable=False)
 
     waited: Mapped[Optional[int]] = mapped_column(INTEGER, nullable=True)
