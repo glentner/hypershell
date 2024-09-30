@@ -20,7 +20,7 @@ from sqlalchemy.orm import Query, DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.types import Integer, DateTime, Text, Boolean, JSON as _JSON
-from sqlalchemy.dialects.postgresql import UUID as POSTGRES_UUID, JSONB as POSTGRES_JSON
+from sqlalchemy.dialects.postgresql import SMALLINT, UUID as POSTGRES_UUID, JSONB as POSTGRES_JSON
 
 # internal libs
 from hypershell.core.logging import Logger, HOSTNAME, INSTANCE
@@ -180,6 +180,26 @@ class Entity(DeclarativeBase):
     def update(cls: Type[Entity], id: str, **changes) -> None:
         """Update by `id` with `changes`."""
         cls.update_all([{'id': id, **changes}, ])
+
+    @classmethod
+    def delete_all(cls: Type[Entity], items: List[Entity]) -> List[Entity]:
+        """Delete records from database."""
+        try:
+            for item in items:
+                Session.delete(item)
+            Session.commit()
+        except Exception:
+            Session.rollback()
+            raise
+        else:
+            for item in items:
+                log.trace(f'Deleted {cls.__tablename__} ({item.id})')  # noqa: id not defined on base
+            return items
+
+    @classmethod
+    def delete(cls: Type[Entity], item: Entity) -> None:
+        """Delete single item from database."""
+        cls.delete_all([item, ])
 
     @classmethod
     def from_id(cls: Type[Entity], id: str) -> Entity:

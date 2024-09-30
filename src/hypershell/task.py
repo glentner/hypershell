@@ -860,7 +860,8 @@ class TaskUpdateApp(Application, SearchableMixin):
                 print(f'Stopping (invalid response: "{response}")')
                 return
 
-        if self.delete_mode:
+        # Delete is handled later if a --limit is used with search
+        if self.delete_mode and self.limit is None:
             query.delete()
             Session.commit()
             log.info(f'Deleted {count} tasks')
@@ -895,25 +896,27 @@ class TaskUpdateApp(Application, SearchableMixin):
             # We cannot apply an UPDATE query with a LIMIT field
             # The alternative is to pull the data and batch the update
             # While terribly inefficient at least it has a LIMIT
+            tasks = query.all()
+            tasks_it = iter(tasks)
+            if self.delete_mode:
+                while batch := tuple(itertools.islice(tasks_it, 100)):
+                    Task.delete_all(list(batch))
             if field_updates:
-                tasks = query.all()
-                tasks_it = iter(tasks)
                 while batch := tuple(itertools.islice(tasks_it, 100)):
                     Task.update_all([{'id': task.id, **field_updates} for task in batch])
             if tag_updates:
-                tasks = query.all()
-                tasks_it = iter(tasks)
                 while batch := tuple(itertools.islice(tasks_it, 100)):
                     Task.update_all([{'id': task.id, 'tag': {**task.tag, **tag_updates}} for task in batch])
             if self.remove_tag:
-                tasks = query.all()
-                tasks_it = iter(tasks)
                 while batch := tuple(itertools.islice(tasks_it, 100)):
                     Task.update_all([
                         {'id': task.id, 'tag': self.drop_items(task.tag, *self.remove_tag)}
                         for task in batch
                     ])
-            log.info(f'Updated {count} tasks')
+            if self.delete_mode:
+                log.info(f'Deleted {count} tasks')
+            else:
+                log.info(f'Updated {count} tasks')
             return
 
         if field_updates:
@@ -1115,7 +1118,7 @@ class Tag:
             return cls(name=tag_part[0].strip())
         else:
             name, value = tag_part[0].strip(), smart_coerce(tag_part[1].strip())
-            Task.ensure_valid_tag({name: value})
+            # Task.ensure_valid_tag({name: value})
             return cls(name, value)
 
     @classmethod
