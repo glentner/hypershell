@@ -1,5 +1,5 @@
-HyperShell
-==========
+What is HyperShell?
+===================
 
 Release v\ |release| (:ref:`Getting Started <getting_started>`)
 
@@ -7,21 +7,21 @@ Release v\ |release| (:ref:`Getting Started <getting_started>`)
     :target: https://www.apache.org/licenses/LICENSE-2.0
     :alt: License
 
-.. image:: https://img.shields.io/pypi/v/hyper-shell.svg?style=flat&color=blue
-    :target: https://pypi.org/project/hyper-shell
-    :alt: PyPI Version
+.. image:: https://img.shields.io/github/v/release/glentner/hypershell?sort=semver
+    :target: https://github.com/glentner/hypershell/releases
+    :alt: Github Release
 
 .. image:: https://img.shields.io/pypi/pyversions/hyper-shell.svg?logo=python&logoColor=white&style=flat
     :target: https://pypi.org/project/hyper-shell
     :alt: Python Versions
 
-.. image:: https://readthedocs.org/projects/hypershell/badge/?version=latest
-    :target: https://hypershell.readthedocs.io/en/latest/?badge=latest
-    :alt: Documentation Status
-
 .. image:: https://static.pepy.tech/badge/hyper-shell
     :target: https://pepy.tech/project/hyper-shell
     :alt: Downloads
+
+.. image:: https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg
+    :target: https://www.contributor-covenant.org/version/2/1/code_of_conduct/
+    :alt: Code of Conduct
 
 |
 
@@ -42,165 +42,80 @@ the user ergonomics we provide. Novel design elements include but are not limite
 * **Database in-the-loop:** run in-memory for quick, ad-hoc workloads. Otherwise,
   include a database for persistence, recovery when restarting, and search.
 
+-------------------
+
+Usage
+-----
+
+|
+
+*HyperShell* is primarily a :ref:`command-line <cli>` program.
+Most users will operate the ``hs cluster`` in a start-to-finish workflow scenario much
+like people tend to do with alternatives like ``xargs``, `GNU Parallel <https://gnu.org/software/parallel>`_,
+or HPC-specific tools like `ParaFly <https://parafly.sourceforge.net>`_ or
+`TaskFarmer <https://docs.nersc.gov/jobs/workflow/taskfarmer/>`_ (NERSC-only) or
+`Launcher <https://tacc.utexas.edu/research/tacc-research/launcher/>`_ (TACC).
+
+.. admonition:: Basic usage
+    :class: note
+
+    .. code-block:: shell
+
+        seq 1000000 | hs cluster -t 'echo {}' -N64 --ssh 'a[00-32].cluster' > task.out
+
+
+See :ref:`getting started <getting_started>` for features and additional usage examples.
+Specific documentation is available for :ref:`configuration <config>` management,
+:ref:`database <database>` setup, :ref:`logging <logging>`, and using :ref:`templates <templates>`.
+
+The *HyperShell* :ref:`server <cli_server>` can operate in standalone mode along side the database.
+Zero or more :ref:`client <cli_client>` instances may come and go as available and process tasks.
+When deployed in this fashion, the cluster can scale out as necessary as well as scale down to zero.
+This strategy is appropriate for creating shared, autoscaling, high-throughput pipelines for
+facilities with multiple users.
+
+*HyperShell* also provides a :ref:`library <library>` interface for Python applications to embed components.
+Developers can add *HyperShell* to their project to provide all of this functionality within their own
+applications or Python-based workflows.
 
 -------------------
 
-Features
+Support
+-------
+
+|
+
+Join the `Discord <https://discord.gg/wmv5gyUfkN>`_ server to post questions, discuss your project,
+share with the community, keep in touch with announcements and upcoming events!
+
+*HyperShell* is an open-source project developed on `GitHub <https://github.com/glentner/hypershell>`_.
+If you find bugs or issues with the software please create an `Issue <https://github.com/glentner/hypershell/issues>`_.
+Contributions are welcome in the form of `Pull requests <https://github.com/glentner/hypershell/pulls>`_
+for bug fixes, documentation, and minor feature improvements.
+
+-------------------
+
+License
+-------
+
+|
+
+*HyperShell* is released under the
+`Apache Software License (v2) <https://www.apache.org/licenses/LICENSE-2.0>`_.
+
+    .. include:: _include/license.rst
+
+-------------------
+
+Citation
 --------
 
 |
 
-**Simple, Scalable**
+If this software has helped facilitate your research please consider citing us.
 
-Take a listing of shell commands and process them in parallel.
-In this example, we use the ``-t`` option to specify a template for the input arguments
-which are not fully formed shell commands. Larger workloads will want to use a database
-for managing tasks and scheduling. Without having configured the database the program
-will manage tasks entirely within memory.
+.. include:: _include/citation.rst
 
-.. admonition:: Hello World
-    :class: note
-
-    .. code-block:: shell
-
-        seq 4 | hs cluster -t 'echo {}'
-
-    .. details:: Output
-
-        .. code-block:: none
-
-            WARNING [hypershell.server] No database configured - automatically disabled
-            0
-            1
-            2
-            4
-
-|
-
-Scale out to remote servers with SSH and even define *groups* in your configuration file.
-By default, all command `stdout` and `stderr` are joined and written out directly.
-Capture individual task `stdout` and `stderr` with ``--capture``.
-Set the :ref:`logging <logging>` level to ``INFO`` to see each task start or ``DEBUG`` to
-see additional detail about what is running, where, and when.
-
-.. admonition:: Distributed Cluster over SSH
-    :class: note
-
-    .. code-block:: shell
-
-        hs cluster tasks.in -N16 --ssh-group=xyz --capture
-
-    .. details:: Logs
-
-        .. code-block:: none
-
-            2022-03-14 12:29:19.659 a00.cluster.xyz   INFO [hypershell.client] Running task (5fb74a31-fc38-4535-8b45-c19bc3dbedee)
-            2022-03-14 12:29:19.665 a01.cluster.xyz   INFO [hypershell.client] Running task (c1d32c32-3e76-48e0-b2c3-9420ea20b41b)
-            2022-03-14 12:29:19.668 a02.cluster.xyz   INFO [hypershell.client] Running task (4a6e19ec-d325-468f-a55b-03a797eb51d5)
-            2022-03-14 12:29:19.671 a03.cluster.xyz   INFO [hypershell.client] Running task (09587f55-4b50-4e2b-a528-55c60667b62a)
-            2022-03-14 12:29:19.674 a04.cluster.xyz   INFO [hypershell.client] Running task (1336f778-c9ab-4111-810e-229d572be62e)
-
-|
-
-Use the provided launcher on HPC clusters to bring up workers within your job allocation.
-Specify which program to use with the ``--launcher`` option. Achieve higher throughput by
-aggregating tasks in bundles with ``-b``, ``--bundlesize``. Add a database configuration to
-allow for retries with ``-r``, ``--max-retries``. Using a negative value for ``--delay-start``
-causes the remote clients to sleep some random interval in seconds up to that value. In this
-example we stagger the launch process over one minute.
-
-.. admonition:: Distributed Cluster over Slurm
-    :class: note
-
-    .. code-block:: shell
-
-        hs cluster tasks.in -N128 -b128 --launcher=srun --max-retries=2 --delay-start=-60 >task.out
-
-    .. details:: Logs
-
-        .. code-block:: none
-
-            2022-03-14 12:29:19.659 a00.cluster.xyz   INFO [hypershell.client] Running task (5fb74a31-fc38-4535-8b45-c19bc3dbedee)
-            2022-03-14 12:29:19.665 a01.cluster.xyz   INFO [hypershell.client] Running task (c1d32c32-3e76-48e0-b2c3-9420ea20b41b)
-            2022-03-14 12:29:19.668 a02.cluster.xyz   INFO [hypershell.client] Running task (4a6e19ec-d325-468f-a55b-03a797eb51d5)
-            2022-03-14 12:29:19.671 a03.cluster.xyz   INFO [hypershell.client] Running task (09587f55-4b50-4e2b-a528-55c60667b62a)
-            2022-03-14 12:29:19.674 a04.cluster.xyz   INFO [hypershell.client] Running task (1336f778-c9ab-4111-810e-229d572be62e)
-
-
-|
-
-**Flexible**
-
-One of several novel features of `HyperShell`, is the ability to independently
-stand up the *server* on one machine and then connect to that server using a *client* from
-a different environment.
-
-Start the server with a bind address of ``0.0.0.0`` to allow remote connections.
-The server schedules tasks on a distributed queue. It is recommended that you protect your instance
-with a private *key* (``-k/--auth``).
-
-.. admonition:: Server
-    :class: note
-
-    .. code-block:: shell
-
-        hs server --forever --bind '0.0.0.0' --auth '<AUTHKEY>'
-
-
-Connect to the running server from a different host (even from a different platform, e.g., Windows).
-You can connect with any number of clients from any number of hosts. The separate client connections
-will each pull tasks off the queue asynchronously, balancing the load.
-
-.. admonition:: Client
-    :class: note
-
-    .. code-block:: shell
-
-        hs client --host '<HOSTNAME>' --auth '<AUTHKEY>' --capture
-
-|
-
-**Dynamic**
-
-Individual task metadata is exposed to tasks as environment variables. For example, ``TASK_ID`` provides
-the UUID for the task, and ``TASK_SUBMIT_TIME`` records the date and time the task was submitted.
-
-Any environment variable defined with the ``HYPERSHELL_EXPORT_`` prefix will be injected into
-the environment of each task, *sans prefix*.
-
-Use ``-t`` (short for ``--template``) to expand a template; ``{}`` can be used to insert the incoming
-task arguments (alternatively, use ``TASK_ARGS``). Be sure to use single quotes to delay the variable
-expansion. Many meta-patterns are supported (see full overview of :ref:`templates <templates>`):
-
-* File operations (e.g., the basename ``'{/}'``)
-* Slicing on whitespace (e.g., first ``'{[0]}'``, first three ``'{[:3]}'``, every other ``'{[::2]}'``)
-* Sub-commands (e.g., ``'{% dirname @ %}'``)
-* Lambda expressions in *x* (e.g., ``'{= x + 1 =}'``)
-
-.. admonition:: Templates
-    :class: note
-
-    .. code-block:: shell
-
-        hs cluster tasks.in -N12 -t './some_program.py {} >outputs/{/-}.out'
-
-Capturing `stdout` and `stderr` is supported directly in fact with the ``--capture`` option.
-See the full documentation for environment variables under :ref:`configuration <config>`.
-
-Add arbitrary tags to one or whole collections of tasks to track additional context.
-
-.. admonition:: Include user-defined tags
-    :class: note
-
-    .. code-block:: shell
-
-        hs submit tasks.in --tag prod instr:B12 site:us-west-1 batch:12
-
-    .. details:: Logs
-
-        .. code-block:: none
-
-            INFO [hypershell.submit] Submitted 20 tasks
 
 |
 
@@ -237,16 +152,3 @@ Add arbitrary tags to one or whole collections of tasks to track additional cont
 
     blog/index
     roadmap
-
-.. toctree::
-    :hidden:
-    :caption: Development
-
-    contributing
-    license
-
-.. toctree::
-    :hidden:
-    :caption: Supplemental
-
-    citation
