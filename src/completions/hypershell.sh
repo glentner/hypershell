@@ -125,6 +125,11 @@ function _hs_config_set()
 				server.bind)
 					COMPREPLY=($(compgen -W "localhost 127.0.0.1 0.0.0.0" -- "${current}"))
 					;;
+        server.auth)
+          # Generate random 16-digit key
+          local authkey=$(cat /dev/urandom | head -c 1024 | md5sum | head -c 16 | tr '[:lower:]' '[:upper:]')
+          COMPREPLY=($(compgen -W "${authkey}" -- "${current}"))
+          ;;
 				autoscale.policy)
 					COMPREPLY=($(compgen -W "fixed dynamic" -- "${current}"))
 					;;
