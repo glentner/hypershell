@@ -6,7 +6,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import List, Dict, Any, Type, TypeVar, Union, Optional
+from typing import List, Dict, Tuple, Any, Type, TypeVar, Union, Optional
 
 # standard libs
 import re
@@ -26,6 +26,7 @@ from sqlalchemy.dialects.postgresql import SMALLINT, UUID as POSTGRES_UUID, JSON
 from hypershell.core.logging import Logger, HOSTNAME, INSTANCE
 from hypershell.core.heartbeat import Heartbeat
 from hypershell.core.types import JSONValue
+from hypershell.core.tag import Tag
 from hypershell.data.core import schema, Session
 
 # public interface
@@ -298,30 +299,53 @@ class Task(Entity):
             tag: Dict[str, JSONValue] = None, **other) -> Task:
         """Create a new Task."""
         cls.ensure_valid_tag(tag)
+        args, inline_tags = cls.split_argline(args)
+        tag = {**(tag or {}), **inline_tags}
         return Task(id=str(gen_uuid()), args=str(args).strip(),
                     submit_id=INSTANCE, submit_host=HOSTNAME, submit_time=datetime.now().astimezone(),
-                    attempt=attempt, retried=retried, tag=(tag or {}), **other)
+                    attempt=attempt, retried=retried, tag=tag, **other)
+
+    @classmethod
+    def split_argline(cls: Type[Task], args: str) -> Tuple[str, Dict[str, JSONValue]]:
+        """Separate input args from possible inline tag comment."""
+        if match := re.search(r'#\s*HYPERSHELL:?', args):
+            try:
+                tags = Tag.parse_cmdline_list(args[match.end():].strip().split())
+                cls.ensure_valid_tag(tags)
+            except (ValueError, TypeError) as error:
+                raise RuntimeError(f'Failed to parse inline tags ({error}, from: "{args}")') from error
+            args = args[:match.start()]
+            return args, tags
+        else:
+            return args, {}
 
     @staticmethod
-    def ensure_valid_tag(tag: Dict[str, JSONValue]) -> None:
+    def ensure_valid_tag(tag: Optional[Dict[str, JSONValue]]) -> None:
         """Check tag dictionary and raise if invalid."""
-        if not isinstance(tag, (dict, type(None))):
-            raise TypeError('Expected dict or None for tag data')
         if tag is None:
             return
+        if not isinstance(tag, dict):
+            raise TypeError('Expected dict for tag data')
         for key, value in tag.items():
             if not isinstance(key, str):
                 raise TypeError(f'Tag key, {key} ({type(key)}) is not string')
+            if len(key.strip()) == 0:
+                raise ValueError(f'Tag key was empty, "{key}:{value}"')
+            if len(key.strip()) > 120:
+                raise ValueError(f'Tag key size ({len(value)}) exceeds 120 characters ({key}:{value})')
+            if not re.match(r'^[A-Za-z0-9_.+-]+$', key):
+                raise ValueError(f'Tag key must only contain alphanumerics and basic symbols [+._-]: '
+                                 f'"{key}:{value}"')
             if not isinstance(value, (str, int, float, bool, type(None))):
                 raise TypeError(f'Invalid type for tag value, {type(value)})')
             if isinstance(value, str):
                 if not value.strip():
                     return  # Empty value is a naked tag (no value).
                 if len(value) > 120:
-                    raise ValueError(f'Tag size ({len(value)}) exceeds 120 characters ({key}: {value})')
+                    raise ValueError(f'Tag value size ({len(value)}) exceeds 120 characters ({key}:{value})')
                 if not re.match(r'^[A-Za-z0-9_.+-]+$', value):
-                    raise ValueError(f'Tag must only contain alphanumerics and basic symbols [+._-]: '
-                                     f'({key}: {value})')
+                    raise ValueError(f'Tag value must only contain alphanumerics and basic symbols [+._-]: '
+                                     f'"{key}:{value}"')
 
     @classmethod
     def select_new(cls: Type[Task], limit: int) -> List[Task]:

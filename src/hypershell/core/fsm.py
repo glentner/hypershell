@@ -56,8 +56,10 @@ class StateMachine(ABC):
                 next_state = action()
                 # PERF: self.__perf_data[previous_state.value] += perf_counter() - self.__perf_counter
         except Exception as error:
-            log.critical(f'Uncaught exception from {self.__class__}')
-            write_traceback(error, logger=log, module=__name__)
+            # NOTE: Only non-RuntimeError instances are "unexpected"
+            if not isinstance(error, RuntimeError):
+                log.critical(f'Uncaught exception from {self.__class__}')
+                write_traceback(error, logger=log, module=__name__)
             raise
         else:
             # NOTE: Development aids not typically engaged
