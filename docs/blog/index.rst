@@ -8,6 +8,33 @@ A place for announcements, release notes, thoughts and ideas for the project.
 
 -----
 
+:ref:`New Logo and Discord Server <20241115_announce_logo>`
+-----------------------------------------------------------
+
+`November 15, 2024`
+
+We've added a new logo to the project ahead of the SC24 conference!
+
+We've also created a `Discord <https://discord.gg/wmv5gyUfkN>`_ server to post questions,
+discuss your project, share with the community, keep in touch with announcements and upcoming events!
+
+-----
+
+:ref:`Release Notes (v2.6.0) <20241115_2_6_0_release>`
+------------------------------------------------------
+
+`November 15, 2024`
+
+The v2.6.0 release includes performance improvements and new features.
+
+- Allow ``--delete`` with ``--limit`` for task update command
+- Add inline tag assignment for task submission
+- Performance improvements and telemetry
+- Update ``--version`` behavior
+- Update logging message behavior
+
+-----
+
 :ref:`Release Notes (v2.5.2) <20240706_2_5_2_release>`
 ------------------------------------------------------
 
@@ -64,8 +91,8 @@ of task info from searches.
 
 -----
 
-:ref:`Release Notes (2.2.0) <20230329_2_2_0_release>`
------------------------------------------------------
+:ref:`Release Notes (v2.2.0) <20230329_2_2_0_release>`
+------------------------------------------------------
 
 `March 23, 2023`
 
@@ -78,6 +105,8 @@ a few quality of life improvements, and a fix for SSH-mode.
     :hidden:
     :maxdepth: 1
 
+    20241115_announce_logo
+    20241115_2_6_0_release
     20240706_2_5_2_release
     20240518_2_5_0_release
     20230602_2_4_0_release
