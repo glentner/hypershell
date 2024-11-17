@@ -82,6 +82,7 @@ manual page. Some desired runtime, ``python3.12``, is already loaded.
 
         ln -sf ../libexec/bin/hs bin/hs
         ln -sf ../src/man share/man
+        ln -sf src/src/completions
 
 |
 
