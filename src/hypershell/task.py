@@ -41,12 +41,13 @@ from hypershell.core.exceptions import handle_exception, handle_exception_silent
 from hypershell.core.logging import Logger, HOSTNAME
 from hypershell.core.remote import SSHConnection
 from hypershell.core.types import smart_coerce, JSONValue
+from hypershell.core.tag import Tag
 from hypershell.data.core import Session
 from hypershell.data.model import Task, to_json_type
 from hypershell.data import ensuredb
 
 # public interface
-__all__ = ['TaskGroupApp', 'Tag', ]
+__all__ = ['TaskGroupApp', ]
 
 # initialize logger
 log = Logger.with_name(__name__)
@@ -80,6 +81,7 @@ class TaskSubmitApp(Application):
     argv: List[str] = []
     interface.add_argument('argv', nargs='+')
 
+    tags: Dict[str, JSONValue] = {}
     taglist: List[str] = []
     interface.add_argument('-t', '--tag', nargs='*', dest='taglist')
 
@@ -90,10 +92,18 @@ class TaskSubmitApp(Application):
     def run(self: TaskSubmitApp) -> None:
         """Submit task to database."""
         ensuredb()
-        task = Task.new(args=' '.join(self.argv),
-                        tag=(None if not self.taglist else Tag.parse_cmdline_list(self.taglist)))
+        self.check_tags()
+        task = Task.new(args=' '.join(self.argv), tag=self.tags)
         Task.add(task)
         print(task.id)
+
+    def check_tags(self: TaskSubmitApp) -> None:
+        """Ensure valid tags."""
+        self.tags = {} if not self.taglist else Tag.parse_cmdline_list(self.taglist)
+        try:
+            Task.ensure_valid_tag(self.tags)
+        except (ValueError, TypeError) as error:
+            raise ArgumentError(str(error)) from error
 
 
 # Catch bad UUID before we touch the database
@@ -860,7 +870,8 @@ class TaskUpdateApp(Application, SearchableMixin):
                 print(f'Stopping (invalid response: "{response}")')
                 return
 
-        if self.delete_mode:
+        # Delete is handled later if a --limit is used with search
+        if self.delete_mode and self.limit is None:
             query.delete()
             Session.commit()
             log.info(f'Deleted {count} tasks')
@@ -895,25 +906,27 @@ class TaskUpdateApp(Application, SearchableMixin):
             # We cannot apply an UPDATE query with a LIMIT field
             # The alternative is to pull the data and batch the update
             # While terribly inefficient at least it has a LIMIT
+            tasks = query.all()
+            tasks_it = iter(tasks)
+            if self.delete_mode:
+                while batch := tuple(itertools.islice(tasks_it, 100)):
+                    Task.delete_all(list(batch))
             if field_updates:
-                tasks = query.all()
-                tasks_it = iter(tasks)
                 while batch := tuple(itertools.islice(tasks_it, 100)):
                     Task.update_all([{'id': task.id, **field_updates} for task in batch])
             if tag_updates:
-                tasks = query.all()
-                tasks_it = iter(tasks)
                 while batch := tuple(itertools.islice(tasks_it, 100)):
                     Task.update_all([{'id': task.id, 'tag': {**task.tag, **tag_updates}} for task in batch])
             if self.remove_tag:
-                tasks = query.all()
-                tasks_it = iter(tasks)
                 while batch := tuple(itertools.islice(tasks_it, 100)):
                     Task.update_all([
                         {'id': task.id, 'tag': self.drop_items(task.tag, *self.remove_tag)}
                         for task in batch
                     ])
-            log.info(f'Updated {count} tasks')
+            if self.delete_mode:
+                log.info(f'Deleted {count} tasks')
+            else:
+                log.info(f'Updated {count} tasks')
             return
 
         if field_updates:
@@ -1094,34 +1107,6 @@ class WhereClause:
             return WhereClause(field=field, value=value, operand=operand)
         else:
             raise ArgumentError(f'Where clause not understood ({argument})')
-
-
-@dataclass
-class Tag:
-    """Tag specification."""
-
-    name: str
-    value: JSONValue = ''
-
-    def to_dict(self: Tag) -> Dict[str, JSONValue]:
-        """Format tag specification as dictionary."""
-        return {self.name: self.value, }
-
-    @classmethod
-    def from_cmdline(cls: Type[Tag], arg: str) -> Tag:
-        """Construct from command-line `arg`."""
-        tag_part = arg.strip().split(':', 1)
-        if len(tag_part) == 1:
-            return cls(name=tag_part[0].strip())
-        else:
-            name, value = tag_part[0].strip(), smart_coerce(tag_part[1].strip())
-            Task.ensure_valid_tag({name: value})
-            return cls(name, value)
-
-    @classmethod
-    def parse_cmdline_list(cls: Type[Tag], args: List[str]) -> Dict[str, Optional[JSONValue]]:
-        """Parse command-line list of tags."""
-        return {tag.name: tag.value for tag in map(cls.from_cmdline, args)}
 
 
 def print_normal(task: Task) -> None:

@@ -53,7 +53,7 @@ from queue import Queue, Empty as QueueEmpty, Full as QueueFull
 # external libs
 from cmdkit.config import ConfigurationError
 from cmdkit.app import Application
-from cmdkit.cli import Interface
+from cmdkit.cli import Interface, ArgumentError
 
 # internal libs
 from hypershell.core.logging import Logger
@@ -760,6 +760,7 @@ class SubmitApp(Application):
     auto_initdb: bool = False
     interface.add_argument('--initdb', action='store_true', dest='auto_initdb')
 
+    tags: Dict[str, JSONValue] = {}
     taglist: List[str] = None
     interface.add_argument('--tag', nargs='*', default=[], dest='taglist')
 
@@ -777,8 +778,7 @@ class SubmitApp(Application):
     def submit_all(self: SubmitApp) -> None:
         """Submit all tasks from source."""
         self.count = submit_from(self.source, template=self.template,
-                                 bundlesize=self.bundlesize, bundlewait=self.bundlewait,
-                                 tags=Tag.parse_cmdline_list(self.taglist))
+                                 bundlesize=self.bundlesize, bundlewait=self.bundlewait, tags=self.tags)
 
     @staticmethod
     def check_config():
@@ -787,10 +787,19 @@ class SubmitApp(Application):
         if config.database.provider == 'sqlite' and db in ('', ':memory:', None):
             raise ConfigurationError('Submitting tasks to in-memory database has no effect')
 
+    def check_tags(self: SubmitApp) -> None:
+        """Ensure valid tags."""
+        self.tags = {} if not self.taglist else Tag.parse_cmdline_list(self.taglist)
+        try:
+            Task.ensure_valid_tag(self.tags)
+        except (ValueError, TypeError) as error:
+            raise ArgumentError(str(error)) from error
+
     def __enter__(self: SubmitApp) -> SubmitApp:
         """Open file if not stdin."""
         self.source = sys.stdin if self.filepath == '-' else open(self.filepath, mode='r')
         self.check_config()
+        self.check_tags()
         if config.database.provider == 'sqlite' or self.auto_initdb:
             initdb()  # Auto-initialize if local sqlite provider
         else:

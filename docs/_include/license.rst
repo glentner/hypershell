@@ -8,4 +8,3 @@ WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE. See the Apache License for more details.
 
 You should have received a copy of the Apache License along with this program.
-If not, see `https://www.apache.org/licenses/LICENSE-2.0 <https://www.apache.org/licenses/LICENSE-2.0>`_.

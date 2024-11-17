@@ -7,6 +7,7 @@
 # standard libs
 import sys
 from importlib.metadata import version as get_version
+from platform import python_version
 
 # external libs
 from cmdkit.app import Application, ApplicationGroup
@@ -91,7 +92,9 @@ class HyperShellApp(ApplicationGroup):
     """Top-level application class for console application."""
 
     interface = Interface(APP_NAME, APP_USAGE, APP_HELP)
-    interface.add_argument('-v', '--version', action='version', version=__version__)
+    interface.add_argument('-v', '--version', action='version',
+                           version=f'HyperShell v{__version__} (Python {python_version()})')
+
     interface.add_argument('--citation', action='version', version=__citation__)
     interface.add_argument('command')
 

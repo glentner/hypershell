@@ -6,7 +6,7 @@
 
 # type annotations
 from __future__ import annotations
-from typing import List, Dict, Any, Type, TypeVar, Union, Optional
+from typing import List, Dict, Tuple, Any, Type, TypeVar, Union, Optional
 
 # standard libs
 import re
@@ -20,12 +20,13 @@ from sqlalchemy.orm import Query, DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.types import Integer, DateTime, Text, Boolean, JSON as _JSON
-from sqlalchemy.dialects.postgresql import UUID as POSTGRES_UUID, JSONB as POSTGRES_JSON
+from sqlalchemy.dialects.postgresql import SMALLINT, UUID as POSTGRES_UUID, JSONB as POSTGRES_JSON
 
 # internal libs
 from hypershell.core.logging import Logger, HOSTNAME, INSTANCE
 from hypershell.core.heartbeat import Heartbeat
 from hypershell.core.types import JSONValue
+from hypershell.core.tag import Tag
 from hypershell.data.core import schema, Session
 
 # public interface
@@ -77,6 +78,7 @@ def from_json_type(value: JSONValue) -> Union[JSONValue, VT]:
 UUID = Text().with_variant(POSTGRES_UUID(as_uuid=False), 'postgresql')
 TEXT = Text()
 INTEGER = Integer()
+SMALL_INTEGER = Integer().with_variant(SMALLINT, 'postgresql')
 DATETIME = DateTime(timezone=True)
 BOOLEAN = Boolean()
 JSON = _JSON().with_variant(POSTGRES_JSON(), 'postgresql')
@@ -181,6 +183,26 @@ class Entity(DeclarativeBase):
         cls.update_all([{'id': id, **changes}, ])
 
     @classmethod
+    def delete_all(cls: Type[Entity], items: List[Entity]) -> List[Entity]:
+        """Delete records from database."""
+        try:
+            for item in items:
+                Session.delete(item)
+            Session.commit()
+        except Exception:
+            Session.rollback()
+            raise
+        else:
+            for item in items:
+                log.trace(f'Deleted {cls.__tablename__} ({item.id})')  # noqa: id not defined on base
+            return items
+
+    @classmethod
+    def delete(cls: Type[Entity], item: Entity) -> None:
+        """Delete single item from database."""
+        cls.delete_all([item, ])
+
+    @classmethod
     def from_id(cls: Type[Entity], id: str) -> Entity:
         """Load by unique `id`."""
         raise NotImplementedError()  # NOTE: non-strict requirement of base
@@ -211,12 +233,12 @@ class Task(Entity):
     command: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
     start_time: Mapped[Optional[datetime]] = mapped_column(DATETIME, nullable=True)
     completion_time: Mapped[Optional[datetime]] = mapped_column(DATETIME, nullable=True)
-    exit_status: Mapped[Optional[int]] = mapped_column(INTEGER, nullable=True)
+    exit_status: Mapped[Optional[int]] = mapped_column(SMALL_INTEGER, nullable=True)
 
     outpath: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
     errpath: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
 
-    attempt: Mapped[int] = mapped_column(INTEGER, nullable=False)
+    attempt: Mapped[int] = mapped_column(SMALL_INTEGER, nullable=False)
     retried: Mapped[bool] = mapped_column(BOOLEAN, nullable=False)
 
     waited: Mapped[Optional[int]] = mapped_column(INTEGER, nullable=True)
@@ -277,30 +299,53 @@ class Task(Entity):
             tag: Dict[str, JSONValue] = None, **other) -> Task:
         """Create a new Task."""
         cls.ensure_valid_tag(tag)
+        args, inline_tags = cls.split_argline(args)
+        tag = {**(tag or {}), **inline_tags}
         return Task(id=str(gen_uuid()), args=str(args).strip(),
                     submit_id=INSTANCE, submit_host=HOSTNAME, submit_time=datetime.now().astimezone(),
-                    attempt=attempt, retried=retried, tag=(tag or {}), **other)
+                    attempt=attempt, retried=retried, tag=tag, **other)
+
+    @classmethod
+    def split_argline(cls: Type[Task], args: str) -> Tuple[str, Dict[str, JSONValue]]:
+        """Separate input args from possible inline tag comment."""
+        if match := re.search(r'#\s*HYPERSHELL:?', args):
+            try:
+                tags = Tag.parse_cmdline_list(args[match.end():].strip().split())
+                cls.ensure_valid_tag(tags)
+            except (ValueError, TypeError) as error:
+                raise RuntimeError(f'Failed to parse inline tags ({error}, from: "{args}")') from error
+            args = args[:match.start()]
+            return args, tags
+        else:
+            return args, {}
 
     @staticmethod
-    def ensure_valid_tag(tag: Dict[str, JSONValue]) -> None:
+    def ensure_valid_tag(tag: Optional[Dict[str, JSONValue]]) -> None:
         """Check tag dictionary and raise if invalid."""
-        if not isinstance(tag, (dict, type(None))):
-            raise TypeError('Expected dict or None for tag data')
         if tag is None:
             return
+        if not isinstance(tag, dict):
+            raise TypeError('Expected dict for tag data')
         for key, value in tag.items():
             if not isinstance(key, str):
                 raise TypeError(f'Tag key, {key} ({type(key)}) is not string')
+            if len(key.strip()) == 0:
+                raise ValueError(f'Tag key was empty, "{key}:{value}"')
+            if len(key.strip()) > 120:
+                raise ValueError(f'Tag key size ({len(value)}) exceeds 120 characters ({key}:{value})')
+            if not re.match(r'^[A-Za-z0-9_.+-]+$', key):
+                raise ValueError(f'Tag key must only contain alphanumerics and basic symbols [+._-]: '
+                                 f'"{key}:{value}"')
             if not isinstance(value, (str, int, float, bool, type(None))):
                 raise TypeError(f'Invalid type for tag value, {type(value)})')
             if isinstance(value, str):
                 if not value.strip():
                     return  # Empty value is a naked tag (no value).
                 if len(value) > 120:
-                    raise ValueError(f'Tag size ({len(value)}) exceeds 120 characters ({key}: {value})')
+                    raise ValueError(f'Tag value size ({len(value)}) exceeds 120 characters ({key}:{value})')
                 if not re.match(r'^[A-Za-z0-9_.+-]+$', value):
-                    raise ValueError(f'Tag must only contain alphanumerics and basic symbols [+._-]: '
-                                     f'({key}: {value})')
+                    raise ValueError(f'Tag value must only contain alphanumerics and basic symbols [+._-]: '
+                                     f'"{key}:{value}"')
 
     @classmethod
     def select_new(cls: Type[Task], limit: int) -> List[Task]:
@@ -556,7 +601,6 @@ class Task(Entity):
 # Indices for efficient queries
 index_scheduled = Index('task_scheduled_index', Task.schedule_time)
 index_retried = Index('task_retries_index', Task.exit_status, Task.retried)
-index_client_completed = Index('task_client_completed_index', Task.client_id, Task.completion_time)
 
 
 class Client(Entity):

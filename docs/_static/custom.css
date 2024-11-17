@@ -1,5 +1,5 @@
 .admonition.note {
-    border-left-color: #ff69b4;
+    border-left-color: #ee0d7e;
     /*border-left-color: var(--color-admonition-title--note);*/
 }
 
@@ -9,7 +9,7 @@
 }
 
 .admonition.note > .admonition-title:before {
-    background-color: #ff69b4;
+    background-color: #ee0d7e;
     /*background-color: var(--color-admonition-title--note);*/
     -webkit-mask-image: var(--icon-admonition-default);
     mask-image:var(--icon-admonition-default)

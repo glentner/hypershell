@@ -335,6 +335,8 @@ else:
 
 
 T = TypeVar('T')
+
+
 def __collapse_if_list_impl(value: Union[T, List[str]]) -> Union[T, str]:
     """If `value` is a list, collapse it to a path-like list (with ':' or ';')."""
     return value if not isinstance(value, list) else PATH_DELIMITER.join([str(member) for member in value])
