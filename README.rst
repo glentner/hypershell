@@ -5,21 +5,21 @@ HyperShell v2: Distributed Task Execution for HPC
     :target: https://www.apache.org/licenses/LICENSE-2.0
     :alt: License
 
-.. image:: https://img.shields.io/pypi/v/hyper-shell.svg?style=flat&color=blue
-    :target: https://pypi.org/project/hyper-shell
-    :alt: PyPI Version
+.. image:: https://img.shields.io/github/v/release/glentner/hypershell?sort=semver
+    :target: https://github.com/glentner/hypershell/releases
+    :alt: Github Release
 
-.. image:: https://img.shields.io/pypi/pyversions/hyper-shell.svg?logo=python&logoColor=white&style=flat
-    :target: https://pypi.org/project/hyper-shell
+.. image:: https://img.shields.io/badge/Python-3.10+-blue.svg
+    :target: https://www.python.org/downloads
     :alt: Python Versions
+
+.. image:: https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg
+    :target: https://www.contributor-covenant.org/version/2/1/code_of_conduct/
+    :alt: Code of Conduct
 
 .. image:: https://readthedocs.org/projects/hypershell/badge/?version=latest
     :target: https://hypershell.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
-
-.. image:: https://static.pepy.tech/badge/hyper-shell
-    :target: https://pepy.tech/project/hyper-shell
-    :alt: Downloads
 
 |
 

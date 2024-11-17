@@ -11,13 +11,9 @@ Release v\ |release| (:ref:`Getting Started <getting_started>`)
     :target: https://github.com/glentner/hypershell/releases
     :alt: Github Release
 
-.. image:: https://img.shields.io/pypi/pyversions/hyper-shell.svg?logo=python&logoColor=white&style=flat
-    :target: https://pypi.org/project/hyper-shell
+.. image:: https://img.shields.io/badge/Python-3.10+-blue.svg
+    :target: https://www.python.org/downloads
     :alt: Python Versions
-
-.. image:: https://static.pepy.tech/badge/hyper-shell
-    :target: https://pepy.tech/project/hyper-shell
-    :alt: Downloads
 
 .. image:: https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg
     :target: https://www.contributor-covenant.org/version/2/1/code_of_conduct/
