@@ -442,10 +442,8 @@ class ConfigApp(ApplicationGroup):
     """Manage configuration."""
 
     interface = Interface(PROGRAM, USAGE, HELP)
-
     interface.add_argument('command')
 
-    command = None
     commands = {'get': ConfigGetApp,
                 'set': ConfigSetApp,
                 'edit': ConfigEditApp,
