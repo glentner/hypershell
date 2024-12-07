@@ -37,8 +37,8 @@ hs = "hypershell:main"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
-cmdkit = "^2.7.5"
-toml = "^0.10.2"
+cmdkit = { version = "^2.7.6", extras = ["toml"] }
+pyyaml = "^6.0.2"
 tomlkit = "^0.13.2"
 sqlalchemy = "^2.0.29"
 rich = "^13.7.1"
